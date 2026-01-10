@@ -1,0 +1,29 @@
+.cache/
+CMakeFiles/
+CMakeCache.txt
+.DS_Store
+Makefile
+cmake_install.cmake
+out
+build/
+Win32CaptureSample/
+obs-studio/
+livekit-sdk-windows-latest/
+livekit-sdk-windows-x64/
+livekit-sdk-windows-x64-0.0.1-test/
+docs/reference
+extern
+
+# Livekit signaling server
+# Root level env files (keep .env.example)
+server/livekit-signaling-server/.env
+server/livekit-signaling-server/.env.production
+server/livekit-signaling-server/.env.with_domain
+
+# Go server
+server/livekit-signaling-server/links-sig-go-server/.env
+server/livekit-signaling-server/links-sig-go-server/*.exe
+
+# Rust server
+server/livekit-signaling-server/links-sig-rust-server/target/
+server/livekit-signaling-server/links-sig-rust-server/.env

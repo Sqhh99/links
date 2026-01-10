@@ -1,0 +1,16 @@
+# Caddy 反向代理配置 - 单端口方案
+# 所有请求通过 8443 端口
+
+:8443 {
+    tls /app/certs/server.crt /app/certs/server.key
+    
+    # LiveKit WebSocket 和 RTC API 路径
+    handle /rtc* {
+        reverse_proxy 127.0.0.1:7880
+    }
+    
+    # 其他请求转发到信令服务器
+    handle {
+        reverse_proxy 127.0.0.1:8081
+    }
+}
