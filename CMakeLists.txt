@@ -7,6 +7,9 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(VCPKG_APPLOCAL_DEPS OFF)
 
+# Testing options
+option(LINKS_BUILD_TESTS "Build test suite" ON)
+
 # Set Qt path
 set(CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
 set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/extern/livekit-sdk-windows")
@@ -204,4 +207,13 @@ if(WIN32)
             "$<TARGET_FILE_DIR:links>/"
         COMMENT "Copying DLLs from client-sdk-cpp to output directory"
     )
+endif()
+
+# =============================================================================
+# Testing Configuration
+# =============================================================================
+if(LINKS_BUILD_TESTS)
+    enable_testing()
+    find_package(GTest CONFIG REQUIRED)
+    add_subdirectory(tests)
 endif()
