@@ -148,11 +148,7 @@ Basic media control is implemented, but the following features require SDK exten
 - Audio level monitoring
 - Video resolution/quality control
 
-### Screen Sharing
-Screen sharing toggle is implemented in the UI, but requires SDK support for:
-- Screen capture
-- Window selection
-- Screen share track publishing
+
 
 ## Future Enhancements
 

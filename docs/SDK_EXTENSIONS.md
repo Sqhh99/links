@@ -58,6 +58,13 @@ localParticipant->PublishTrack(audioTrack, options);
 - 实时推送到LiveKit AudioSource
 - 支持设备枚举
 
+**ScreenCapturer** (`core/screen_capturer.h`, `core/screen_capturer.cpp`, `core/desktop_capture/`)
+- 基于WebRTC架构的模块化设计
+- 支持 Windows Graphics Capture (WGC), DXGI, GDI 多种捕获方式
+- 自动优选最佳捕获策略
+- 实时推送到LiveKit VideoSource
+
+
 #### 使用示例:
 
 ```cpp
@@ -93,6 +100,22 @@ if (micCapturer->start()) {
     proto::TrackPublishOptions options;
     options.set_source(proto::SOURCE_MICROPHONE);
     localParticipant->PublishTrack(audioTrack, options);
+    options.set_source(proto::SOURCE_MICROPHONE);
+    localParticipant->PublishTrack(audioTrack, options);
+}
+
+// 创建屏幕捕获器
+auto screenCapturer = new ScreenCapturer(this);
+
+// 启动捕获 (屏幕或窗口)
+screenCapturer->setScreen(QGuiApplication::primaryScreen()); // 或 setWindow(id)
+if (screenCapturer->start()) {
+    auto videoSource = screenCapturer->getVideoSource();
+    auto videoTrack = videoSource->CreateTrack("screen_share");
+    
+    proto::TrackPublishOptions options;
+    options.set_source(proto::SOURCE_SCREEN_SHARE);
+    localParticipant->PublishTrack(videoTrack, options);
 }
 ```
 
@@ -104,7 +127,8 @@ if (micCapturer->start()) {
 - 更新了 `livekit.h` 主头文件
 
 #### Qt Conference CMakeLists.txt
-- 添加了 `camera_capturer.cpp` 和 `microphone_capturer.cpp`
+- 添加了 `camera_capturer.cpp`, `microphone_capturer.cpp` 和 `screen_capturer.cpp`
+- 添加了 `core/desktop_capture/` 模块源文件
 - 添加了对应的头文件
 
 ## 技术细节
@@ -208,10 +232,9 @@ cd client-sdk-cpp
 
 ## 已知限制
 
-1. **屏幕共享**: 尚未实现,需要额外的屏幕捕获代码
-2. **设备选择**: 目前使用默认设备,需要添加设备选择UI
-3. **视频质量**: 固定640x480,需要添加分辨率配置
-4. **音频质量**: 固定48kHz单声道,可能需要立体声支持
+1. **设备选择**: 目前使用默认设备,需要添加设备选择UI
+2. **视频质量**: 固定640x480 (摄像头), 屏幕共享取决于源分辨率
+3. **音频质量**: 固定48kHz单声道,可能需要立体声支持
 
 ## 文件清单
 
@@ -223,11 +246,11 @@ cd client-sdk-cpp
 - `include/livekit/livekit.h` (已更新)
 - `CMakeLists.txt` (已更新)
 
-### Qt应用层 (5个文件)
-- `core/camera_capturer.h`
-- `core/camera_capturer.cpp`
-- `core/microphone_capturer.h`
-- `core/microphone_capturer.cpp`
+### Qt应用层 (主要文件)
+- `core/camera_capturer.h/cpp`
+- `core/microphone_capturer.h/cpp`
+- `core/screen_capturer.h/cpp`
+- `core/desktop_capture/` (模块目录)
 - `CMakeLists.txt` (已更新)
 
 ## 总结
@@ -236,13 +259,13 @@ cd client-sdk-cpp
 - SDK视频/音频源API
 - Qt摄像头捕获
 - Qt麦克风捕获
+- 屏幕/窗口捕获
 - 构建配置更新
 - 完整的数据流管道
 
 ⏳ **待完成**:
 - 集成到ConferenceManager
 - 添加到UI控制
-- 屏幕共享实现
 - 设备选择UI
 - 测试和调试
 
