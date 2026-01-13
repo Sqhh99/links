@@ -35,6 +35,9 @@ set(SOURCES
     core/microphone_capturer.cpp
     core/screen_capturer.cpp
     core/room_event_delegate.cpp
+    # Desktop Capture module
+    core/desktop_capture/desktop_frame.cpp
+    core/desktop_capture/desktop_capturer.cpp
     # Utils
     utils/logger.cpp
     utils/settings.cpp
@@ -45,6 +48,16 @@ set(SOURCES
     ui/backend/VideoRenderer.cpp
     ui/backend/ScreenPickerBackend.cpp
 )
+
+# Windows-specific desktop capture sources
+if(WIN32)
+    list(APPEND SOURCES
+        core/desktop_capture/win/window_utils.cpp
+        core/desktop_capture/win/wgc_capturer.cpp
+        core/desktop_capture/win/dxgi_duplicator.cpp
+        core/desktop_capture/win/gdi_capturer.cpp
+    )
+endif()
 
 set(HEADERS
     # Core modules
