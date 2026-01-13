@@ -15,11 +15,10 @@ set(CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
 set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/extern/livekit-sdk-windows")
 set(LIVEKIT_PATH "${LIVEKIT_SDK_ROOT}/lib")
 # Set LiveKit SDK paths (external library)
+# livekit.lib is the import library for livekit.dll
 set(LIVEKIT_INCLUDE_DIR "${LIVEKIT_SDK_ROOT}/include")
 set(LIVEKIT_LIBRARY "${LIVEKIT_PATH}/livekit.lib")
 set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_PATH}/livekit_ffi.dll.lib")
-set(PROTOBUF_LIBRARY "${LIVEKIT_PATH}/libprotobuf.lib")
-set(ABSEIL_LIBRARY "${LIVEKIT_PATH}/abseil_dll.lib")
 
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
@@ -163,8 +162,6 @@ qt_add_qml_module(links
 target_link_libraries(links PRIVATE
     ${LIVEKIT_LIBRARY}
     ${LIVEKIT_FFI_LIBRARY}
-    ${PROTOBUF_LIBRARY}
-    ${ABSEIL_LIBRARY}
     Qt6::Core
     Qt6::Gui
     Qt6::Network
@@ -210,10 +207,7 @@ if(WIN32)
     set(DLL_SOURCE_DIR "${LIVEKIT_PATH}")
     add_custom_command(TARGET links POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DLL_SOURCE_DIR}/abseil_dll.dll"
-            "$<TARGET_FILE_DIR:links>/"
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DLL_SOURCE_DIR}/libprotobuf.dll"
+            "${DLL_SOURCE_DIR}/livekit.dll"
             "$<TARGET_FILE_DIR:links>/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${DLL_SOURCE_DIR}/livekit_ffi.dll"

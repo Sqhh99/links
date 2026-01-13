@@ -139,7 +139,7 @@ void ScreenCapturer::captureOnce()
             try {
                 std::vector<uint8_t> frameData(lastValidFrame_.constBits(),
                     lastValidFrame_.constBits() + lastValidFrame_.sizeInBytes());
-                livekit::LKVideoFrame frame(lastValidFrame_.width(), lastValidFrame_.height(),
+                livekit::VideoFrame frame(lastValidFrame_.width(), lastValidFrame_.height(),
                     livekit::VideoBufferType::RGBA, std::move(frameData));
                 videoSource_->captureFrame(frame, QDateTime::currentMSecsSinceEpoch() * 1000);
             } catch (const std::exception& e) {
@@ -185,7 +185,7 @@ void ScreenCapturer::onCaptureResult(DesktopCapturer::Result result,
         try {
             std::vector<uint8_t> frameData(image.constBits(),
                 image.constBits() + image.sizeInBytes());
-            livekit::LKVideoFrame lkFrame(image.width(), image.height(),
+            livekit::VideoFrame lkFrame(image.width(), image.height(),
                 livekit::VideoBufferType::RGBA, std::move(frameData));
             videoSource_->captureFrame(lkFrame, QDateTime::currentMSecsSinceEpoch() * 1000);
         } catch (const std::exception& e) {

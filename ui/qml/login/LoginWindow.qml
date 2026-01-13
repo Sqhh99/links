@@ -21,7 +21,7 @@ Window {
         onJoinConference: function(url, token, roomName, userName, isHost) {
             // This will be handled by C++ to create ConferenceWindow
             console.log("Join conference:", roomName)
-            root.close()
+            root.hide()  // Hide instead of close, so we can show it again after leaving
         }
         
         onSettingsRequested: {

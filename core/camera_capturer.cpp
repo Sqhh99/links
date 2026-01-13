@@ -164,11 +164,11 @@ void CameraCapturer::processFrame(const QVideoFrame& frame)
     
     // Send to LiveKit
     try {
-        // Create LKVideoFrame from RGBA image data
+        // Create VideoFrame from RGBA image data
         std::vector<uint8_t> frameData(image.constBits(), image.constBits() + image.sizeInBytes());
-        livekit::LKVideoFrame frame(image.width(), image.height(), 
-                                    livekit::VideoBufferType::RGBA, 
-                                    std::move(frameData));
+        livekit::VideoFrame frame(image.width(), image.height(), 
+                                  livekit::VideoBufferType::RGBA, 
+                                  std::move(frameData));
         
         // Capture frame with current timestamp in microseconds
         int64_t timestamp_us = QDateTime::currentMSecsSinceEpoch() * 1000;

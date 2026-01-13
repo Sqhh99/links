@@ -58,6 +58,25 @@ void createConferenceWindow(const QString& url, const QString& token,
     QQuickWindow* window = qobject_cast<QQuickWindow*>(object);
     if (window) {
         window->show();
+        
+        // When conference window is closed, show login window again
+        QObject::connect(window, &QQuickWindow::visibilityChanged, [window](QWindow::Visibility visibility) {
+            if (visibility == QWindow::Hidden) {
+                // Conference window was closed, show login window
+                if (g_engine && !g_engine->rootObjects().isEmpty()) {
+                    QObject* loginWindow = g_engine->rootObjects().first();
+                    if (loginWindow) {
+                        QQuickWindow* loginQmlWindow = qobject_cast<QQuickWindow*>(loginWindow);
+                        if (loginQmlWindow) {
+                            loginQmlWindow->show();
+                            Logger::instance().info("Login window shown after leaving conference");
+                        }
+                    }
+                }
+                // Clean up conference window
+                window->deleteLater();
+            }
+        });
     }
     
     Logger::instance().info("Conference window created and shown");
