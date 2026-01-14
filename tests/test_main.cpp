@@ -16,18 +16,18 @@ TEST(SanityCheck, StringComparison) {
 
 // =============================================================================
 // Add your test files here:
-// 
+//
 // Example structure:
 //   tests/
-//   ├── CMakeLists.txt
-//   ├── test_main.cpp          <- This file
-//   ├── core/
-//   │   ├── test_conference_manager.cpp
-//   │   ├── test_media_manager.cpp
-//   │   └── test_network_client.cpp
-//   └── utils/
-//       ├── test_logger.cpp
-//       └── test_settings.cpp
+//     CMakeLists.txt
+//     test_main.cpp
+//     core/
+//       test_conference_manager.cpp
+//       test_media_manager.cpp
+//       test_network_client.cpp
+//     utils/
+//       test_logger.cpp
+//       test_settings.cpp
 //
 // To add new test files:
 // 1. Create the test file in the appropriate subdirectory

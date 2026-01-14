@@ -7,8 +7,7 @@ setlocal EnableDelayedExpansion
 ::   build.cmd [command]
 ::
 :: Commands:
-::   (none)    - Default Debug build
-::   debug     - Debug build
+::   (none)    - Default Release build
 ::   release   - Release build
 ::   clean     - Clean build directory
 ::   test      - Run tests
@@ -40,13 +39,12 @@ if not defined VSINSTALLDIR (
 
 :: Parse command
 set "COMMAND=%~1"
-if "%COMMAND%"=="" set "COMMAND=debug"
+if "%COMMAND%"=="" set "COMMAND=release"
 
 :: Handle commands
 if /i "%COMMAND%"=="help" goto :show_help
 if /i "%COMMAND%"=="clean" goto :clean
 if /i "%COMMAND%"=="test" goto :run_tests
-if /i "%COMMAND%"=="debug" goto :build_debug
 if /i "%COMMAND%"=="release" goto :build_release
 
 echo Unknown command: %COMMAND%
@@ -62,7 +60,6 @@ echo.
 echo Usage: build.cmd [command]
 echo.
 echo Commands:
-echo   debug     - Build Debug version (default)
 echo   release   - Build Release version
 echo   clean     - Clean build directory
 echo   test      - Run tests
@@ -94,32 +91,6 @@ if not exist "%VCPKG_DIR%\vcpkg.exe" (
 )
 
 echo [+] vcpkg is ready
-goto :eof
-
-:: -----------------------------------------------------------------------------
-:build_debug
-:: -----------------------------------------------------------------------------
-call :check_vcpkg
-if errorlevel 1 exit /b 1
-
-echo.
-echo [*] Configuring Debug build...
-cmake --preset debug
-if errorlevel 1 (
-    echo [!] CMake configuration failed
-    exit /b 1
-)
-
-echo.
-echo [*] Building Debug...
-cmake --build --preset debug
-if errorlevel 1 (
-    echo [!] Build failed
-    exit /b 1
-)
-
-echo.
-echo [+] Debug build completed successfully
 goto :eof
 
 :: -----------------------------------------------------------------------------
@@ -163,13 +134,16 @@ goto :eof
 :: -----------------------------------------------------------------------------
 :run_tests
 :: -----------------------------------------------------------------------------
-if not exist "%BUILD_DIR%" (
-    echo [!] Build directory not found. Please build first.
-    exit /b 1
-)
+call :build_release
+if errorlevel 1 exit /b 1
+
+set "VCPKG_BIN=%PROJECT_ROOT%extern\vcpkg_installed\x64-windows\bin"
+set "QT_BIN=D:/Qt/6.10.0/msvc2022_64/bin"
+if exist "%VCPKG_BIN%" set "PATH=%VCPKG_BIN%;%PATH%"
+if exist "%QT_BIN%" set "PATH=%QT_BIN%;%PATH%"
 
 echo [*] Running tests...
-ctest --preset default
+ctest --preset release
 if errorlevel 1 (
     echo [!] Some tests failed
     exit /b 1

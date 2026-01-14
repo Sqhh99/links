@@ -4,6 +4,15 @@ add_executable(links_tests
     # Add more test files here:
     # core/test_conference_manager.cpp
     # core/test_media_manager.cpp
+    core/test_desktop_geometry.cpp
+    core/test_desktop_frame.cpp
+    ${CMAKE_SOURCE_DIR}/core/desktop_capture/desktop_frame.cpp
+)
+
+set_target_properties(links_tests PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
 )
 
 target_link_libraries(links_tests PRIVATE
@@ -21,4 +30,6 @@ target_include_directories(links_tests PRIVATE
 
 # Discover and register tests with CTest
 include(GoogleTest)
-gtest_discover_tests(links_tests)
+gtest_discover_tests(links_tests
+    DISCOVERY_MODE PRE_TEST
+)

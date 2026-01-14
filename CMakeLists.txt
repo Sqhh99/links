@@ -10,8 +10,8 @@ set(VCPKG_APPLOCAL_DEPS OFF)
 # Testing options
 option(LINKS_BUILD_TESTS "Build test suite" ON)
 
-# Set Qt path
-set(CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
+# Set Qt path (keep existing prefixes for vcpkg)
+list(PREPEND CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
 set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/extern/livekit-sdk-windows")
 set(LIVEKIT_PATH "${LIVEKIT_SDK_ROOT}/lib")
 # Set LiveKit SDK paths (external library)
