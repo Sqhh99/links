@@ -17,8 +17,16 @@ namespace desktop_capture {
 std::unique_ptr<DesktopCapturer> DesktopCapturer::createScreenCapturer(
     const CaptureOptions& options) {
 #ifdef _WIN32
-    // For screen capture, use DXGI duplicator
-    return std::make_unique<win::DxgiDuplicator>(options);
+    // Prefer WGC for screen capture when available.
+    if (win::WgcCapturer::isSupported()) {
+        return std::make_unique<win::WgcCapturer>(options);
+    }
+    // Fallback to DXGI if WGC isn't available.
+    if (win::DxgiDuplicator::isSupported()) {
+        return std::make_unique<win::DxgiDuplicator>(options);
+    }
+    // Last resort: no screen capture available (GdiCapturer doesn't support it)
+    return nullptr;
 #else
     // TODO: Implement for other platforms
     return nullptr;

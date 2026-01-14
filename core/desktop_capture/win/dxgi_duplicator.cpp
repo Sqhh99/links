@@ -24,7 +24,7 @@ namespace win {
 
 class DxgiDuplicator::Impl {
 public:
-    bool init(HWND hwnd);
+    bool init(DesktopCapturer::SourceId source);
     bool capture(std::unique_ptr<DesktopFrame>& outFrame, bool& noNewFrame);
     void shutdown();
 
@@ -33,8 +33,10 @@ private:
     bool updateOutput();
     bool acquireFrame(bool& softMiss);
     std::unique_ptr<DesktopFrame> frameToDesktopFrame();
+    void releaseFrame();
 
     HWND hwnd_{nullptr};
+    HMONITOR monitor_{nullptr};
     Microsoft::WRL::ComPtr<ID3D11Device> device_;
     Microsoft::WRL::ComPtr<ID3D11DeviceContext> context_;
     Microsoft::WRL::ComPtr<IDXGIOutputDuplication> duplication_;
@@ -44,6 +46,9 @@ private:
     SIZE outputSize_{};
     POINT desktopOrigin_{};
     HMONITOR currentMonitor_{nullptr};
+    // Cached frame for returning when desktop is static (no new frames)
+    std::unique_ptr<DesktopFrame> cachedFrame_;
+    bool frameAcquired_{false};
 };
 
 bool DxgiDuplicator::Impl::createDevice() {
@@ -96,7 +101,10 @@ bool DxgiDuplicator::Impl::updateOutput() {
         return false;
     }
 
-    HMONITOR targetMonitor = hwnd_ ? MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST) : nullptr;
+    HMONITOR targetMonitor = monitor_;
+    if (!targetMonitor && hwnd_) {
+        targetMonitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+    }
     Microsoft::WRL::ComPtr<IDXGIOutput> output;
 
     for (UINT i = 0;; ++i) {
@@ -131,7 +139,10 @@ bool DxgiDuplicator::Impl::updateOutput() {
         return false;
     }
 
-    duplication_.Reset();
+    if (duplication_) {
+        releaseFrame();
+        duplication_.Reset();
+    }
     hr = output1->DuplicateOutput(device_.Get(), duplication_.GetAddressOf());
     if (FAILED(hr)) {
         duplication_.Reset();
@@ -151,10 +162,20 @@ bool DxgiDuplicator::Impl::updateOutput() {
     return true;
 }
 
-bool DxgiDuplicator::Impl::init(HWND hwnd) {
-    hwnd_ = hwnd;
+bool DxgiDuplicator::Impl::init(DesktopCapturer::SourceId source) {
     shutdown();
-    currentMonitor_ = hwnd_ ? MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST) : nullptr;
+    hwnd_ = nullptr;
+    monitor_ = nullptr;
+    if (source != 0) {
+        HWND hwndCandidate = reinterpret_cast<HWND>(source);
+        if (IsWindow(hwndCandidate)) {
+            hwnd_ = hwndCandidate;
+        } else {
+            monitor_ = reinterpret_cast<HMONITOR>(source);
+        }
+    }
+
+    currentMonitor_ = hwnd_ ? MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST) : monitor_;
     if (!createDevice()) {
         return false;
     }
@@ -168,9 +189,11 @@ bool DxgiDuplicator::Impl::acquireFrame(bool& softMiss) {
     if (hwnd_) {
         HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
         if (monitor && monitor != currentMonitor_) {
-            duplication_.Reset();
+            if (duplication_) {
+                releaseFrame();
+                duplication_.Reset();
+            }
             output_.Reset();
-            lastFrame_.Reset();
             currentMonitor_ = monitor;
             if (!updateOutput()) {
                 return false;
@@ -185,9 +208,13 @@ bool DxgiDuplicator::Impl::acquireFrame(bool& softMiss) {
 
         frameInfo_ = {};
         Microsoft::WRL::ComPtr<IDXGIResource> resource;
-        HRESULT hr = duplication_->AcquireNextFrame(16, &frameInfo_, resource.GetAddressOf());
+        // Use 0ms timeout like WebRTC - we don't actively wait for frames
+        // When desktop is static, DXGI returns WAIT_TIMEOUT which we handle
+        // by returning the cached frame
+        HRESULT hr = duplication_->AcquireNextFrame(0, &frameInfo_, resource.GetAddressOf());
 
         if (hr == DXGI_ERROR_WAIT_TIMEOUT) {
+            // No new frame available - this is normal for static desktops
             softMiss = true;
             return false;
         }
@@ -196,16 +223,26 @@ bool DxgiDuplicator::Impl::acquireFrame(bool& softMiss) {
             duplication_.Reset();
             output_.Reset();
             lastFrame_.Reset();
+            frameAcquired_ = false;
             continue;
         }
         if (FAILED(hr) || !resource) {
             return false;
         }
 
+        if (frameAcquired_) {
+            releaseFrame();
+        }
+
         lastFrame_.Reset();
         resource.As(&lastFrame_);
-        duplication_->ReleaseFrame();
-        return lastFrame_ != nullptr;
+        if (!lastFrame_) {
+            duplication_->ReleaseFrame();
+            frameAcquired_ = false;
+            return false;
+        }
+        frameAcquired_ = true;
+        return true;
     }
     return false;
 }
@@ -266,11 +303,28 @@ bool DxgiDuplicator::Impl::capture(std::unique_ptr<DesktopFrame>& outFrame, bool
     }
     bool softMiss = false;
     if (!acquireFrame(softMiss)) {
-        noNewFrame = softMiss;
-        return softMiss;
+        if (softMiss) {
+            // No new frame (desktop is static) - return cached frame if available
+            noNewFrame = true;
+            if (cachedFrame_) {
+                // Clone the cached frame to return
+                auto clone = std::make_unique<BasicDesktopFrame>(cachedFrame_->size());
+                clone->copyPixelsFrom(*cachedFrame_, DesktopVector(0, 0),
+                                      DesktopRect::makeXYWH(0, 0, cachedFrame_->width(), cachedFrame_->height()));
+                clone->setCaptureTimeUs(
+                    std::chrono::duration_cast<std::chrono::microseconds>(
+                        std::chrono::steady_clock::now().time_since_epoch()).count());
+                outFrame = std::move(clone);
+                return true;
+            }
+            // No cached frame yet, report as temporary error
+            return false;
+        }
+        return false;
     }
 
     auto frame = frameToDesktopFrame();
+    releaseFrame();
     if (!frame) {
         return false;
     }
@@ -305,20 +359,37 @@ bool DxgiDuplicator::Impl::capture(std::unique_ptr<DesktopFrame>& outFrame, bool
         std::chrono::duration_cast<std::chrono::microseconds>(
             std::chrono::steady_clock::now().time_since_epoch()).count());
 
+    // Cache a copy of this frame for when desktop is static
+    cachedFrame_ = std::make_unique<BasicDesktopFrame>(frame->size());
+    cachedFrame_->copyPixelsFrom(*frame, DesktopVector(0, 0),
+                                 DesktopRect::makeXYWH(0, 0, frame->width(), frame->height()));
+
     outFrame = std::move(frame);
     return true;
 }
 
 void DxgiDuplicator::Impl::shutdown() {
-    duplication_.Reset();
+    releaseFrame();
+    if (duplication_) {
+        duplication_.Reset();
+    }
     output_.Reset();
-    lastFrame_.Reset();
+    cachedFrame_.reset();
     context_.Reset();
     device_.Reset();
     hwnd_ = nullptr;
+    monitor_ = nullptr;
     outputSize_ = {};
     frameInfo_ = {};
     currentMonitor_ = nullptr;
+}
+
+void DxgiDuplicator::Impl::releaseFrame() {
+    if (duplication_ && frameAcquired_) {
+        duplication_->ReleaseFrame();
+    }
+    frameAcquired_ = false;
+    lastFrame_.Reset();
 }
 
 // DxgiDuplicator public interface
@@ -334,8 +405,17 @@ DxgiDuplicator::~DxgiDuplicator() {
 void DxgiDuplicator::start(Callback* callback) {
     std::lock_guard<std::mutex> lock(mutex_);
     callback_ = callback;
-    if (impl_->init(reinterpret_cast<HWND>(selectedSource_))) {
+    // Log the source being captured
+    const bool isWindowSource = selectedSource_ != 0 &&
+        IsWindow(reinterpret_cast<HWND>(selectedSource_));
+    OutputDebugStringA(isWindowSource ?
+        "[DXGI] Starting window capture\n" :
+        "[DXGI] Starting screen capture\n");
+    if (impl_->init(selectedSource_)) {
         started_ = true;
+        OutputDebugStringA("[DXGI] Initialization successful\n");
+    } else {
+        OutputDebugStringA("[DXGI] Initialization FAILED\n");
     }
 }
 
@@ -352,12 +432,20 @@ void DxgiDuplicator::captureFrame() {
     }
     std::unique_ptr<DesktopFrame> frame;
     bool noNewFrame = false;
-    if (impl_->capture(frame, noNewFrame) && frame) {
-        callback_->onCaptureResult(Result::SUCCESS, std::move(frame));
-    } else if (noNewFrame) {
-        // No new frame available, this is temporary
-        callback_->onCaptureResult(Result::ERROR_TEMPORARY, nullptr);
+    if (impl_->capture(frame, noNewFrame)) {
+        if (frame) {
+            // Got a frame (either new or cached)
+            callback_->onCaptureResult(Result::SUCCESS, std::move(frame));
+        } else {
+            // capture() returned true but no frame - shouldn't happen
+            callback_->onCaptureResult(Result::ERROR_TEMPORARY, nullptr);
+        }
     } else {
+        // Capture failed
+        static int failCount = 0;
+        if (++failCount % 30 == 1) { // Log every 30 failures to avoid spam
+            OutputDebugStringA("[DXGI] Capture failed\n");
+        }
         callback_->onCaptureResult(Result::ERROR_TEMPORARY, nullptr);
     }
 }
@@ -390,8 +478,14 @@ bool DxgiDuplicator::selectSource(SourceId id) {
 }
 
 bool DxgiDuplicator::isSourceValid(SourceId id) {
-    if (id == 0) return true;  // Screen capture
-    return isWindowValid(reinterpret_cast<HWND>(id));
+    if (id == 0) return true;  // Screen capture (primary)
+    HWND hwnd = reinterpret_cast<HWND>(id);
+    if (isWindowValid(hwnd)) {
+        return true;
+    }
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    return GetMonitorInfo(reinterpret_cast<HMONITOR>(id), &info);
 }
 
 DxgiDuplicator::SourceId DxgiDuplicator::selectedSource() const {

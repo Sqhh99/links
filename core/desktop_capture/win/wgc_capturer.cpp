@@ -56,7 +56,7 @@ winrt::com_ptr<T> getDxgiInterfaceFromObject(winrt::Windows::Foundation::IInspec
 
 class WgcCapturer::Impl {
 public:
-    bool init(HWND hwnd);
+    bool init(DesktopCapturer::SourceId source);
     bool capture(std::unique_ptr<DesktopFrame>& outFrame);
     void shutdown();
     void setCopyIntervalMs(int ms) { copyIntervalMs_ = (ms > 0) ? ms : 0; }
@@ -67,7 +67,8 @@ private:
     std::unique_ptr<DesktopFrame> frameToDesktopFrame(
         const winrt::Windows::Graphics::Capture::Direct3D11CaptureFrame& frame);
     void onFrameArrived(const winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool& sender);
-    winrt::Windows::Graphics::Capture::GraphicsCaptureItem createItem(HWND hwnd);
+    winrt::Windows::Graphics::Capture::GraphicsCaptureItem createItem(DesktopCapturer::SourceId source);
+    static HMONITOR resolveMonitor(DesktopCapturer::SourceId source);
 
     winrt::com_ptr<ID3D11Device> d3dDevice_;
     winrt::com_ptr<ID3D11DeviceContext> d3dContext_;
@@ -140,7 +141,7 @@ bool WgcCapturer::Impl::createDevice() {
     return winrtDevice_ != nullptr;
 }
 
-bool WgcCapturer::Impl::init(HWND hwnd) {
+bool WgcCapturer::Impl::init(DesktopCapturer::SourceId source) {
     shutdown();
 
     if (!createDevice()) {
@@ -155,7 +156,7 @@ bool WgcCapturer::Impl::init(HWND hwnd) {
         // Access request may fail, but capture might still work
     }
 
-    item_ = createItem(hwnd);
+    item_ = createItem(source);
     if (!item_) {
         shutdown();
         return false;
@@ -328,16 +329,40 @@ void WgcCapturer::Impl::onFrameArrived(
     }
 }
 
-winrt::Windows::Graphics::Capture::GraphicsCaptureItem WgcCapturer::Impl::createItem(HWND hwnd) {
+HMONITOR WgcCapturer::Impl::resolveMonitor(DesktopCapturer::SourceId source) {
+    if (source != 0) {
+        return reinterpret_cast<HMONITOR>(source);
+    }
+    return MonitorFromWindow(GetDesktopWindow(), MONITOR_DEFAULTTOPRIMARY);
+}
+
+winrt::Windows::Graphics::Capture::GraphicsCaptureItem WgcCapturer::Impl::createItem(
+    DesktopCapturer::SourceId source) {
     winrt::Windows::Graphics::Capture::GraphicsCaptureItem item{nullptr};
     try {
         winrt::com_ptr<IGraphicsCaptureItemInterop> interop =
             winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem,
                                           IGraphicsCaptureItemInterop>();
-        HRESULT hr = interop->CreateForWindow(
-            hwnd,
-            winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
-            reinterpret_cast<void**>(winrt::put_abi(item)));
+        HRESULT hr = E_FAIL;
+        if (source != 0) {
+            HWND hwnd = reinterpret_cast<HWND>(source);
+            if (IsWindow(hwnd)) {
+                hr = interop->CreateForWindow(
+                    hwnd,
+                    winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
+                    reinterpret_cast<void**>(winrt::put_abi(item)));
+            }
+        }
+
+        if (FAILED(hr) || !item) {
+            HMONITOR monitor = resolveMonitor(source);
+            if (monitor) {
+                hr = interop->CreateForMonitor(
+                    monitor,
+                    winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
+                    reinterpret_cast<void**>(winrt::put_abi(item)));
+            }
+        }
         if (FAILED(hr)) item = nullptr;
     } catch (...) {
         item = nullptr;
@@ -378,7 +403,12 @@ void WgcCapturer::start(Callback* callback) {
     callback_ = callback;
     if (selectedSource_ != 0) {
         impl_->setCopyIntervalMs(1000 / std::max(1, options_.targetFps));
-        if (impl_->init(reinterpret_cast<HWND>(selectedSource_))) {
+        if (impl_->init(selectedSource_)) {
+            started_ = true;
+        }
+    } else {
+        impl_->setCopyIntervalMs(1000 / std::max(1, options_.targetFps));
+        if (impl_->init(0)) {
             started_ = true;
         }
     }
@@ -435,7 +465,16 @@ bool WgcCapturer::selectSource(SourceId id) {
 }
 
 bool WgcCapturer::isSourceValid(SourceId id) {
-    return isWindowValid(reinterpret_cast<HWND>(id));
+    if (id == 0) {
+        return true;
+    }
+    HWND hwnd = reinterpret_cast<HWND>(id);
+    if (isWindowValid(hwnd)) {
+        return true;
+    }
+    MONITORINFO info{};
+    info.cbSize = sizeof(info);
+    return GetMonitorInfo(reinterpret_cast<HMONITOR>(id), &info);
 }
 
 WgcCapturer::SourceId WgcCapturer::selectedSource() const {

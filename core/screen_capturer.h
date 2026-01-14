@@ -61,6 +61,7 @@ private:
     bool validateWindowHandle() const;
     bool isWindowMinimized() const;
     QImage frameToQImage(const links::desktop_capture::DesktopFrame& frame);
+    links::desktop_capture::DesktopCapturer::SourceId screenSourceId() const;
 
     std::shared_ptr<livekit::VideoSource> videoSource_;
     std::unique_ptr<links::desktop_capture::DesktopCapturer> capturer_;

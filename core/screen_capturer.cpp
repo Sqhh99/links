@@ -57,9 +57,13 @@ bool ScreenCapturer::initCapturer()
         }
     } else {
         capturer_ = DesktopCapturer::createScreenCapturer(options);
-        // For screen capture, source 0 means primary screen
         if (capturer_) {
-            capturer_->selectSource(0);
+            auto sourceId = screenSourceId();
+            if (sourceId == 0 && screen_) {
+                Logger::instance().warning("Selected screen not found, falling back to primary");
+            }
+            // Source 0 means primary screen when no specific monitor is resolved
+            capturer_->selectSource(sourceId);
         }
     }
 
@@ -245,4 +249,43 @@ bool ScreenCapturer::isWindowMinimized() const
 #else
     return false;
 #endif
+}
+
+DesktopCapturer::SourceId ScreenCapturer::screenSourceId() const
+{
+#ifdef Q_OS_WIN
+    if (!screen_) {
+        return 0;
+    }
+
+    auto normalizeName = [](const QString& name) {
+        QString normalized = name.trimmed().toUpper();
+        if (normalized.startsWith("\\\\.\\") || normalized.startsWith("//./")) {
+            normalized = normalized.mid(4);
+        }
+        return normalized;
+    };
+
+    const QString screenName = normalizeName(screen_->name());
+    const QRect screenGeometry = screen_->geometry();
+    const auto monitors = win::enumerateMonitors();
+
+    for (const auto& monitor : monitors) {
+        const QString monitorName =
+            normalizeName(QString::fromWCharArray(monitor.deviceName.c_str()));
+        if (!monitorName.isEmpty() && monitorName == screenName) {
+            return reinterpret_cast<DesktopCapturer::SourceId>(monitor.handle);
+        }
+    }
+
+    for (const auto& monitor : monitors) {
+        QRect bounds(monitor.bounds.left(), monitor.bounds.top(),
+                     monitor.bounds.width(), monitor.bounds.height());
+        if (bounds == screenGeometry) {
+            return reinterpret_cast<DesktopCapturer::SourceId>(monitor.handle);
+        }
+    }
+#endif
+
+    return 0;
 }
