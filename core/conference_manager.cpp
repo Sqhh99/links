@@ -142,34 +142,110 @@ void ConferenceManager::disconnect()
     Logger::instance().info("Disconnecting from room");
     
     try {
-        // Stop capturers
+        // Stop capturers first
         if (cameraCapturer_) cameraCapturer_->stop();
         if (microphoneCapturer_) microphoneCapturer_->stop();
-        
-        localVideoTrack_ = nullptr;
-        localAudioTrack_ = nullptr;
-        cameraEnabled_ = false;
-        microphoneEnabled_ = false;
-        screenShareEnabled_ = false;
+        if (screenCapturer_) screenCapturer_->stop();
 
-        if (room_ && connected_) {
-            // New SDK disconnects when Room is destroyed
-            room_.reset();
-            room_ = std::make_unique<livekit::Room>();
-            Logger::instance().info("Room reset (disconnected) successfully");
+        // CRITICAL: Stop all stream reader threads FIRST
+        // This must happen before clearing streams to avoid race conditions
+        for (auto it = streamStopFlags_.begin(); it != streamStopFlags_.end(); ++it) {
+            if (it.value()) {
+                it.value()->store(true);
+            }
         }
-        connected_ = false;
-        participants_.clear();
+        
+        // Join all video reader threads
+        for (auto& [trackSid, threadPtr] : videoStreamThreads_) {
+            if (threadPtr && threadPtr->joinable()) {
+                threadPtr->join();
+            }
+        }
+        videoStreamThreads_.clear();
+        
+        // Join all audio reader threads
+        for (auto& [trackSid, threadPtr] : audioStreamThreads_) {
+            if (threadPtr && threadPtr->joinable()) {
+                threadPtr->join();
+            }
+        }
+        audioStreamThreads_.clear();
+        
+        // Clean up stop flags
+        for (auto it = streamStopFlags_.begin(); it != streamStopFlags_.end(); ++it) {
+            delete it.value();
+        }
+        streamStopFlags_.clear();
+        
+        // CRITICAL: Clear streams BEFORE room destruction
+        // VideoStream and AudioStream destructors call FfiClient::RemoveListener
+        // which must happen while FfiClient is still valid
+        Logger::instance().info("Cleaning up video streams");
         videoStreams_.clear();
+        
+        Logger::instance().info("Cleaning up audio streams");
         audioStreams_.clear();
+        
+        // Stop audio players
         for (auto& player : audioPlayers_) {
             if (player.sink) {
                 player.sink->stop();
             }
         }
         audioPlayers_.clear();
+
+        if (room_) {
+            // Step 1: Remove delegate to prevent callbacks during cleanup (prevents use-after-free)
+            room_->setDelegate(nullptr);
+            
+            // Step 2: Unpublish all tracks before destroying the room (only if connected)
+            if (connected_) {
+                auto localParticipant = room_->localParticipant();
+                if (localParticipant) {
+                    // Unpublish audio track
+                    if (localAudioTrack_ && !localAudioTrack_->sid().empty()) {
+                        Logger::instance().info("Unpublishing audio track");
+                        localParticipant->unpublishTrack(localAudioTrack_->sid());
+                    }
+                    
+                    // Unpublish camera video track
+                    if (!cameraTrackSid_.empty()) {
+                        Logger::instance().info("Unpublishing camera track");
+                        localParticipant->unpublishTrack(cameraTrackSid_);
+                    }
+                    
+                    // Unpublish screen share track
+                    if (!screenTrackSid_.empty()) {
+                        Logger::instance().info("Unpublishing screen share track");
+                        localParticipant->unpublishTrack(screenTrackSid_);
+                    }
+                }
+            }
+            
+            // Step 3: Reset the room (this triggers disconnect in FFI layer)
+            Logger::instance().info("Resetting room");
+            room_.reset();
+            
+            Logger::instance().info("Room disconnected successfully");
+        }
+        
+        // Clear local state
+        localVideoTrack_ = nullptr;
+        localAudioTrack_ = nullptr;
+        localScreenTrack_ = nullptr;
+        cameraTrackSid_.clear();
+        screenTrackSid_.clear();
+        cameraEnabled_ = false;
+        microphoneEnabled_ = false;
+        screenShareEnabled_ = false;
+        connected_ = false;
+        
+        // Clear participant and tracking data
+        participants_.clear();
         trackSources_.clear();
+        trackKinds_.clear();
         screenShareActive_.clear();
+        
         emit disconnected();
     } catch (const std::exception& e) {
         Logger::instance().error(QString("Disconnect error: %1").arg(e.what()));
