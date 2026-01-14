@@ -12,12 +12,15 @@ ComboBox {
         contentItem: Text {
             text: {
                 if (control.textRole) {
-                    if (typeof modelData !== "undefined") {
-                        return modelData[control.textRole]
+                    if (typeof modelData !== "undefined" && modelData !== null) {
+                        return modelData[control.textRole] ?? ""
                     }
-                    return model[control.textRole]
+                    if (typeof model !== "undefined" && model !== null) {
+                        return model[control.textRole] ?? ""
+                    }
+                    return ""
                 }
-                return modelData
+                return modelData ?? ""
             }
             color: delegate.highlighted ? "#FFFFFF" : "#111827"
             font: control.font
@@ -42,6 +45,7 @@ ComboBox {
         contextType: "2d"
 
         onPaint: {
+            if (!context) return;
             context.reset();
             context.moveTo(0, 0);
             context.lineTo(width, 0);

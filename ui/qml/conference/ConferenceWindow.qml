@@ -33,7 +33,7 @@ Window {
         }
         
         onLeaveRequested: leaveDialog.open()
-        onShowSettings: settingsLoader.open()
+        onShowSettings: settingsDialog.open()
         
         // Video frame routing
         onLocalVideoFrameReady: function(frame) {
@@ -492,13 +492,8 @@ Window {
         }
         
         // Settings dialog
-        Loader {
-            id: settingsLoader
-            anchors.centerIn: parent
-            active: false
-            source: "qrc:/qml/ui/qml/settings/SettingsDialog.qml"
-            z: 100
-            function open() { active = true; if (item) item.open() }
+        SettingsDialog {
+            id: settingsDialog
         }
     }
     
