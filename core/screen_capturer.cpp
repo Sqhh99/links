@@ -6,15 +6,12 @@
 #include "screen_capturer.h"
 #include "../utils/logger.h"
 #include "livekit/video_frame.h"
+#include "platform_window_ops.h"
 #include <QGuiApplication>
 #include <QDateTime>
 #include <algorithm>
 
 #ifdef Q_OS_WIN
-#ifndef NOMINMAX
-#define NOMINMAX
-#endif
-#include <Windows.h>
 #include "desktop_capture/win/window_utils.h"
 #endif
 
@@ -234,7 +231,8 @@ QImage ScreenCapturer::frameToQImage(const DesktopFrame& frame)
 bool ScreenCapturer::validateWindowHandle() const
 {
 #ifdef Q_OS_WIN
-    return windowId_ != 0 && IsWindow(reinterpret_cast<HWND>(windowId_));
+    return windowId_ != 0
+        && links::core::isWindowValid(static_cast<links::core::WindowId>(windowId_));
 #else
     return windowId_ != 0;
 #endif
@@ -244,8 +242,7 @@ bool ScreenCapturer::isWindowMinimized() const
 {
 #ifdef Q_OS_WIN
     if (windowId_ == 0) return false;
-    HWND hwnd = reinterpret_cast<HWND>(windowId_);
-    return IsWindow(hwnd) && IsIconic(hwnd);
+    return links::core::isWindowMinimized(static_cast<links::core::WindowId>(windowId_));
 #else
     return false;
 #endif

@@ -5,6 +5,7 @@
 
 #include "ShareModeManager.h"
 #include "../utils/logger.h"
+#include "../../core/platform_window_ops.h"
 
 #ifdef Q_OS_WIN
 #include <windows.h>
@@ -179,23 +180,16 @@ void ShareModeManager::excludeFromCapture(QWindow* window)
         return;
     }
     
-    // Get native window handle
-    HWND hwnd = reinterpret_cast<HWND>(window->winId());
-    if (!hwnd) {
-        Logger::instance().warning("excludeFromCapture: failed to get HWND");
+    const auto windowId = static_cast<links::core::WindowId>(window->winId());
+    if (windowId == 0) {
+        Logger::instance().warning("excludeFromCapture: failed to get window id");
         return;
     }
-    
-    // WDA_EXCLUDEFROMCAPTURE = 0x00000011 (defined in Windows 10 2004+)
-    // The window's contents are excluded from any capture operations
-#ifndef WDA_EXCLUDEFROMCAPTURE
-#define WDA_EXCLUDEFROMCAPTURE 0x00000011
-#endif
-    
-    BOOL result = SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE);
+
+    bool result = links::core::excludeFromCapture(windowId);
     if (result) {
-        Logger::instance().info(QString("Window excluded from capture: HWND=0x%1")
-            .arg(reinterpret_cast<quintptr>(hwnd), 0, 16));
+        Logger::instance().info(QString("Window excluded from capture: WId=0x%1")
+            .arg(static_cast<quintptr>(windowId), 0, 16));
     } else {
         DWORD error = GetLastError();
         Logger::instance().error(QString("SetWindowDisplayAffinity failed: error=%1").arg(error));

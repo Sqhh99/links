@@ -9,9 +9,8 @@
 #include <QRect>
 #include <QVector>
 #include <QWindow>
-#include <QFutureWatcher>
-#include <QMutex>
-#include <atomic>
+#include "../../core/window_types.h"
+#include "../../core/thumbnail_service.h"
 
 class ScreenPickerBackend : public QObject
 {
@@ -33,11 +32,7 @@ public:
     };
     Q_ENUM(SelectionType)
     
-    struct WindowInfo {
-        QString title;
-        WId id{0};
-        QRect geometry;
-    };
+    using WindowInfo = links::core::WindowInfo;
 
     explicit ScreenPickerBackend(QObject* parent = nullptr);
     ~ScreenPickerBackend() override;
@@ -60,7 +55,7 @@ public:
     // Selection results
     SelectionType selectionType() const { return selectionType_; }
     QScreen* selectedScreen() const { return selectedScreen_; }
-    WId selectedWindow() const { return selectedWindowId_; }
+    WId selectedWindow() const { return static_cast<WId>(selectedWindowId_); }
 
     Q_INVOKABLE void refreshScreens();
     Q_INVOKABLE void refreshWindows();
@@ -81,7 +76,6 @@ signals:
 private:
     QList<WindowInfo> enumerateWindows() const;
     QImage grabScreenThumbnail(QScreen* screen) const;
-    QImage grabWindowThumbnail(const WindowInfo& info) const;
     QImage placeholderThumbnail(const QString& label) const;
     void captureWindowThumbnailsAsync();
     
@@ -95,10 +89,9 @@ private:
     
     SelectionType selectionType_{SelectionType::Cancel};
     QScreen* selectedScreen_{nullptr};
-    WId selectedWindowId_{0};
+    links::core::WindowId selectedWindowId_{0};
     
-    QMutex thumbnailMutex_;
-    QFutureWatcher<void>* thumbnailWatcher_{nullptr};
+    links::core::ThumbnailService* thumbnailService_{nullptr};
     
     static constexpr int kThumbWidth = 240;
     static constexpr int kThumbHeight = 140;

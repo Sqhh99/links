@@ -38,6 +38,8 @@ set(SOURCES
     core/microphone_capturer.cpp
     core/screen_capturer.cpp
     core/room_event_delegate.cpp
+    core/platform_window_ops.cpp
+    core/thumbnail_service.cpp
     # Desktop Capture module
     core/desktop_capture/desktop_frame.cpp
     core/desktop_capture/desktop_capturer.cpp
@@ -57,6 +59,7 @@ set(SOURCES
 if(WIN32)
     list(APPEND SOURCES
         core/desktop_capture/win/window_utils.cpp
+        core/desktop_capture/win/platform_window_ops_win.cpp
         core/desktop_capture/win/wgc_capturer.cpp
         core/desktop_capture/win/dxgi_duplicator.cpp
         core/desktop_capture/win/gdi_capturer.cpp
@@ -77,6 +80,9 @@ set(HEADERS
     core/microphone_capturer.h
     core/screen_capturer.h
     core/room_event_delegate.h
+    core/window_types.h
+    core/platform_window_ops.h
+    core/thumbnail_service.h
     # Utils
     utils/logger.h
     utils/settings.h
