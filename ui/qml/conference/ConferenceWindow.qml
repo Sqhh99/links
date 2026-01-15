@@ -33,7 +33,7 @@ Window {
             }
         }
         
-        onLeaveRequested: leaveDialog.open()
+        onLeaveRequested: Qt.callLater(function() { leaveDialog.open() })
         onShowSettings: settingsDialog.open()
         
         // Video frame routing
@@ -156,10 +156,13 @@ Window {
     Rectangle {
         id: windowFrame
         anchors.fill: parent
+        anchors.margins: 1
         color: "#F5F7FA"
-        radius: backend.isFullscreen ? 0 : 12
+        radius: 16
         border.color: "#E5E7EB"
-        border.width: backend.isFullscreen ? 0 : 1
+        border.width: 1
+        clip: true
+        antialiasing: true
         
         ColumnLayout {
             anchors.fill: parent
@@ -526,14 +529,12 @@ Window {
             }
         }
     }
-    
-    // Camera Thumbnail (floating, capture-excluded)
+
+    // Camera Thumbnail (when overlay is disabled, keep it in the main window)
     Loader {
         id: cameraThumbnailLoader
-        active: backend.shareMode && backend.shareMode.isActive && 
-                backend.shareMode.overlayEnabled && 
-                backend.camEnabled && 
-                backend.shareMode.cameraThumbnailVisible
+        active: backend.shareMode && backend.shareMode.isActive &&
+                !backend.shareMode.overlayEnabled && backend.camEnabled
         sourceComponent: CameraThumbnail {
             backend: root.conferenceBackend
             visible: true

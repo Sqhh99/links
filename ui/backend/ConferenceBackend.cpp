@@ -79,6 +79,24 @@ void ConferenceBackend::setupConnections()
                     shareModeManager_->exitShareMode();
                 }
             });
+    connect(conferenceManager_, &ConferenceManager::localMicrophoneChanged,
+            this, [this](bool enabled) {
+                if (micState_.value("local", false) == enabled) {
+                    return;
+                }
+                micState_["local"] = enabled;
+                emit micEnabledChanged();
+                updateParticipantsList();
+            });
+    connect(conferenceManager_, &ConferenceManager::localCameraChanged,
+            this, [this](bool enabled) {
+                if (camState_.value("local", false) == enabled) {
+                    return;
+                }
+                camState_["local"] = enabled;
+                emit camEnabledChanged();
+                updateParticipantsList();
+            });
 }
 
 // Property getters

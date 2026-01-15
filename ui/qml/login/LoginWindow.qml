@@ -13,6 +13,7 @@ Window {
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Window
     title: "LiveKit Conference - Join Meeting"
+    onClosing: Qt.quit()
     
     // Backend integration
     LoginBackend {

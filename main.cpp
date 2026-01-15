@@ -103,6 +103,8 @@ void createConferenceWindow(const QString& url, const QString& token,
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
+    app.setQuitOnLastWindowClosed(false);
+    QQuickWindow::setDefaultAlphaBuffer(true);
     
     // Set application info
     app.setApplicationName("SQLink");

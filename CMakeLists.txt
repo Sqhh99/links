@@ -167,13 +167,14 @@ qt_add_qml_module(links
         res/icon/pin.png
         res/icon/set_up.png
         res/icon/panel-left-close.png
-        res/icon/panel-left-open.png
+        res/icon/panel-left-open.png 
         res/icon/user-x.png
         res/icon/maximize_recovery.png
         res/icon/chevron-down.png
         res/icon/chevron-up.png
         res/icon/network.png
         res/icon/screen_sharing_sidebar.png
+        res/icon/screen-share-off.png
         res/icon/camera_staring_sidebar.png
 )
 

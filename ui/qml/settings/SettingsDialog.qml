@@ -11,6 +11,9 @@ Popup {
     height: 520
     modal: true
     closePolicy: Popup.CloseOnEscape
+
+    property point dragLastGlobal: Qt.point(0, 0)
+    property bool dragging: false
     
     anchors.centerIn: parent
     
@@ -28,19 +31,17 @@ Popup {
     }
     
     background: Rectangle {
-        color: "transparent"
-    }
-    
-    contentItem: Rectangle {
         id: frame
         color: "#FFFFFF"
         radius: 16
         border.color: "#E5E7EB"
         border.width: 1
-        
-        // Drag support
-        property point dragStartPos
-        property bool dragging: false
+        antialiasing: true
+    }
+    
+    contentItem: Item {
+        anchors.fill: parent
+        clip: true
         
         ColumnLayout {
             anchors.fill: parent
@@ -118,7 +119,27 @@ Popup {
                         // Header area with Close button
                         RowLayout {
                             Layout.fillWidth: true
-                            Item { Layout.fillWidth: true }
+                            Item {
+                                Layout.fillWidth: true
+                                height: 32
+                                MouseArea {
+                                    anchors.fill: parent
+                                    cursorShape: Qt.SizeAllCursor
+                                    preventStealing: true
+                                    onPressed: function(mouse) {
+                                        root.dragging = true
+                                        root.dragLastGlobal = Qt.point(root.x + mouse.x, root.y + mouse.y)
+                                    }
+                                    onPositionChanged: function(mouse) {
+                                        if (!root.dragging) return
+                                        var globalPos = Qt.point(root.x + mouse.x, root.y + mouse.y)
+                                        root.x += globalPos.x - root.dragLastGlobal.x
+                                        root.y += globalPos.y - root.dragLastGlobal.y
+                                        root.dragLastGlobal = globalPos
+                                    }
+                                    onReleased: root.dragging = false
+                                }
+                            }
                             IconButton {
                                 iconSource: "qrc:/res/icon/close.png"
                                 iconColor: "#6B7280"

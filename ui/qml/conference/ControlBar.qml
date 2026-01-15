@@ -124,35 +124,10 @@ Rectangle {
         Item { Layout.fillWidth: true }
         
         // --- Right Group: Leave ---
-        Button {
-            id: leaveButton
-            implicitWidth: 48
-            implicitHeight: 40
-            Layout.alignment: Qt.AlignVCenter
-            
-            background: Rectangle {
-                color: leaveButton.hovered ? "#BE123C" : "#E11D48"
-                radius: 12
-            }
-            
-            contentItem: Image {
-                source: "qrc:/res/icon/hang_up.png"
-                sourceSize.width: 20
-                sourceSize.height: 20
-                anchors.centerIn: parent
-            }
-            
-            ToolTip.visible: hovered
-            ToolTip.text: "结束会议"
-            ToolTip.delay: 500
-            
+        IconOnlyButton {
+            iconSource: "qrc:/res/icon/hang_up.png"
+            toolTip: "结束会议"
             onClicked: if (backend) backend.leave()
-            
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onPressed: function(mouse) { mouse.accepted = false }
-            }
         }
     }
     

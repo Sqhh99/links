@@ -14,6 +14,8 @@ Window {
     
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
     color: "transparent"
+    visible: true
+    transientParent: null
     
     // Initial position: bottom-right corner of screen
     x: Screen.width - width - 32
@@ -123,34 +125,6 @@ Window {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: root.minimized = true
-                    }
-                }
-                
-                // Close button
-                Rectangle {
-                    width: 24
-                    height: 24
-                    radius: 12
-                    color: closeArea.containsMouse ? "#EF4444" : Qt.rgba(0, 0, 0, 0.4)
-                    
-                    Text {
-                        anchors.centerIn: parent
-                        text: "×"
-                        color: "white"
-                        font.pixelSize: 16
-                        font.bold: true
-                    }
-                    
-                    MouseArea {
-                        id: closeArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            if (backend && backend.shareMode) {
-                                backend.shareMode.cameraThumbnailVisible = false
-                            }
-                        }
                     }
                 }
             }
