@@ -239,7 +239,7 @@ Window {
                             
                             Image {
                                 anchors.centerIn: parent
-                                source: "qrc:/res/icon/left_sidebar.png"
+                                source: backend.sidebarVisible ? "qrc:/res/icon/panel-left-close.png" : "qrc:/res/icon/panel-left-open.png"
                                 sourceSize.width: 18
                                 sourceSize.height: 18
                             }

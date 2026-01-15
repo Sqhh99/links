@@ -127,7 +127,7 @@ Rectangle {
                             spacing: 4
                             
                             Image {
-                                source: "qrc:/res/icon/member.png" // Using as grid icon
+                                source: "qrc:/res/icon/user.png" // Using as grid icon
                                 sourceSize.width: 12
                                 sourceSize.height: 12
                             }

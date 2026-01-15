@@ -153,25 +153,25 @@ qt_add_qml_module(links
         ui/qml/screenpicker/ShareButton.qml
     RESOURCES
         res/icon/close.png
-        res/icon/hovered_close.png
         res/icon/minimize.png
         res/icon/maximize.png
         res/icon/video.png
         res/icon/close_video.png
         res/icon/mute_the_microphone.png
         res/icon/Turn_on_the_microphone.png
-        res/icon/screen_sharing.png
+        res/icon/monitor-up.png
         res/icon/message.png
-        res/icon/member.png
+        res/icon/user.png
         res/icon/hang_up.png
-        res/icon/zhiding.png
-        res/icon/yizhiding.png
+        res/icon/pin-off.png
+        res/icon/pin.png
         res/icon/set_up.png
-        res/icon/left_sidebar.png
-        res/icon/kick_out.png
+        res/icon/panel-left-close.png
+        res/icon/panel-left-open.png
+        res/icon/user-x.png
         res/icon/maximize_recovery.png
-        res/icon/down_arrow.png
-        res/icon/up_arrow.png
+        res/icon/chevron-down.png
+        res/icon/chevron-up.png
         res/icon/network.png
         res/icon/screen_sharing_sidebar.png
         res/icon/camera_staring_sidebar.png

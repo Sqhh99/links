@@ -85,7 +85,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             
             IconOnlyButton {
-                iconSource: "qrc:/res/icon/screen_sharing.png"
+                iconSource: "qrc:/res/icon/monitor-up.png"
                 isActive: backend ? backend.screenSharing : false
                 activeColor: "#D1FAE5" // emerald-100
                 activeIconColor: "#059669" // emerald-600
@@ -106,7 +106,7 @@ Rectangle {
             }
             
             IconOnlyButton {
-                iconSource: "qrc:/res/icon/member.png"
+                iconSource: "qrc:/res/icon/user.png"
                 isActive: backend ? backend.isParticipantsVisible : false
                 toolTip: "成员"
                 badgeCount: backend ? backend.participants.length : 1
@@ -244,7 +244,7 @@ Rectangle {
                     
                     Image {
                         anchors.centerIn: parent
-                        source: menuPopup.visible ? "qrc:/res/icon/down_arrow.png" : "qrc:/res/icon/up_arrow.png"
+                        source: menuPopup.visible ? "qrc:/res/icon/chevron-down.png" : "qrc:/res/icon/chevron-up.png"
                         sourceSize.width: 10
                         sourceSize.height: 10
                         opacity: splitBtn.isActive ? 0.5 : 0.7

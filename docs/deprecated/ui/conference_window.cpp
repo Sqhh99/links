@@ -309,7 +309,7 @@ void ConferenceWindow::setupUI()
     controlLayout->addWidget(chatButton_);
     
     participantsButton_ = new QPushButton(controlBar_);
-    participantsButton_->setIcon(QIcon(":/icon/member.png"));
+    participantsButton_->setIcon(QIcon(":/icon/user.png"));
     participantsButton_->setObjectName("controlButton");
     participantsButton_->setFixedSize(48, 48);
     participantsButton_->setIconSize(QSize(24, 24));
@@ -1277,7 +1277,7 @@ void ConferenceWindow::updateControlButtons()
 
     screenShareButton_->setIcon(QIcon(":/icon/screen_sharing.png"));
     chatButton_->setIcon(QIcon(":/icon/message.png"));
-    participantsButton_->setIcon(QIcon(":/icon/member.png"));
+    participantsButton_->setIcon(QIcon(":/icon/user.png"));
 }
 
 void ConferenceWindow::updateParticipantMediaState(const QString& id, bool micOn, bool camOn)

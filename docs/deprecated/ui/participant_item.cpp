@@ -72,7 +72,7 @@ void ParticipantItem::setupUI()
     kickButton_->setFixedSize(28, 28);
     kickButton_->setIconSize(QSize(16, 16));
     kickButton_->setCursor(Qt::PointingHandCursor);
-    kickButton_->setIcon(QIcon(":/icon/kick_out.png"));
+    kickButton_->setIcon(QIcon(":/icon/user-x.png"));
     kickButton_->setToolTip(tr("Kick participant"));
     kickButton_->setStyleSheet(R"(
         QPushButton {
