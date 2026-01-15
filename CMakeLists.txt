@@ -46,6 +46,7 @@ set(SOURCES
     ui/backend/ConferenceBackend.cpp
     ui/backend/VideoRenderer.cpp
     ui/backend/ScreenPickerBackend.cpp
+    ui/backend/ShareModeManager.cpp
 )
 
 # Windows-specific desktop capture sources
@@ -76,6 +77,7 @@ set(HEADERS
     ui/backend/ConferenceBackend.h
     ui/backend/VideoRenderer.h
     ui/backend/ScreenPickerBackend.h
+    ui/backend/ShareModeManager.h
 )
 
 # Create executable
@@ -123,6 +125,8 @@ qt_add_qml_module(links
         ui/qml/conference/ChatPanel.qml
         ui/qml/conference/ChatMessage.qml
         ui/qml/conference/LeaveDialog.qml
+        ui/qml/conference/FloatingControlBar.qml
+        ui/qml/conference/CameraThumbnail.qml
         # Screen Picker
         ui/qml/screenpicker/ScreenPickerDialog.qml
         ui/qml/screenpicker/ScreenPickerTitleBar.qml

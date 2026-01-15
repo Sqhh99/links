@@ -9,6 +9,7 @@
 #include "ui/backend/ConferenceBackend.h"
 #include "ui/backend/VideoRenderer.h"
 #include "ui/backend/ScreenPickerBackend.h"
+#include "ui/backend/ShareModeManager.h"
 #include "utils/logger.h"
 #include "livekit/livekit.h"
 
@@ -60,9 +61,26 @@ void createConferenceWindow(const QString& url, const QString& token,
         window->show();
         
         // When conference window is closed, show login window again
+        // Note: We check if share mode is active - in share mode, window is intentionally hidden
         QObject::connect(window, &QQuickWindow::visibilityChanged, [window](QWindow::Visibility visibility) {
             if (visibility == QWindow::Hidden) {
-                // Conference window was closed, show login window
+                // Check if any ConferenceBackend is in share mode (hidden but not closed)
+                bool inShareMode = false;
+                auto backends = window->findChildren<ConferenceBackend*>();
+                for (ConferenceBackend* backend : backends) {
+                    if (backend->shareMode() && backend->shareMode()->isActive()) {
+                        inShareMode = true;
+                        break;
+                    }
+                }
+                
+                if (inShareMode) {
+                    // Window is hidden for share mode, don't treat as close
+                    Logger::instance().info("Conference window hidden for share mode (not closed)");
+                    return;
+                }
+                
+                // Conference window was actually closed, show login window
                 if (g_engine && !g_engine->rootObjects().isEmpty()) {
                     QObject* loginWindow = g_engine->rootObjects().first();
                     if (loginWindow) {

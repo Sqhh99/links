@@ -10,6 +10,7 @@
 ConferenceBackend::ConferenceBackend(QObject* parent)
     : QObject(parent)
     , conferenceManager_(new ConferenceManager(this))
+    , shareModeManager_(new ShareModeManager(this))
     , isHost_(false)
 {
 }
@@ -69,7 +70,15 @@ void ConferenceBackend::setupConnections()
     connect(conferenceManager_, &ConferenceManager::trackUnpublished,
             this, &ConferenceBackend::onTrackUnpublished);
     connect(conferenceManager_, &ConferenceManager::localScreenShareChanged,
-            this, [this](bool) { emit screenSharingChanged(); });
+            this, [this](bool enabled) {
+                emit screenSharingChanged();
+                // Automatically enter/exit share mode when screen sharing changes
+                if (enabled) {
+                    shareModeManager_->enterShareMode();
+                } else {
+                    shareModeManager_->exitShareMode();
+                }
+            });
 }
 
 // Property getters

@@ -8,6 +8,7 @@
 #include "../core/conference_manager.h"
 #include "../core/network_client.h"
 #include "../core/screen_capturer.h"
+#include "ShareModeManager.h"
 
 class ConferenceBackend : public QObject
 {
@@ -28,6 +29,9 @@ class ConferenceBackend : public QObject
     Q_PROPERTY(bool micEnabled READ micEnabled NOTIFY micEnabledChanged)
     Q_PROPERTY(bool camEnabled READ camEnabled NOTIFY camEnabledChanged)
     Q_PROPERTY(bool screenSharing READ screenSharing NOTIFY screenSharingChanged)
+    
+    // Share Mode
+    Q_PROPERTY(ShareModeManager* shareMode READ shareMode CONSTANT)
     
     // UI state
     Q_PROPERTY(bool isChatVisible READ isChatVisible WRITE setIsChatVisible NOTIFY chatVisibleChanged)
@@ -62,6 +66,7 @@ public:
     bool micEnabled() const;
     bool camEnabled() const;
     bool screenSharing() const;
+    ShareModeManager* shareMode() const { return shareModeManager_; }
     bool isChatVisible() const { return isChatVisible_; }
     bool isParticipantsVisible() const { return isParticipantsVisible_; }
     bool sidebarVisible() const { return sidebarVisible_; }
@@ -180,6 +185,7 @@ private:
     
     // Core
     ConferenceManager* conferenceManager_;
+    ShareModeManager* shareModeManager_;
     QString url_;
     QString token_;
     QString roomName_;

@@ -10,7 +10,8 @@ Window {
     
     width: 1280
     height: 800
-    visible: true
+    // Hide main window when in Share Mode (overlay enabled)
+    visible: !(backend.shareMode && backend.shareMode.isActive && backend.shareMode.overlayEnabled)
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Window
     title: backend.roomName ? "LiveKit Conference - " + backend.roomName : "Conference"
@@ -506,4 +507,39 @@ Window {
             root.close()
         }
     }
+    
+    // ==========================================
+    // Share Mode: Floating overlay windows
+    // ==========================================
+    
+    // Floating Control Bar (always-on-top, capture-excluded)
+    Loader {
+        id: floatingBarLoader
+        active: backend.shareMode && backend.shareMode.isActive && backend.shareMode.overlayEnabled
+        sourceComponent: FloatingControlBar {
+            backend: root.conferenceBackend
+            settingsBackend: settingsBackendInstance
+            visible: true
+            
+            onStopSharingClicked: {
+                root.conferenceBackend.stopScreenShare()
+            }
+        }
+    }
+    
+    // Camera Thumbnail (floating, capture-excluded)
+    Loader {
+        id: cameraThumbnailLoader
+        active: backend.shareMode && backend.shareMode.isActive && 
+                backend.shareMode.overlayEnabled && 
+                backend.camEnabled && 
+                backend.shareMode.cameraThumbnailVisible
+        sourceComponent: CameraThumbnail {
+            backend: root.conferenceBackend
+            visible: true
+        }
+    }
+    
+    // Alias for easier access in loader components
+    property alias conferenceBackend: backend
 }
