@@ -5,8 +5,6 @@
 #include "livekit/room_delegate.h"
 #include "livekit/room_event_types.h"
 
-class ConferenceManager;
-
 /**
  * Bridge class that implements livekit::RoomDelegate and forwards
  * events to ConferenceManager via Qt's queued connections.
@@ -14,7 +12,7 @@ class ConferenceManager;
 class RoomEventDelegate : public QObject, public livekit::RoomDelegate {
     Q_OBJECT
 public:
-    explicit RoomEventDelegate(ConferenceManager* manager, QObject* parent = nullptr);
+    explicit RoomEventDelegate(QObject* parent = nullptr);
     ~RoomEventDelegate() override = default;
 
     // RoomDelegate overrides - these are called from LiveKit SDK threads
@@ -54,8 +52,6 @@ signals:
     void connectionStateChangedQueued(int state);
     void dataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
 
-private:
-    ConferenceManager* manager_;
 };
 
 #endif // ROOM_EVENT_DELEGATE_H

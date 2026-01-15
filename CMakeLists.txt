@@ -27,7 +27,11 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickCont
 set(SOURCES
     main.cpp
     # Core modules
-    core/conference_manager.cpp
+    core/conference/conference_manager.cpp
+    core/conference/participant_store.cpp
+    core/conference/media_pipeline.cpp
+    core/conference/device_controller.cpp
+    core/conference/room_controller.cpp
     core/media_manager.cpp
     core/network_client.cpp
     core/camera_capturer.cpp
@@ -61,7 +65,12 @@ endif()
 
 set(HEADERS
     # Core modules
-    core/conference_manager.h
+    core/conference/conference_manager.h
+    core/conference/conference_types.h
+    core/conference/participant_store.h
+    core/conference/media_pipeline.h
+    core/conference/device_controller.h
+    core/conference/room_controller.h
     core/media_manager.h
     core/network_client.h
     core/camera_capturer.h

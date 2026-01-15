@@ -1,13 +1,12 @@
 #include "room_event_delegate.h"
-#include "conference_manager.h"
 #include "../utils/logger.h"
 #include "livekit/remote_participant.h"
+#include "livekit/remote_track_publication.h"
 #include "livekit/track.h"
-#include "livekit/track_publication.h"
 #include <QMetaObject>
 
-RoomEventDelegate::RoomEventDelegate(ConferenceManager* manager, QObject* parent)
-    : QObject(parent), manager_(manager)
+RoomEventDelegate::RoomEventDelegate(QObject* parent)
+    : QObject(parent)
 {
 }
 
