@@ -9,6 +9,8 @@ Rectangle {
     
     height: 68
     color: "#FFFFFF"
+    radius: 12
+    clip: true
     
     // Top border
     Rectangle {

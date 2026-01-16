@@ -7,6 +7,8 @@ Rectangle {
     id: root
     
     color: "#FFFFFF"
+    radius: 12
+    clip: true
     
     property ConferenceBackend backend
     

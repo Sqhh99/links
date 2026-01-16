@@ -59,6 +59,8 @@ Popup {
                     Layout.preferredWidth: 200
                     Layout.fillHeight: true
                     color: "#F9FAFB" // Light sidebar
+                    radius: 16
+                    clip: true
                     
                     // Borders
                     Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: "#E5E7EB" }
@@ -110,6 +112,8 @@ Popup {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: "#FFFFFF"
+                    radius: 16
+                    clip: true
                     
                     ColumnLayout {
                         anchors.fill: parent

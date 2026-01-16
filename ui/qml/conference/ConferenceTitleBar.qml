@@ -8,6 +8,8 @@ Rectangle {
     
     height: 52
     color: "#FFFFFF" // Light theme
+    radius: 12
+    clip: true
     
     property var targetWindow
     property ConferenceBackend backend
