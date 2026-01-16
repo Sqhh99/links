@@ -172,6 +172,8 @@ qt_add_qml_module(links
         res/icon/maximize_recovery.png
         res/icon/chevron-down.png
         res/icon/chevron-up.png
+        res/icon/chevron-right.png
+        res/icon/chevron-left.png 
         res/icon/network.png
         res/icon/screen_sharing_sidebar.png
         res/icon/screen-share-off.png

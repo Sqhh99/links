@@ -50,8 +50,15 @@ Window {
             if (backend.mainParticipantId === "local" && showCameraInMain && mainVideoPanel) {
                 mainVideoPanel.updateFrame(frame)
             }
-            // Also route to gallery view local thumbnail
-            if (galleryView.visible && localGalleryThumbnail) localGalleryThumbnail.updateFrame(frame)
+            // Route to gallery view local thumbnail
+            // Show camera frames when: showing camera in dual-stream OR single-stream camera only
+            if (galleryView.visible && localGalleryThumbnail) {
+                var hasDualStreams = backend.camEnabled && backend.screenSharing
+                var shouldShowCamera = !hasDualStreams || !localGalleryCard.showingScreen
+                if (shouldShowCamera && backend.camEnabled) {
+                    localGalleryThumbnail.updateFrame(frame)
+                }
+            }
         }
         
         onLocalScreenFrameReady: function(frame) {
@@ -67,6 +74,16 @@ Window {
             
             if (backend.mainParticipantId === "local" && backend.screenSharing && showScreenInMain && mainVideoPanel) {
                 mainVideoPanel.updateFrame(frame)
+            }
+            
+            // Route to gallery view local thumbnail
+            // Show screen frames when: showing screen in dual-stream OR single-stream screen only
+            if (galleryView.visible && localGalleryThumbnail) {
+                var hasDualStreamsLocal = backend.camEnabled && backend.screenSharing
+                var shouldShowScreen = !hasDualStreamsLocal || localGalleryCard.showingScreen
+                if (shouldShowScreen && backend.screenSharing) {
+                    localGalleryThumbnail.updateFrame(frame)
+                }
             }
         }
         
@@ -85,9 +102,9 @@ Window {
             if (backend.mainParticipantId === participantId && showCameraInMain && mainVideoPanel) {
                 mainVideoPanel.updateFrame(frame)
             }
-            // Also route to gallery view remote thumbnails
+            // Also route to gallery view remote thumbnails (camera frames)
             if (galleryView.visible) {
-                updateGalleryRemoteFrame(participantId, frame)
+                updateGalleryRemoteFrame(participantId, frame, false)
             }
         }
         
@@ -104,6 +121,11 @@ Window {
             
             if (backend.mainParticipantId === participantId && showScreenInMain && mainVideoPanel) {
                 mainVideoPanel.updateFrame(frame)
+            }
+            
+            // Also route to gallery view remote thumbnails (screen frames)
+            if (galleryView.visible) {
+                updateGalleryRemoteFrame(participantId, frame, true)
             }
         }
         
@@ -130,7 +152,7 @@ Window {
     }
     
     // Gallery view remote frame routing
-    function updateGalleryRemoteFrame(participantId, frame) {
+    function updateGalleryRemoteFrame(participantId, frame, isScreenFrame) {
         for (var i = 0; i < galleryRemoteRepeater.count; i++) {
             var item = galleryRemoteRepeater.itemAt(i)
             if (item && item.children) {
@@ -138,7 +160,23 @@ Window {
                 for (var j = 0; j < item.children.length; j++) {
                     var child = item.children[j]
                     if (child.participantId && child.participantId === participantId) {
-                        child.updateFrame(frame)
+                        // Check if this card should receive this frame type
+                        var hasDualStreams = item.hasDualStreams || false
+                        var showingScreen = item.showingScreen || false
+                        
+                        // Determine if we should route this frame
+                        var shouldRoute = false
+                        if (hasDualStreams) {
+                            // In dual-stream mode, route based on which stream is being shown
+                            shouldRoute = (isScreenFrame === showingScreen)
+                        } else {
+                            // In single-stream mode, route if this is the only active stream type
+                            shouldRoute = true
+                        }
+                        
+                        if (shouldRoute) {
+                            child.updateFrame(frame)
+                        }
                         return
                     }
                 }
@@ -295,16 +333,82 @@ Window {
                                 border.width: 1
                                 clip: true
                                 
-                                // Video thumbnail for local camera
+                                // Dual-stream state
+                                property bool showingScreen: false
+                                property bool hasDualStreams: backend.camEnabled && backend.screenSharing
+                                
+                                // Video thumbnail for local camera/screen
                                 VideoThumbnail {
                                     id: localGalleryThumbnail
                                     anchors.fill: parent
                                     participantId: "local"
                                     participantName: backend.userName + " (You)"
                                     micEnabled: backend.micEnabled
-                                    camEnabled: backend.camEnabled
-                                    mirrored: true
+                                    camEnabled: localGalleryCard.showingScreen ? true : (backend.camEnabled || backend.screenSharing)
+                                    mirrored: !localGalleryCard.showingScreen
                                     showStatus: false // We use custom name label below
+                                }
+                                
+                                // Left chevron button (switch to camera)
+                                Rectangle {
+                                    id: localLeftChevron
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.leftMargin: 8
+                                    width: 28
+                                    height: 28
+                                    radius: 14
+                                    color: localLeftArea.containsMouse ? "#00000080" : "#00000050"
+                                    border.color: "#6010B981"
+                                    border.width: 1
+                                    visible: localGalleryCard.hasDualStreams && localGalleryCard.showingScreen
+                                    z: 20
+                                    
+                                    Image {
+                                        anchors.centerIn: parent
+                                        source: "qrc:/res/icon/chevron-left.png"
+                                        sourceSize.width: 14
+                                        sourceSize.height: 14
+                                    }
+                                    
+                                    MouseArea {
+                                        id: localLeftArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: localGalleryCard.showingScreen = false
+                                    }
+                                }
+                                
+                                // Right chevron button (switch to screen)
+                                Rectangle {
+                                    id: localRightChevron
+                                    anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.rightMargin: 8
+                                    width: 28
+                                    height: 28
+                                    radius: 14
+                                    color: localRightArea.containsMouse ? "#00000080" : "#00000050"
+                                    border.color: "#6010B981"
+                                    border.width: 1
+                                    visible: localGalleryCard.hasDualStreams && !localGalleryCard.showingScreen
+                                    z: 20
+                                    
+                                    Image {
+                                        anchors.centerIn: parent
+                                        source: "qrc:/res/icon/chevron-right.png"
+                                        sourceSize.width: 14
+                                        sourceSize.height: 14
+                                    }
+                                    
+                                    MouseArea {
+                                        id: localRightArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: localGalleryCard.showingScreen = true
+                                    }
                                 }
                                 
                                 // Name label with mic status (bottom-left, semi-transparent)
@@ -341,7 +445,7 @@ Window {
                                         }
                                         
                                         Text {
-                                            text: "我 (You)"
+                                            text: localGalleryCard.showingScreen ? "我 (屏幕)" : "我 (You)"
                                             color: "#374151"
                                             font.pixelSize: 11
                                             font.weight: Font.Bold
@@ -355,6 +459,7 @@ Window {
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
                                     onClicked: backend.pinParticipant("local")
+                                    z: 1
                                 }
                             }
                             
@@ -374,6 +479,10 @@ Window {
                                     border.width: modelData.identity === backend.mainParticipantId ? 2 : 1
                                     clip: true
                                     
+                                    // Dual-stream state
+                                    property bool showingScreen: false
+                                    property bool hasDualStreams: modelData.camEnabled && modelData.screenSharing
+                                    
                                     // Video thumbnail for remote participant
                                     VideoThumbnail {
                                         id: remoteGalleryThumbnail
@@ -381,9 +490,69 @@ Window {
                                         participantId: modelData.identity
                                         participantName: modelData.name || modelData.identity
                                         micEnabled: modelData.micEnabled
-                                        camEnabled: modelData.camEnabled
+                                        camEnabled: remoteCard.showingScreen ? true : (modelData.camEnabled || modelData.screenSharing)
                                         mirrored: false
                                         showStatus: false // We use custom name label below
+                                    }
+                                    
+                                    // Left chevron button (switch to camera)
+                                    Rectangle {
+                                        anchors.left: parent.left
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.leftMargin: 8
+                                        width: 28
+                                        height: 28
+                                        radius: 14
+                                        color: remoteLeftArea.containsMouse ? "#00000080" : "#00000050"
+                                        border.color: "#6010B981"
+                                        border.width: 1
+                                        visible: remoteCard.hasDualStreams && remoteCard.showingScreen
+                                        z: 20
+                                        
+                                        Image {
+                                            anchors.centerIn: parent
+                                            source: "qrc:/res/icon/chevron-left.png"
+                                            sourceSize.width: 14
+                                            sourceSize.height: 14
+                                        }
+                                        
+                                        MouseArea {
+                                            id: remoteLeftArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: remoteCard.showingScreen = false
+                                        }
+                                    }
+                                    
+                                    // Right chevron button (switch to screen)
+                                    Rectangle {
+                                        anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        anchors.rightMargin: 8
+                                        width: 28
+                                        height: 28
+                                        radius: 14
+                                        color: remoteRightArea.containsMouse ? "#00000080" : "#00000050"
+                                        border.color: "#6010B981"
+                                        border.width: 1
+                                        visible: remoteCard.hasDualStreams && !remoteCard.showingScreen
+                                        z: 20
+                                        
+                                        Image {
+                                            anchors.centerIn: parent
+                                            source: "qrc:/res/icon/chevron-right.png"
+                                            sourceSize.width: 14
+                                            sourceSize.height: 14
+                                        }
+                                        
+                                        MouseArea {
+                                            id: remoteRightArea
+                                            anchors.fill: parent
+                                            hoverEnabled: true
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: remoteCard.showingScreen = true
+                                        }
                                     }
                                     
                                     // Speaker ring effect
@@ -431,7 +600,7 @@ Window {
                                             }
                                             
                                             Text {
-                                                text: modelData.name || modelData.identity
+                                                text: remoteCard.showingScreen ? (modelData.name || modelData.identity) + " (屏幕)" : (modelData.name || modelData.identity)
                                                 color: "#374151"
                                                 font.pixelSize: 11
                                                 font.weight: Font.Bold
