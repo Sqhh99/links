@@ -10,7 +10,7 @@ Popup {
     width: 720
     height: 520
     modal: true
-    closePolicy: Popup.CloseOnEscape
+    closePolicy: Popup.NoAutoClose
 
     property point dragLastGlobal: Qt.point(0, 0)
     property bool dragging: false
@@ -42,6 +42,31 @@ Popup {
     contentItem: Item {
         anchors.fill: parent
         clip: true
+        
+        // Unified drag area at the top of the entire panel (left side only, avoiding close button)
+        MouseArea {
+            id: dragArea
+            anchors.left: parent.left
+            anchors.top: parent.top
+            // Cover left sidebar (200px) + right content area minus close button area (about 60px from right)
+            width: parent.width - 80
+            height: 52
+            cursorShape: Qt.SizeAllCursor
+            preventStealing: true
+            
+            onPressed: function(mouse) {
+                root.dragging = true
+                root.dragLastGlobal = Qt.point(root.x + mouse.x, root.y + mouse.y)
+            }
+            onPositionChanged: function(mouse) {
+                if (!root.dragging) return
+                var globalPos = Qt.point(root.x + mouse.x, root.y + mouse.y)
+                root.x += globalPos.x - root.dragLastGlobal.x
+                root.y += globalPos.y - root.dragLastGlobal.y
+                root.dragLastGlobal = globalPos
+            }
+            onReleased: root.dragging = false
+        }
         
         ColumnLayout {
             anchors.fill: parent
@@ -126,23 +151,6 @@ Popup {
                             Item {
                                 Layout.fillWidth: true
                                 height: 32
-                                MouseArea {
-                                    anchors.fill: parent
-                                    cursorShape: Qt.SizeAllCursor
-                                    preventStealing: true
-                                    onPressed: function(mouse) {
-                                        root.dragging = true
-                                        root.dragLastGlobal = Qt.point(root.x + mouse.x, root.y + mouse.y)
-                                    }
-                                    onPositionChanged: function(mouse) {
-                                        if (!root.dragging) return
-                                        var globalPos = Qt.point(root.x + mouse.x, root.y + mouse.y)
-                                        root.x += globalPos.x - root.dragLastGlobal.x
-                                        root.y += globalPos.y - root.dragLastGlobal.y
-                                        root.dragLastGlobal = globalPos
-                                    }
-                                    onReleased: root.dragging = false
-                                }
                             }
                             IconButton {
                                 iconSource: "qrc:/res/icon/close.png"

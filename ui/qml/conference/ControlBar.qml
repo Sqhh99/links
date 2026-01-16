@@ -232,7 +232,13 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: menuPopup.visible ? menuPopup.close() : menuPopup.open()
+                        onClicked: function() {
+                            if (menuPopup.visible) {
+                                menuPopup.close()
+                                return
+                            }
+                            menuPopup.open()
+                        }
                     }
                 }
             }
@@ -245,6 +251,7 @@ Rectangle {
             x: 0  // Left edge aligns with dropdown arrow button (after main button + separator)
             width: 260
             padding: 0
+            closePolicy: Popup.CloseOnEscape
             
             background: Rectangle {
                 color: "#FFFFFF"

@@ -549,7 +549,7 @@ Window {
         }
     }
 
-    SettingsDialog {
+    SettingsPanel {
         id: settingsDialog
         popupType: Popup.Window
         modal: true

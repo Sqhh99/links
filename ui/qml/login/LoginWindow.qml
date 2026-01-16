@@ -112,7 +112,7 @@ Window {
     }
     
     // Settings dialog
-    SettingsDialog {
+    SettingsPanel {
         id: settingsDialog
     }
 }
