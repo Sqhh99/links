@@ -124,7 +124,7 @@ qt_add_qml_module(links
         ui/qml/login/QuickStartForm.qml
         ui/qml/login/ScheduleForm.qml
         # Settings
-        ui/qml/settings/SettingsPanel.qml
+        ui/qml/settings/SettingsWindow.qml
         ui/qml/settings/AudioSettings.qml
         ui/qml/settings/VideoSettings.qml
         ui/qml/settings/NetworkSettings.qml

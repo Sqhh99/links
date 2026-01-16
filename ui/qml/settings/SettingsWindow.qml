@@ -1,21 +1,39 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 import Links
 import Links.Backend 1.0
 
-Popup {
+Window {
     id: root
     
     width: 720
     height: 520
-    modal: true
-    closePolicy: Popup.NoAutoClose
+    visible: false
+    color: "transparent"
+    flags: Qt.FramelessWindowHint | Qt.Window
+    title: "设置"
+    
+    // Center on screen when first shown
+    x: Screen.width / 2 - width / 2
+    y: Screen.height / 2 - height / 2
 
     property point dragLastGlobal: Qt.point(0, 0)
     property bool dragging: false
     
-    anchors.centerIn: parent
+    function open() {
+        // Center on screen
+        x = Screen.width / 2 - width / 2
+        y = Screen.height / 2 - height / 2
+        visible = true
+        raise()
+        requestActivate()
+    }
+    
+    function close() {
+        visible = false
+    }
     
     // Backend integration
     SettingsBackend {
@@ -23,24 +41,20 @@ Popup {
         
         Component.onCompleted: {
             refreshDevices()
-            loadSettings()
         }
         
         onAccepted: root.close()
         onRejected: root.close()
     }
     
-    background: Rectangle {
+    Rectangle {
         id: frame
+        anchors.fill: parent
         color: "#FFFFFF"
         radius: 16
         border.color: "#E5E7EB"
         border.width: 1
         antialiasing: true
-    }
-    
-    contentItem: Item {
-        anchors.fill: parent
         clip: true
         
         // Unified drag area at the top of the entire panel (left side only, avoiding close button)
@@ -271,13 +285,6 @@ Popup {
                     visible: true
                     opacity: 0.7
                 }
-                /*
-                MultiEffect {
-                    source: btnIcon; anchors.fill: btnIcon
-                    colorization: 1.0
-                    colorizationColor: navBtn.active ? "#2563EB" : "#6B7280"
-                }
-                */
             }
             
             Text {
@@ -320,15 +327,7 @@ Popup {
                 visible: true
                 opacity: 0.7
             }
-            /*
-            MultiEffect {
-                source: icon
-                anchors.fill: icon
-                colorization: 1.0
-                colorizationColor: btn.iconColor
-            }
-            */
         }
-        onClicked: btn.clicked()
     }
+
 }

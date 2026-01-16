@@ -12,12 +12,8 @@ Button {
     implicitHeight: 24
     
     background: Rectangle {
-        color: root.checked ? "#2563EB" : (root.hovered ? root.hoverColor : "transparent")
+        color: "transparent"
         radius: 4
-        
-        Behavior on color {
-            ColorAnimation { duration: 100 }
-        }
     }
     
     contentItem: Image {

@@ -185,12 +185,9 @@ void SettingsBackend::loadFromSettings()
 {
     auto& settings = Settings::instance();
     
-    Logger::instance().info("Loading settings to SettingsBackend...");
-    
     setApiUrl(settings.getSignalingServerUrl());
     setSelectedCameraId(settings.getSelectedCameraId());
     setSelectedMicId(settings.getSelectedMicrophoneId());
     setSelectedSpeakerId(settings.getSelectedSpeakerId());
-    
-    Logger::instance().info("Settings loaded successfully");
 }
+

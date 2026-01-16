@@ -549,12 +549,10 @@ Window {
         }
     }
 
-    SettingsPanel {
+    SettingsWindow {
         id: settingsDialog
-        popupType: Popup.Window
-        modal: true
-        anchors.centerIn: undefined
     }
+
 
     Loader {
         id: cameraThumbnailLoader

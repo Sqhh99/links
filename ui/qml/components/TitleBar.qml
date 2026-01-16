@@ -23,6 +23,8 @@ Rectangle {
     
     MouseArea {
         anchors.fill: parent
+        z: -1  // Ensure this is behind the buttons
+        hoverEnabled: false  // Don't interfere with button hover states
         
         onPressed: function(mouse) {
             if (root.targetWindow) {
