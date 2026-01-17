@@ -153,6 +153,9 @@ Window {
         
         // Handle local screen share ended - clear frames
         onLocalScreenShareEnded: {
+            if (localGalleryThumbnail && typeof localGalleryThumbnail.clearFrame === 'function') {
+                localGalleryThumbnail.clearFrame()
+            }
             if (backend.mainParticipantId === "local" && mainVideoPanel) {
                 mainVideoPanel.clearFrame()
             }
