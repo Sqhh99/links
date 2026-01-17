@@ -77,6 +77,7 @@ void ConferenceBackend::setupConnections()
                     shareModeManager_->enterShareMode();
                 } else {
                     shareModeManager_->exitShareMode();
+                    // Note: localScreenShareEnded is emitted from stopScreenShare() method
                 }
             });
     connect(conferenceManager_, &ConferenceManager::localMicrophoneChanged,
@@ -96,6 +97,7 @@ void ConferenceBackend::setupConnections()
                 camState_["local"] = enabled;
                 emit camEnabledChanged();
                 updateParticipantsList();
+                // Note: localCameraEnded is emitted from toggleCamera() method
             });
 }
 
@@ -238,10 +240,15 @@ void ConferenceBackend::toggleMicrophone()
 void ConferenceBackend::toggleCamera()
 {
     if (conferenceManager_) {
+        bool wasEnabled = conferenceManager_->isCameraEnabled();
         conferenceManager_->toggleCamera();
         camState_["local"] = conferenceManager_->isCameraEnabled();
         emit camEnabledChanged();
         updateParticipantsList();
+        // Emit localCameraEnded when camera is turned off
+        if (wasEnabled && !conferenceManager_->isCameraEnabled()) {
+            emit localCameraEnded();
+        }
     }
 }
 
@@ -288,6 +295,7 @@ void ConferenceBackend::stopScreenShare()
     if (conferenceManager_ && conferenceManager_->isScreenSharing()) {
         conferenceManager_->toggleScreenShare();
         emit screenSharingChanged();
+        emit localScreenShareEnded();  // Notify QML to clear the frame
     }
 }
 

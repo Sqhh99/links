@@ -19,6 +19,16 @@ Rectangle {
             root.remoteViewRefreshCounter++
         }
         
+        // Handle local camera ended - clear local camera frame
+        function onLocalCameraEnded() {
+            localVideoThumbnail.clearFrame()
+        }
+        
+        // Handle local screen share ended - clear local screen frame
+        function onLocalScreenShareEnded() {
+            localScreenThumbnail.clearFrame()
+        }
+        
         // Handle track ended - clear the video frame to show placeholder
         function onRemoteTrackEnded(participantId, isScreenShare) {
             // Find the corresponding VideoThumbnail and clear its frame
@@ -28,13 +38,15 @@ Rectangle {
                     if (isScreenShare) {
                         // Clear screen share thumbnail
                         var screenThumbnail = item.children[1]
-                        if (screenThumbnail && screenThumbnail.participantId === participantId + "_screen") {
+                        if (screenThumbnail && screenThumbnail.participantId === participantId + "_screen" 
+                            && typeof screenThumbnail.clearFrame === 'function') {
                             screenThumbnail.clearFrame()
                         }
                     } else {
                         // Clear camera thumbnail
                         var camThumbnail = item.children[0]
-                        if (camThumbnail && camThumbnail.participantId === participantId) {
+                        if (camThumbnail && camThumbnail.participantId === participantId
+                            && typeof camThumbnail.clearFrame === 'function') {
                             camThumbnail.clearFrame()
                         }
                     }

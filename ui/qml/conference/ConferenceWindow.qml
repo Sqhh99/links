@@ -140,6 +140,33 @@ Window {
                 : (Qt.FramelessWindowHint | Qt.Window)
             root.show()
         }
+        
+        // Handle local camera ended - clear frames
+        onLocalCameraEnded: {
+            if (localGalleryThumbnail && typeof localGalleryThumbnail.clearFrame === 'function') {
+                localGalleryThumbnail.clearFrame()
+            }
+            if (backend.mainParticipantId === "local" && mainVideoPanel) {
+                mainVideoPanel.clearFrame()
+            }
+        }
+        
+        // Handle local screen share ended - clear frames
+        onLocalScreenShareEnded: {
+            if (backend.mainParticipantId === "local" && mainVideoPanel) {
+                mainVideoPanel.clearFrame()
+            }
+        }
+        
+        // Handle remote track ended - clear frames
+        onRemoteTrackEnded: function(participantId, isScreenShare) {
+            // Clear main panel if this participant is displayed
+            if (backend.mainParticipantId === participantId && mainVideoPanel) {
+                mainVideoPanel.clearFrame()
+            }
+            // Clear gallery view thumbnails
+            clearGalleryRemoteFrame(participantId)
+        }
     }
     
     // Dynamic grid column calculation
@@ -188,6 +215,24 @@ Window {
     function getAvatarColor(index) {
         var colors = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#06B6D4", "#EF4444", "#6366F1"]
         return colors[index % colors.length]
+    }
+    
+    // Clear gallery view remote frame when track ends
+    function clearGalleryRemoteFrame(participantId) {
+        for (var i = 0; i < galleryRemoteRepeater.count; i++) {
+            var item = galleryRemoteRepeater.itemAt(i)
+            if (item && item.children) {
+                for (var j = 0; j < item.children.length; j++) {
+                    var child = item.children[j]
+                    if (child.participantId && child.participantId === participantId) {
+                        if (typeof child.clearFrame === 'function') {
+                            child.clearFrame()
+                        }
+                        return
+                    }
+                }
+            }
+        }
     }
     
     // Main content

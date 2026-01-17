@@ -157,6 +157,8 @@ signals:
     void participantLeft(const QString& identity);
     void remoteViewStateChanged(const QString& participantId);  // Emitted when toggle camera/screen in main
     void remoteTrackEnded(const QString& participantId, bool isScreenShare);  // Emitted when remote track ends
+    void localCameraEnded();  // Emitted when local camera is turned off
+    void localScreenShareEnded();  // Emitted when local screen share is stopped
     
 private slots:
     void onConnected();
