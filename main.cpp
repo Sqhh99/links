@@ -10,6 +10,7 @@
 #include "ui/backend/VideoRenderer.h"
 #include "ui/backend/ScreenPickerBackend.h"
 #include "ui/backend/ShareModeManager.h"
+#include "ui/backend/AuthBackend.h"
 #include "utils/logger.h"
 #include "livekit/livekit.h"
 
@@ -127,6 +128,7 @@ int main(int argc, char *argv[])
     qmlRegisterType<ConferenceBackend>("Links.Backend", 1, 0, "ConferenceBackend");
     qmlRegisterType<VideoRenderer>("Links.Backend", 1, 0, "VideoRenderer");
     qmlRegisterType<ScreenPickerBackend>("Links.Backend", 1, 0, "ScreenPickerBackend");
+    qmlRegisterType<AuthBackend>("Links.Backend", 1, 0, "AuthBackend");
     
     // Create QML engine
     QQmlApplicationEngine engine;

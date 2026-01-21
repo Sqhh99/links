@@ -16,8 +16,8 @@ Window {
     title: "Links"
     onClosing: Qt.quit()
 
-    property bool isGuest: true
-    property string userName: "游客"
+    property bool isGuest: !authBackend.isLoggedIn
+    property string userName: authBackend.isLoggedIn ? authBackend.userName : "游客"
     property int currentIndex: 0
 
     function openAuthModal() {
@@ -40,6 +40,12 @@ Window {
             meetingPage.closeActionDialog()
             root.hide()
         }
+    }
+
+    AuthBackend {
+        id: authBackend
+        onLoginSucceeded: authModal.close()
+        onRegisterSucceeded: authModal.close()
     }
 
     Rectangle {
@@ -78,10 +84,7 @@ Window {
                     currentIndex: root.currentIndex
                     onNavChanged: function(index) { root.currentIndex = index }
                     onLoginRequested: root.openAuthModal()
-                    onLogoutRequested: {
-                        root.isGuest = true
-                        root.userName = "游客"
-                    }
+                    onLogoutRequested: authBackend.logout()
                     onAccountSettingsRequested: settingsDialog.open()
                     onSettingsRequested: settingsDialog.open()
                 }
@@ -142,16 +145,7 @@ Window {
 
     AuthModal {
         id: authModal
-        onLoginRequested: function(email, password) {
-            root.isGuest = false
-            root.userName = email.indexOf("@") > 0 ? email.split("@")[0] : email
-            authModal.close()
-        }
-        onRegisterRequested: function(displayName, email, code, password) {
-            root.isGuest = false
-            root.userName = displayName.length > 0 ? displayName : "新用户"
-            authModal.close()
-        }
+        authBackend: authBackend
     }
 
     GuestPromptDialog {

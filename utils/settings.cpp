@@ -137,3 +137,63 @@ void Settings::sync()
     settings_.sync();
     Logger::instance().info("Settings synced to disk");
 }
+
+// Auth data methods
+QString Settings::getAuthToken() const
+{
+    return settings_.value("auth/token", "").toString();
+}
+
+void Settings::setAuthToken(const QString& token)
+{
+    settings_.setValue("auth/token", token);
+    settings_.sync();
+}
+
+QString Settings::getUserId() const
+{
+    return settings_.value("auth/user_id", "").toString();
+}
+
+void Settings::setUserId(const QString& userId)
+{
+    settings_.setValue("auth/user_id", userId);
+    settings_.sync();
+}
+
+QString Settings::getUserEmail() const
+{
+    return settings_.value("auth/email", "").toString();
+}
+
+void Settings::setUserEmail(const QString& email)
+{
+    settings_.setValue("auth/email", email);
+    settings_.sync();
+}
+
+QString Settings::getDisplayName() const
+{
+    return settings_.value("auth/display_name", "").toString();
+}
+
+void Settings::setDisplayName(const QString& name)
+{
+    settings_.setValue("auth/display_name", name);
+    settings_.sync();
+}
+
+bool Settings::hasAuthData() const
+{
+    return !getAuthToken().isEmpty() && !getUserId().isEmpty();
+}
+
+void Settings::clearAuthData()
+{
+    settings_.remove("auth/token");
+    settings_.remove("auth/user_id");
+    settings_.remove("auth/email");
+    settings_.remove("auth/display_name");
+    settings_.sync();
+    Logger::instance().info("Auth data cleared");
+}

@@ -53,6 +53,7 @@ set(SOURCES
     ui/backend/VideoRenderer.cpp
     ui/backend/ScreenPickerBackend.cpp
     ui/backend/ShareModeManager.cpp
+    ui/backend/AuthBackend.cpp
 )
 
 # Windows-specific desktop capture sources
@@ -93,6 +94,7 @@ set(HEADERS
     ui/backend/VideoRenderer.h
     ui/backend/ScreenPickerBackend.h
     ui/backend/ShareModeManager.h
+    ui/backend/AuthBackend.h
 )
 
 # Create executable
@@ -118,19 +120,13 @@ qt_add_qml_module(links
         ui/qml/components/TabButton.qml
         ui/qml/components/ComboBox.qml
         ui/qml/components/CheckBox.qml
-        # Login
-        ui/qml/login/LoginWindow.qml
-        ui/qml/login/HeroPanel.qml
+        # Login (auth components)
         ui/qml/login/LoginCard.qml
         ui/qml/login/AuthTabs.qml
         ui/qml/login/AuthField.qml
         ui/qml/login/AuthTextField.qml
-        ui/qml/login/AvatarPicker.qml
         ui/qml/login/LoginForm.qml
         ui/qml/login/RegisterForm.qml
-        ui/qml/login/JoinForm.qml
-        ui/qml/login/QuickStartForm.qml
-        ui/qml/login/ScheduleForm.qml
         # Home
         ui/qml/home/HomeWindow.qml
         ui/qml/home/HomeSidebar.qml
@@ -145,6 +141,9 @@ qt_add_qml_module(links
         ui/qml/home/AuthModal.qml
         ui/qml/home/ShareScreenForm.qml
         ui/qml/home/LoginPromptCard.qml
+        ui/qml/home/JoinForm.qml
+        ui/qml/home/QuickStartForm.qml
+        ui/qml/home/ScheduleForm.qml
         # Settings
         ui/qml/settings/SettingsWindow.qml
         ui/qml/settings/AudioSettings.qml

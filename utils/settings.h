@@ -44,6 +44,18 @@ public:
     QString getSignalingServerUrl() const;
     void setSignalingServerUrl(const QString& url);
     
+    // Auth data
+    QString getAuthToken() const;
+    void setAuthToken(const QString& token);
+    QString getUserId() const;
+    void setUserId(const QString& userId);
+    QString getUserEmail() const;
+    void setUserEmail(const QString& email);
+    QString getDisplayName() const;
+    void setDisplayName(const QString& name);
+    bool hasAuthData() const;
+    void clearAuthData();
+    
     // Force sync to disk
     void sync();
     

@@ -6,8 +6,7 @@ import Links
 Popup {
     id: root
 
-    signal loginRequested(string email, string password)
-    signal registerRequested(string displayName, string email, string code, string password)
+    property var authBackend: null
 
     modal: true
     focus: true
@@ -29,8 +28,7 @@ Popup {
 
         LoginCard {
             anchors.fill: parent
-            onLoginRequested: root.loginRequested(email, password)
-            onRegisterRequested: root.registerRequested(displayName, email, code, password)
+            authBackend: root.authBackend
         }
     }
 }

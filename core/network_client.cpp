@@ -210,3 +210,121 @@ void NetworkClient::endRoom(const QString& roomName)
         Logger::instance().info(QString("Successfully ended room '%1'").arg(roomName));
     });
 }
+
+// Auth API implementations
+void NetworkClient::login(const QString& email, const QString& password)
+{
+    Logger::instance().info(QString("Attempting login for email: %1").arg(email));
+    
+    QUrl url(apiUrl_ + "/api/auth/login");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    
+    QJsonObject json;
+    json["email"] = email;
+    json["password"] = password;
+    
+    QJsonDocument doc(json);
+    QByteArray data = doc.toJson();
+    
+    QNetworkReply* reply = networkManager_->post(request, data);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        
+        QByteArray responseData = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(responseData);
+        QJsonObject obj = doc.object();
+        
+        if (reply->error() != QNetworkReply::NoError) {
+            QString errorMsg = obj.contains("error") ? obj["error"].toString() 
+                                                      : reply->errorString();
+            Logger::instance().error("Login failed: " + errorMsg);
+            emit authError(errorMsg);
+            return;
+        }
+        
+        QString userId = obj["user_id"].toString();
+        QString email = obj["email"].toString();
+        QString token = obj["token"].toString();
+        
+        Logger::instance().info("Login successful for: " + email);
+        emit loginSuccess(userId, email, token);
+    });
+}
+
+void NetworkClient::requestVerificationCode(const QString& email)
+{
+    Logger::instance().info(QString("Requesting verification code for: %1").arg(email));
+    
+    QUrl url(apiUrl_ + "/api/auth/register/request-code");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    
+    QJsonObject json;
+    json["email"] = email;
+    
+    QJsonDocument doc(json);
+    QByteArray data = doc.toJson();
+    
+    QNetworkReply* reply = networkManager_->post(request, data);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        
+        QByteArray responseData = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(responseData);
+        QJsonObject obj = doc.object();
+        
+        if (reply->error() != QNetworkReply::NoError) {
+            QString errorMsg = obj.contains("error") ? obj["error"].toString() 
+                                                      : reply->errorString();
+            Logger::instance().error("Request code failed: " + errorMsg);
+            emit authError(errorMsg);
+            return;
+        }
+        
+        int expiresInSecs = obj["expires_in_secs"].toInt(600);
+        Logger::instance().info("Verification code sent successfully");
+        emit codeRequestSuccess(expiresInSecs);
+    });
+}
+
+void NetworkClient::registerUser(const QString& email, const QString& password, const QString& code)
+{
+    Logger::instance().info(QString("Registering user: %1").arg(email));
+    
+    QUrl url(apiUrl_ + "/api/auth/register");
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    
+    QJsonObject json;
+    json["email"] = email;
+    json["password"] = password;
+    json["code"] = code;
+    
+    QJsonDocument doc(json);
+    QByteArray data = doc.toJson();
+    
+    QNetworkReply* reply = networkManager_->post(request, data);
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+        
+        QByteArray responseData = reply->readAll();
+        QJsonDocument doc = QJsonDocument::fromJson(responseData);
+        QJsonObject obj = doc.object();
+        
+        if (reply->error() != QNetworkReply::NoError) {
+            QString errorMsg = obj.contains("error") ? obj["error"].toString() 
+                                                      : reply->errorString();
+            Logger::instance().error("Registration failed: " + errorMsg);
+            emit authError(errorMsg);
+            return;
+        }
+        
+        QString userId = obj["user_id"].toString();
+        QString email = obj["email"].toString();
+        QString token = obj["token"].toString();
+        
+        Logger::instance().info("Registration successful for: " + email);
+        emit registerSuccess(userId, email, token);
+    });
+}

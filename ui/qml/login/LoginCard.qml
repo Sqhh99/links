@@ -7,10 +7,7 @@ Item {
     id: root
 
     property string mode: "login"
-    property bool loading: false
-
-    signal loginRequested(string email, string password)
-    signal registerRequested(string displayName, string email, string code, string password)
+    property var authBackend: null
 
     onModeChanged: {
         loginForm.resetValidation()
@@ -62,11 +59,15 @@ Item {
             LoginForm {
                 id: loginForm
                 anchors.fill: parent
-                loading: root.loading
+                loading: root.authBackend ? root.authBackend.loading : false
                 opacity: root.mode === "login" ? 1 : 0
                 x: root.mode === "login" ? 0 : -24
                 enabled: root.mode === "login"
-                onLoginRequested: root.loginRequested(email, password)
+                onLoginRequested: {
+                    if (root.authBackend) {
+                        root.authBackend.login(email, password)
+                    }
+                }
 
                 Behavior on opacity {
                     NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
@@ -79,11 +80,21 @@ Item {
             RegisterForm {
                 id: registerForm
                 anchors.fill: parent
-                loading: root.loading
+                loading: root.authBackend ? root.authBackend.loading : false
+                codeCooldown: root.authBackend ? root.authBackend.codeCooldown : 0
                 opacity: root.mode === "register" ? 1 : 0
                 x: root.mode === "register" ? 0 : 24
                 enabled: root.mode === "register"
-                onRegisterRequested: root.registerRequested(displayName, email, code, password)
+                onRegisterRequested: {
+                    if (root.authBackend) {
+                        root.authBackend.registerUser(displayName, email, code, password)
+                    }
+                }
+                onRequestCodeClicked: {
+                    if (root.authBackend) {
+                        root.authBackend.requestCode(email)
+                    }
+                }
 
                 Behavior on opacity {
                     NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
@@ -92,6 +103,17 @@ Item {
                     NumberAnimation { duration: 200; easing.type: Easing.OutCubic }
                 }
             }
+        }
+
+        // Error message display
+        Text {
+            visible: root.authBackend && root.authBackend.errorMessage.length > 0
+            text: root.authBackend ? root.authBackend.errorMessage : ""
+            color: "#EF4444"
+            font.pixelSize: 13
+            Layout.fillWidth: true
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
         }
     }
 }

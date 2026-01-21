@@ -12,6 +12,7 @@ ColumnLayout {
     property bool emailTouched: false
     property bool codeTouched: false
     property bool passwordTouched: false
+    property int codeCooldown: 0
     property string displayName: nameField.text
     property string email: emailField.text
     property string code: codeInput.text
@@ -26,6 +27,7 @@ ColumnLayout {
     property bool formValid: root.nameValid && root.emailValid && root.codeValid && root.passwordValid
 
     signal registerRequested(string displayName, string email, string code, string password)
+    signal requestCodeClicked(string email)
 
     spacing: 12
 
@@ -82,8 +84,8 @@ ColumnLayout {
 
             Button {
                 id: sendCodeButton
-                text: "发送验证码"
-                enabled: root.emailValid && !root.loading
+                text: root.codeCooldown > 0 ? (root.codeCooldown + "s") : "发送验证码"
+                enabled: root.emailValid && !root.loading && root.codeCooldown === 0
                 implicitHeight: 44
                 Layout.preferredWidth: 120
 
@@ -112,6 +114,8 @@ ColumnLayout {
                     cursorShape: Qt.PointingHandCursor
                     onPressed: function(mouse) { mouse.accepted = false }
                 }
+
+                onClicked: root.requestCodeClicked(root.email)
             }
         }
 
