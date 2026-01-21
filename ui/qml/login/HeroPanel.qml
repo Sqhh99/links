@@ -11,15 +11,37 @@ Rectangle {
     
     Rectangle {
         anchors.fill: parent
-        radius: 14
+        radius: 16
         border.color: "#1E40AF"
         border.width: 1
-        
+
         gradient: Gradient {
-            orientation: Gradient.Horizontal
-            GradientStop { position: 0.0; color: "#2563EB" }
-            GradientStop { position: 1.0; color: "#1E40AF" }
+            orientation: Gradient.Vertical
+            GradientStop { position: 0.0; color: "#1D4ED8" }
+            GradientStop { position: 1.0; color: "#0F172A" }
         }
+    }
+
+    Rectangle {
+        width: 180
+        height: 180
+        radius: 90
+        color: "#1A93C5FD"
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: -40
+        anchors.rightMargin: -60
+    }
+
+    Rectangle {
+        width: 140
+        height: 140
+        radius: 70
+        color: "#1A22D3EE"
+        anchors.bottom: parent.bottom
+        anchors.left: parent.left
+        anchors.bottomMargin: -30
+        anchors.leftMargin: -40
     }
     
     ColumnLayout {
@@ -39,7 +61,7 @@ Rectangle {
                 
                 Text {
                     anchors.centerIn: parent
-                    text: "LIVE"
+                    text: "LINKS"
                     color: "#2563EB"
                     font.pixelSize: 11
                     font.weight: Font.ExtraBold
@@ -48,81 +70,47 @@ Rectangle {
             }
             
             Text {
-                text: "CloudMeet"
+                text: "Links"
                 color: "white"
-                font.pixelSize: 18
+                font.pixelSize: 20
                 font.weight: Font.ExtraBold
             }
             
             Item { Layout.fillWidth: true }
         }
         
-        // Time
         Text {
-            text: root.currentTime
-            color: "white"
-            font.pixelSize: 44
-            font.weight: Font.Light
-            font.letterSpacing: -1
-        }
-        
-        // Date
-        Text {
-            text: root.currentDate
-            color: "#E0E7FF" // Blue-100
+            text: "现代化音视频会议体验"
+            color: "#E0E7FF"
             font.pixelSize: 14
+            font.weight: Font.Medium
         }
-        
-        // Highlight card
+
         Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 60
-            radius: 12
-            color: "#1AFFFFFF"  // 10% white
-            border.color: "#33FFFFFF"  // 20% white
-            border.width: 1
-            
-            Text {
-                anchors.fill: parent
-                anchors.margins: 14
-                text: "下一场会议：产品评审\n10:00 - 11:00"
-                color: "white"
-                font.pixelSize: 13
-                font.weight: Font.DemiBold
-                wrapMode: Text.WordWrap
-            }
+            Layout.preferredWidth: 48
+            Layout.preferredHeight: 4
+            radius: 2
+            color: "#60A5FA"
         }
-        
-        // Bullet points
-        ColumnLayout {
-            spacing: 8
-            
-            Repeater {
-                model: [
-                    "低延迟高清音视频",
-                    "一键屏幕共享与录制",
-                    "端到端加密与入会鉴权"
-                ]
-                
-                RowLayout {
-                    spacing: 8
-                    
-                    Rectangle {
-                        width: 10
-                        height: 10
-                        radius: 6
-                        color: "#34D399" // Emerald-400
-                    }
-                    
-                    Text {
-                        text: modelData
-                        color: "#EFF6FF" // Blue-50
-                        font.pixelSize: 13
-                    }
-                }
-            }
-        }
-        
+
         Item { Layout.fillHeight: true }
+
+        ColumnLayout {
+            spacing: 6
+
+            Text {
+                text: root.currentTime
+                color: "white"
+                font.pixelSize: 36
+                font.weight: Font.Light
+                font.letterSpacing: -1
+            }
+
+            Text {
+                text: root.currentDate
+                color: "#BFDBFE"
+                font.pixelSize: 12
+            }
+        }
     }
 }

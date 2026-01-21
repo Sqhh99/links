@@ -12,19 +12,13 @@ Window {
     visible: true
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Window
-    title: "LiveKit Conference - Join Meeting"
+    title: "Links - 登录"
     onClosing: Qt.quit()
     
     // Backend integration
     LoginBackend {
         id: backend
-        
-        onJoinConference: function(url, token, roomName, userName, isHost) {
-            // This will be handled by C++ to create ConferenceWindow
-            console.log("Join conference:", roomName)
-            root.hide()  // Hide instead of close, so we can show it again after leaving
-        }
-        
+
         onSettingsRequested: {
             settingsDialog.open()
         }
@@ -61,7 +55,7 @@ Window {
             TitleBar {
                 Layout.fillWidth: true
                 targetWindow: root
-                title: "LiveKit Conference"
+                title: "Links"
                 
                 onSettingsClicked: backend.showSettings()
                 onMinimizeClicked: root.showMinimized()
@@ -80,32 +74,14 @@ Window {
                 HeroPanel {
                     id: heroPanel
                     Layout.fillHeight: true
-                    Layout.preferredWidth: 300
+                    Layout.preferredWidth: 320
                 }
                 
-                // Login card (right)
+                // Auth card (right)
                 LoginCard {
                     id: loginCard
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    
-                    userName: backend.userName
-                    roomName: backend.roomName
-                    scheduledTime: backend.scheduledTime
-                    micEnabled: backend.micEnabled
-                    camEnabled: backend.camEnabled
-                    loading: backend.loading
-                    errorMessage: backend.errorMessage
-                    
-                    onUserNameChanged: backend.userName = userName
-                    onRoomNameChanged: backend.roomName = roomName
-                    onScheduledTimeChanged: backend.scheduledTime = scheduledTime
-                    onMicEnabledChanged: backend.micEnabled = micEnabled
-                    onCamEnabledChanged: backend.camEnabled = camEnabled
-                    
-                    onJoinClicked: backend.join()
-                    onQuickJoinClicked: backend.quickJoin()
-                    onCreateRoomClicked: backend.createScheduledRoom()
                 }
             }
         }

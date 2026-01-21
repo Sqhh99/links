@@ -2,6 +2,6 @@ import QtQuick
 import QtQuick.Window
 import Links
 
-LoginWindow {
+HomeWindow {
     id: mainWindow
 }

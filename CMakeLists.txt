@@ -111,6 +111,8 @@ qt_add_qml_module(links
         ui/qml/components/TitleBar.qml
         ui/qml/components/IconButton.qml
         ui/qml/components/PrimaryButton.qml
+        ui/qml/components/SecondaryButton.qml
+        ui/qml/components/LinkButton.qml
         ui/qml/components/TextField.qml
         ui/qml/components/PillToggle.qml
         ui/qml/components/TabButton.qml
@@ -120,9 +122,29 @@ qt_add_qml_module(links
         ui/qml/login/LoginWindow.qml
         ui/qml/login/HeroPanel.qml
         ui/qml/login/LoginCard.qml
+        ui/qml/login/AuthTabs.qml
+        ui/qml/login/AuthField.qml
+        ui/qml/login/AuthTextField.qml
+        ui/qml/login/AvatarPicker.qml
+        ui/qml/login/LoginForm.qml
+        ui/qml/login/RegisterForm.qml
         ui/qml/login/JoinForm.qml
         ui/qml/login/QuickStartForm.qml
         ui/qml/login/ScheduleForm.qml
+        # Home
+        ui/qml/home/HomeWindow.qml
+        ui/qml/home/HomeSidebar.qml
+        ui/qml/home/HomeUserCard.qml
+        ui/qml/home/HomeNavButton.qml
+        ui/qml/home/HomeMeetingPage.qml
+        ui/qml/home/HomeRecordingPage.qml
+        ui/qml/home/QuickActionCard.qml
+        ui/qml/home/MeetingListPanel.qml
+        ui/qml/home/MeetingListItem.qml
+        ui/qml/home/GuestPromptDialog.qml
+        ui/qml/home/AuthModal.qml
+        ui/qml/home/ShareScreenForm.qml
+        ui/qml/home/LoginPromptCard.qml
         # Settings
         ui/qml/settings/SettingsWindow.qml
         ui/qml/settings/AudioSettings.qml
@@ -167,7 +189,8 @@ qt_add_qml_module(links
         res/icon/pin.png
         res/icon/set_up.png
         res/icon/panel-left-close.png
-        res/icon/panel-left-open.png 
+        res/icon/panel-left-open.png
+        res/icon/panel-right-open.png
         res/icon/user-x.png
         res/icon/maximize_recovery.png
         res/icon/chevron-down.png
