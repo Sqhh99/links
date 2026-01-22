@@ -31,6 +31,9 @@ public:
     void setDevice(const QAudioDevice& device);
     void setDeviceById(const QByteArray& deviceId);
     
+    // Audio processing options (must be called before start())
+    void setAudioProcessingOptions(bool echoCancellation, bool noiseSuppression, bool autoGainControl);
+    
 signals:
     void error(const QString& message);
     
@@ -51,6 +54,9 @@ private:
     
     // Selected audio device
     QAudioDevice selectedDevice_;
+    
+    // Audio processing options for LiveKit AudioSource
+    livekit::AudioSourceOptions audioOptions_;
 };
 
 #endif // MICROPHONE_CAPTURER_H

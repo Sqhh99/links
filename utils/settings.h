@@ -30,6 +30,16 @@ public:
     bool isCameraEnabledByDefault() const;
     void setCameraEnabledByDefault(bool enabled);
     
+    // Audio processing options
+    bool isEchoCancellationEnabled() const;
+    void setEchoCancellationEnabled(bool enabled);
+    
+    bool isNoiseSuppressionEnabled() const;
+    void setNoiseSuppressionEnabled(bool enabled);
+    
+    bool isAutoGainControlEnabled() const;
+    void setAutoGainControlEnabled(bool enabled);
+    
     // Device selection
     QString getSelectedCameraId() const;
     void setSelectedCameraId(const QString& deviceId);

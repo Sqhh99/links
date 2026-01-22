@@ -1,4 +1,5 @@
 .cache/
+.claude
 CMakeFiles/
 CMakeCache.txt
 .DS_Store
@@ -14,6 +15,7 @@ livekit-sdk-windows-x64-0.0.1-test/
 docs/reference
 docs/deprecated
 extern
+agents
 
 # Livekit signaling server
 # Root level env files (keep .env.example)

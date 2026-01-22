@@ -14,15 +14,8 @@ MicrophoneCapturer::MicrophoneCapturer(QObject* parent)
     format_.setChannelCount(1);
     format_.setSampleFormat(QAudioFormat::Int16);
     
-    // Create LiveKit audio source
-    try {
-        livekitAudioSource_ = std::make_shared<livekit::AudioSource>(48000, 1);
-        Logger::instance().info("AudioSource created for microphone");
-    } catch (const std::exception& e) {
-        Logger::instance().error(QString("Failed to create AudioSource: %1").arg(e.what()));
-        emit error(QString("Failed to create audio source: %1").arg(e.what()));
-        return;
-    }
+    // Note: LiveKit AudioSource is created lazily in start() to ensure 
+    // audio processing options are applied correctly
     
     // Get default or selected audio input device
     QAudioDevice deviceInfo;
@@ -88,10 +81,25 @@ bool MicrophoneCapturer::start()
         return false;
     }
     
+    // Create LiveKit audio source with current audio processing options
+    // This is done here (not in constructor) to ensure options are applied correctly
+    try {
+        livekitAudioSource_ = std::make_shared<livekit::AudioSource>(48000, 1, 1000, audioOptions_);
+        Logger::instance().info(QString("AudioSource created for microphone (echo_cancellation=%1, noise_suppression=%2, auto_gain_control=%3)")
+                               .arg(audioOptions_.echo_cancellation)
+                               .arg(audioOptions_.noise_suppression)
+                               .arg(audioOptions_.auto_gain_control));
+    } catch (const std::exception& e) {
+        Logger::instance().error(QString("Failed to create AudioSource: %1").arg(e.what()));
+        emit error(QString("Failed to create audio source: %1").arg(e.what()));
+        return false;
+    }
+    
     try {
         audioInput_ = audioSource_->start();
         if (!audioInput_) {
             Logger::instance().error("Failed to start audio input");
+            livekitAudioSource_.reset();
             return false;
         }
         
@@ -109,6 +117,7 @@ bool MicrophoneCapturer::start()
     } catch (const std::exception& e) {
         Logger::instance().error(QString("Failed to start microphone: %1").arg(e.what()));
         emit error(QString("Failed to start microphone: %1").arg(e.what()));
+        livekitAudioSource_.reset();
         return false;
     }
 }
@@ -125,6 +134,9 @@ void MicrophoneCapturer::stop()
     
     audioInput_ = nullptr;
     isActive_ = false;
+    
+    // Reset LiveKit audio source so it can be recreated with potentially new options
+    livekitAudioSource_.reset();
     
     Logger::instance().info(QString("Microphone stopped (processed %1 samples)")
                            .arg(samplesProcessed_));
@@ -245,4 +257,21 @@ void MicrophoneCapturer::setDeviceById(const QByteArray& deviceId)
     }
     Logger::instance().warning(QString("Microphone with ID '%1' not found")
                               .arg(QString(deviceId)));
+}
+
+void MicrophoneCapturer::setAudioProcessingOptions(bool echoCancellation, bool noiseSuppression, bool autoGainControl)
+{
+    if (isActive_) {
+        Logger::instance().warning("Cannot change audio processing options while microphone is active");
+        return;
+    }
+    
+    audioOptions_.echo_cancellation = echoCancellation;
+    audioOptions_.noise_suppression = noiseSuppression;
+    audioOptions_.auto_gain_control = autoGainControl;
+    
+    Logger::instance().info(QString("Audio processing options set: echo_cancellation=%1, noise_suppression=%2, auto_gain_control=%3")
+                           .arg(echoCancellation)
+                           .arg(noiseSuppression)
+                           .arg(autoGainControl));
 }

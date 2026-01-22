@@ -22,6 +22,13 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
     if (!micId.isEmpty()) {
         microphoneCapturer_->setDeviceById(micId.toUtf8());
     }
+    
+    // Apply audio processing options from settings
+    microphoneCapturer_->setAudioProcessingOptions(
+        settings.isEchoCancellationEnabled(),
+        settings.isNoiseSuppressionEnabled(),
+        settings.isAutoGainControlEnabled()
+    );
 
     QObject::connect(cameraCapturer_, &CameraCapturer::error, this, [](const QString& msg) {
         Logger::instance().error(QString("Camera error: %1").arg(msg));
@@ -121,12 +128,11 @@ void DeviceController::toggleMicrophone()
                 Logger::instance().info(QString("Got audio source: %1").arg(source ? "valid" : "null"));
 
                 if (source) {
-                    if (!localAudioTrack_) {
-                        Logger::instance().info("Creating audio track...");
-                        localAudioTrack_ = livekit::LocalAudioTrack::createLocalAudioTrack("mic", source);
-                        Logger::instance().info(QString("Audio track created: %1")
-                            .arg(localAudioTrack_ ? "valid" : "null"));
-                    }
+                    // Always create a new audio track since AudioSource is recreated each time
+                    Logger::instance().info("Creating audio track...");
+                    localAudioTrack_ = livekit::LocalAudioTrack::createLocalAudioTrack("mic", source);
+                    Logger::instance().info(QString("Audio track created: %1")
+                        .arg(localAudioTrack_ ? "valid" : "null"));
 
                     auto localParticipant = room_->localParticipant();
                     Logger::instance().info(QString("Got local participant: %1")

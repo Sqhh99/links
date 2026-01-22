@@ -91,6 +91,37 @@ void Settings::setCameraEnabledByDefault(bool enabled)
     settings_.setValue("media/camera_enabled", enabled);
 }
 
+// Audio processing options
+bool Settings::isEchoCancellationEnabled() const
+{
+    return settings_.value("audio/echo_cancellation", true).toBool();
+}
+
+void Settings::setEchoCancellationEnabled(bool enabled)
+{
+    settings_.setValue("audio/echo_cancellation", enabled);
+}
+
+bool Settings::isNoiseSuppressionEnabled() const
+{
+    return settings_.value("audio/noise_suppression", true).toBool();
+}
+
+void Settings::setNoiseSuppressionEnabled(bool enabled)
+{
+    settings_.setValue("audio/noise_suppression", enabled);
+}
+
+bool Settings::isAutoGainControlEnabled() const
+{
+    return settings_.value("audio/auto_gain_control", true).toBool();
+}
+
+void Settings::setAutoGainControlEnabled(bool enabled)
+{
+    settings_.setValue("audio/auto_gain_control", enabled);
+}
+
 QString Settings::getSelectedCameraId() const
 {
     return settings_.value("device/camera_id", "").toString();

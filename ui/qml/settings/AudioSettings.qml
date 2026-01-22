@@ -103,6 +103,15 @@ ScrollView {
                     if (backend) backend.noiseSuppression = checked
                 }
             }
+            
+            Comp.CheckBox {
+                id: agcCheck
+                text: "自动增益控制"
+                checked: backend ? backend.autoGainControl : true
+                onCheckedChanged: {
+                    if (backend) backend.autoGainControl = checked
+                }
+            }
         }
         
         Item { Layout.fillHeight: true }

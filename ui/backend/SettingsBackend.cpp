@@ -62,6 +62,14 @@ void SettingsBackend::setNoiseSuppression(bool enabled)
     }
 }
 
+void SettingsBackend::setAutoGainControl(bool enabled)
+{
+    if (autoGainControl_ != enabled) {
+        autoGainControl_ = enabled;
+        emit autoGainControlChanged();
+    }
+}
+
 void SettingsBackend::setHardwareAccel(bool enabled)
 {
     if (hardwareAccel_ != enabled) {
@@ -176,6 +184,11 @@ void SettingsBackend::saveToSettings()
     settings.setSelectedMicrophoneId(selectedMicId_);
     settings.setSelectedSpeakerId(selectedSpeakerId_);
     
+    // Audio processing options
+    settings.setEchoCancellationEnabled(echoCancel_);
+    settings.setNoiseSuppressionEnabled(noiseSuppression_);
+    settings.setAutoGainControlEnabled(autoGainControl_);
+    
     settings.sync();
     
     Logger::instance().info("Settings saved successfully");
@@ -189,5 +202,10 @@ void SettingsBackend::loadFromSettings()
     setSelectedCameraId(settings.getSelectedCameraId());
     setSelectedMicId(settings.getSelectedMicrophoneId());
     setSelectedSpeakerId(settings.getSelectedSpeakerId());
+    
+    // Audio processing options
+    setEchoCancel(settings.isEchoCancellationEnabled());
+    setNoiseSuppression(settings.isNoiseSuppressionEnabled());
+    setAutoGainControl(settings.isAutoGainControlEnabled());
 }
 

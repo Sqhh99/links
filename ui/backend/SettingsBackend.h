@@ -19,6 +19,7 @@ class SettingsBackend : public QObject
     Q_PROPERTY(int selectedResolutionIndex READ selectedResolutionIndex WRITE setSelectedResolutionIndex NOTIFY selectedResolutionIndexChanged)
     Q_PROPERTY(bool echoCancel READ echoCancel WRITE setEchoCancel NOTIFY echoCancelChanged)
     Q_PROPERTY(bool noiseSuppression READ noiseSuppression WRITE setNoiseSuppression NOTIFY noiseSuppressionChanged)
+    Q_PROPERTY(bool autoGainControl READ autoGainControl WRITE setAutoGainControl NOTIFY autoGainControlChanged)
     Q_PROPERTY(bool hardwareAccel READ hardwareAccel WRITE setHardwareAccel NOTIFY hardwareAccelChanged)
     Q_PROPERTY(QString apiUrl READ apiUrl WRITE setApiUrl NOTIFY apiUrlChanged)
 
@@ -49,6 +50,9 @@ public:
     bool noiseSuppression() const { return noiseSuppression_; }
     void setNoiseSuppression(bool enabled);
     
+    bool autoGainControl() const { return autoGainControl_; }
+    void setAutoGainControl(bool enabled);
+    
     bool hardwareAccel() const { return hardwareAccel_; }
     void setHardwareAccel(bool enabled);
     
@@ -69,6 +73,7 @@ signals:
     void selectedResolutionIndexChanged();
     void echoCancelChanged();
     void noiseSuppressionChanged();
+    void autoGainControlChanged();
     void hardwareAccelChanged();
     void apiUrlChanged();
     void accepted();
@@ -90,6 +95,7 @@ private:
     int selectedResolutionIndex_{0};
     bool echoCancel_{true};
     bool noiseSuppression_{true};
+    bool autoGainControl_{true};
     bool hardwareAccel_{true};
     QString apiUrl_;
 };
