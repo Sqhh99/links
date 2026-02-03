@@ -24,11 +24,9 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
     }
     
     // Apply audio processing options from settings
-    microphoneCapturer_->setAudioProcessingOptions(
-        settings.isEchoCancellationEnabled(),
-        settings.isNoiseSuppressionEnabled(),
-        settings.isAutoGainControlEnabled()
-    );
+    microphoneCapturer_->setEchoCancellationEnabled(settings.isEchoCancellationEnabled());
+    microphoneCapturer_->setNoiseSuppressionEnabled(settings.isNoiseSuppressionEnabled());
+    microphoneCapturer_->setAutoGainControlEnabled(settings.isAutoGainControlEnabled());
 
     QObject::connect(cameraCapturer_, &CameraCapturer::error, this, [](const QString& msg) {
         Logger::instance().error(QString("Camera error: %1").arg(msg));

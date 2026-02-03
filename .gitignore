@@ -14,7 +14,7 @@ livekit-sdk-windows-x64/
 livekit-sdk-windows-x64-0.0.1-test/
 docs/reference
 docs/deprecated
-extern
+# extern
 agents
 
 # Livekit signaling server

@@ -12,13 +12,19 @@ option(LINKS_BUILD_TESTS "Build test suite" ON)
 
 # Set Qt path (keep existing prefixes for vcpkg)
 list(PREPEND CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
-set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/extern/livekit-sdk-windows")
+set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/extern/livekit-sdk-windows-x64-0.2.7")
 set(LIVEKIT_PATH "${LIVEKIT_SDK_ROOT}/lib")
 # Set LiveKit SDK paths (external library)
 # livekit.lib is the import library for livekit.dll
 set(LIVEKIT_INCLUDE_DIR "${LIVEKIT_SDK_ROOT}/include")
 set(LIVEKIT_LIBRARY "${LIVEKIT_PATH}/livekit.lib")
 set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_PATH}/livekit_ffi.dll.lib")
+
+# WebRTC Audio Processing library paths
+set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/webrtc-audio-processing-msvc2022")
+set(WEBRTC_APM_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include/webrtc-audio-processing-2")
+set(WEBRTC_ABSEIL_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include")
+set(WEBRTC_APM_LIBRARY "${WEBRTC_APM_ROOT}/lib/webrtc-audio-processing-2.lib")
 
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
@@ -36,6 +42,7 @@ set(SOURCES
     core/network_client.cpp
     core/camera_capturer.cpp
     core/microphone_capturer.cpp
+    core/audio_processing_module.cpp
     core/screen_capturer.cpp
     core/room_event_delegate.cpp
     core/platform_window_ops.cpp
@@ -206,6 +213,7 @@ qt_add_qml_module(links
 target_link_libraries(links PRIVATE
     ${LIVEKIT_LIBRARY}
     ${LIVEKIT_FFI_LIBRARY}
+    ${WEBRTC_APM_LIBRARY}
     Qt6::Core
     Qt6::Gui
     Qt6::Network
@@ -223,6 +231,8 @@ target_include_directories(links PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/utils
     ${LIVEKIT_INCLUDE_DIR}
+    ${WEBRTC_APM_INCLUDE_DIR}
+    ${WEBRTC_ABSEIL_INCLUDE_DIR}
 )
 
 # Set output directory
@@ -248,15 +258,17 @@ if(WIN32)
     )
     
     # Copy DLLs to output directory after build
-    set(DLL_SOURCE_DIR "${LIVEKIT_PATH}")
     add_custom_command(TARGET links POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DLL_SOURCE_DIR}/livekit.dll"
+            "${LIVEKIT_SDK_ROOT}/bin/livekit.dll"
             "$<TARGET_FILE_DIR:links>/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${DLL_SOURCE_DIR}/livekit_ffi.dll"
+            "${LIVEKIT_SDK_ROOT}/bin/livekit_ffi.dll"
             "$<TARGET_FILE_DIR:links>/"
-        COMMENT "Copying DLLs from client-sdk-cpp to output directory"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${WEBRTC_APM_ROOT}/bin/webrtc-audio-processing-2-1.dll"
+            "$<TARGET_FILE_DIR:links>/"
+        COMMENT "Copying DLLs to output directory"
     )
 endif()
 
