@@ -33,10 +33,39 @@
       }
     },
     {
+      "name": "linux-base",
+      "hidden": true,
+      "inherits": "vcpkg-base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++"
+      }
+    },
+    {
+      "name": "macos-base",
+      "hidden": true,
+      "inherits": "vcpkg-base",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Darwin"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "clang",
+        "CMAKE_CXX_COMPILER": "clang++",
+        "CMAKE_OSX_DEPLOYMENT_TARGET": "12.0"
+      }
+    },
+    {
       "name": "default",
       "displayName": "Default (Release)",
       "description": "Default Release build configuration",
-      "inherits": "windows-base",
+      "inherits": ["windows-base", "linux-base", "macos-base"],
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
@@ -78,4 +107,3 @@
     }
   ]
 }
-
