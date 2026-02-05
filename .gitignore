@@ -17,10 +17,6 @@ docs/reference
 docs/deprecated
 third_party
 agents
-third_party/webrtc-audio-processing
-third_party/vcpkg_installed
-third_party/vcpkg
-
 
 # Livekit signaling server
 # Root level env files (keep .env.example)

@@ -36,18 +36,11 @@ endif()
 include(FetchLiveKitSDK)
 
 # =============================================================================
-# WebRTC Audio Processing library paths
+# WebRTC Audio Processing (auto-download based on platform)
 # =============================================================================
-if(WIN32)
-    set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-windows-x64")
-elseif(APPLE)
-    set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-macos-arm64")
-elseif(UNIX)
-    set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-linux-x64")
-endif()
-set(WEBRTC_APM_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include/webrtc-audio-processing-2")
-set(WEBRTC_ABSEIL_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include")
-set(WEBRTC_APM_LIBRARY "${WEBRTC_APM_ROOT}/lib/webrtc-audio-processing-2.lib")
+# Set version before including the module (optional, defaults to 2.1.0-mirror.1)
+# set(WEBRTC_APM_VERSION "2.1.0-mirror.1")
+include(FetchWebRTCAudioProcessing)
 
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
@@ -289,7 +282,7 @@ if(WIN32)
             "${LIVEKIT_BIN_DIR}/livekit_ffi.dll"
             "$<TARGET_FILE_DIR:links>/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${WEBRTC_APM_ROOT}/bin/webrtc-audio-processing-2-1.dll"
+            "${WEBRTC_APM_SHARED_LIB}"
             "$<TARGET_FILE_DIR:links>/"
         COMMENT "Copying DLLs to output directory"
     )
