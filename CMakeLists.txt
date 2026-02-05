@@ -12,7 +12,7 @@ option(LINKS_BUILD_TESTS "Build test suite" ON)
 
 # Set Qt path (keep existing prefixes for vcpkg)
 list(PREPEND CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
-set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/extern/livekit-sdk-windows-x64-0.2.7")
+set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/third_party/livekit-sdk-windows-x64-0.2.7")
 set(LIVEKIT_PATH "${LIVEKIT_SDK_ROOT}/lib")
 # Set LiveKit SDK paths (external library)
 # livekit.lib is the import library for livekit.dll
@@ -21,7 +21,7 @@ set(LIVEKIT_LIBRARY "${LIVEKIT_PATH}/livekit.lib")
 set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_PATH}/livekit_ffi.dll.lib")
 
 # WebRTC Audio Processing library paths
-set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/extern/webrtc-audio-processing-msvc2022")
+set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-windows-x64")
 set(WEBRTC_APM_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include/webrtc-audio-processing-2")
 set(WEBRTC_ABSEIL_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include")
 set(WEBRTC_APM_LIBRARY "${WEBRTC_APM_ROOT}/lib/webrtc-audio-processing-2.lib")

@@ -15,7 +15,7 @@ setlocal EnableDelayedExpansion
 :: =============================================================================
 
 set "PROJECT_ROOT=%~dp0"
-set "VCPKG_DIR=%PROJECT_ROOT%extern\vcpkg"
+set "VCPKG_DIR=%PROJECT_ROOT%third_party\vcpkg"
 set "BUILD_DIR=%PROJECT_ROOT%build"
 
 :: Setup Visual Studio environment if not already set
@@ -137,7 +137,7 @@ goto :eof
 call :build_release
 if errorlevel 1 exit /b 1
 
-set "VCPKG_BIN=%PROJECT_ROOT%extern\vcpkg_installed\x64-windows\bin"
+set "VCPKG_BIN=%PROJECT_ROOT%third_party\vcpkg_installed\x64-windows\bin"
 set "QT_BIN=D:/Qt/6.10.0/msvc2022_64/bin"
 if exist "%VCPKG_BIN%" set "PATH=%VCPKG_BIN%;%PATH%"
 if exist "%QT_BIN%" set "PATH=%QT_BIN%;%PATH%"

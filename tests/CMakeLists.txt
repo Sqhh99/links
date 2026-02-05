@@ -118,7 +118,7 @@ gtest_discover_tests(desktop_capture_tests DISCOVERY_MODE PRE_TEST)
 # =============================================================================
 
 # GTest DLLs (from vcpkg)
-set(GTEST_DLL_DIR "${CMAKE_SOURCE_DIR}/extern/vcpkg_installed/x64-windows/bin")
+set(GTEST_DLL_DIR "${CMAKE_SOURCE_DIR}/third_party/vcpkg_installed/x64-windows/bin")
 
 # Copy GTest and WebRTC APM DLLs for audio_processing_tests
 add_custom_command(TARGET audio_processing_tests POST_BUILD

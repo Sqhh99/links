@@ -15,8 +15,12 @@ livekit-sdk-windows-x64/
 livekit-sdk-windows-x64-0.0.1-test/
 docs/reference
 docs/deprecated
-extern
+third_party
 agents
+third_party/webrtc-audio-processing
+third_party/vcpkg_installed
+third_party/vcpkg
+
 
 # Livekit signaling server
 # Root level env files (keep .env.example)
