@@ -10,18 +10,41 @@ set(VCPKG_APPLOCAL_DEPS OFF)
 # Testing options
 option(LINKS_BUILD_TESTS "Build test suite" ON)
 
-# Set Qt path (keep existing prefixes for vcpkg)
-list(PREPEND CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
-set(LIVEKIT_SDK_ROOT "D:/workspace/cpp-workspace/links/third_party/livekit-sdk-windows-x64-0.2.7")
-set(LIVEKIT_PATH "${LIVEKIT_SDK_ROOT}/lib")
-# Set LiveKit SDK paths (external library)
-# livekit.lib is the import library for livekit.dll
-set(LIVEKIT_INCLUDE_DIR "${LIVEKIT_SDK_ROOT}/include")
-set(LIVEKIT_LIBRARY "${LIVEKIT_PATH}/livekit.lib")
-set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_PATH}/livekit_ffi.dll.lib")
+# =============================================================================
+# CMake Module Path
+# =============================================================================
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+# =============================================================================
+# Qt Configuration (platform-specific)
+# =============================================================================
+if(WIN32)
+    list(PREPEND CMAKE_PREFIX_PATH "D:/Qt/6.10.0/msvc2022_64")
+elseif(APPLE)
+    # macOS: Adjust this path as needed
+    # list(PREPEND CMAKE_PREFIX_PATH "/path/to/Qt/6.x.x/macos")
+elseif(UNIX)
+    # Linux: Qt is typically found via system paths or set externally
+    # list(PREPEND CMAKE_PREFIX_PATH "/path/to/Qt/6.x.x/gcc_64")
+endif()
+
+# =============================================================================
+# LiveKit SDK (auto-download based on platform)
+# =============================================================================
+# Set version before including the module (optional, defaults to 0.2.7)
+# set(LIVEKIT_SDK_VERSION "0.2.7")
+include(FetchLiveKitSDK)
+
+# =============================================================================
 # WebRTC Audio Processing library paths
-set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-windows-x64")
+# =============================================================================
+if(WIN32)
+    set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-windows-x64")
+elseif(APPLE)
+    set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-macos-arm64")
+elseif(UNIX)
+    set(WEBRTC_APM_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/third_party/webrtc-audio-processing/webrtc-audio-processing-linux-x64")
+endif()
 set(WEBRTC_APM_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include/webrtc-audio-processing-2")
 set(WEBRTC_ABSEIL_INCLUDE_DIR "${WEBRTC_APM_ROOT}/include")
 set(WEBRTC_APM_LIBRARY "${WEBRTC_APM_ROOT}/lib/webrtc-audio-processing-2.lib")
@@ -260,10 +283,10 @@ if(WIN32)
     # Copy DLLs to output directory after build
     add_custom_command(TARGET links POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${LIVEKIT_SDK_ROOT}/bin/livekit.dll"
+            "${LIVEKIT_BIN_DIR}/livekit.dll"
             "$<TARGET_FILE_DIR:links>/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            "${LIVEKIT_SDK_ROOT}/bin/livekit_ffi.dll"
+            "${LIVEKIT_BIN_DIR}/livekit_ffi.dll"
             "$<TARGET_FILE_DIR:links>/"
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${WEBRTC_APM_ROOT}/bin/webrtc-audio-processing-2-1.dll"
