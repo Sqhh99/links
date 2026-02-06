@@ -10,6 +10,9 @@ namespace links {
 namespace core {
 
 std::vector<WindowInfo> enumerateWindows();
+bool isWindowShareSupportedOnCurrentPlatform();
+bool isScreenShareSupportedOnCurrentPlatform();
+bool hasScreenCapturePermission();
 bool bringWindowToForeground(WindowId id);
 bool excludeFromCapture(WindowId id);
 bool isWindowValid(WindowId id);

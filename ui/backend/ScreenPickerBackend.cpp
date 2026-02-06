@@ -76,11 +76,7 @@ QString ScreenPickerBackend::shareButtonText() const
 
 bool ScreenPickerBackend::windowShareSupported() const
 {
-#ifdef Q_OS_WIN
-    return true;
-#else
-    return false;
-#endif
+    return links::core::isWindowShareSupportedOnCurrentPlatform();
 }
 
 void ScreenPickerBackend::refreshScreens()
