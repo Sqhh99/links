@@ -129,6 +129,7 @@ if(APPLE OR (UNIX AND NOT WIN32))
         find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
         find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
         find_library(CORE_MEDIA_FRAMEWORK CoreMedia REQUIRED)
+        find_library(CORE_VIDEO_FRAMEWORK CoreVideo REQUIRED)
         find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
         find_library(SCREEN_CAPTURE_KIT_FRAMEWORK ScreenCaptureKit)
         list(APPEND CAPTURE_PLATFORM_LIBS
@@ -136,6 +137,7 @@ if(APPLE OR (UNIX AND NOT WIN32))
             ${CORE_FOUNDATION_FRAMEWORK}
             ${FOUNDATION_FRAMEWORK}
             ${CORE_MEDIA_FRAMEWORK}
+            ${CORE_VIDEO_FRAMEWORK}
             ${AVFOUNDATION_FRAMEWORK}
         )
         if(SCREEN_CAPTURE_KIT_FRAMEWORK)
