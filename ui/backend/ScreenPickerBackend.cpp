@@ -38,6 +38,9 @@ ScreenPickerBackend::~ScreenPickerBackend()
 
 void ScreenPickerBackend::setCurrentTabIndex(int index)
 {
+    if (!windowShareSupported() && index == 1) {
+        index = 0;
+    }
     if (currentTabIndex_ != index) {
         currentTabIndex_ = index;
         emit currentTabIndexChanged();
@@ -67,14 +70,24 @@ bool ScreenPickerBackend::hasSelection() const
 {
     if (currentTabIndex_ == 0) {
         return selectedScreenIndex_ >= 0 && selectedScreenIndex_ < screens_.size();
-    } else {
+    } else if (windowShareSupported()) {
         return selectedWindowIndex_ >= 0 && selectedWindowIndex_ < windows_.size();
     }
+    return false;
 }
 
 QString ScreenPickerBackend::shareButtonText() const
 {
-    return currentTabIndex_ == 0 ? "共享屏幕" : "共享窗口";
+    return currentTabIndex_ == 0 || !windowShareSupported() ? "共享屏幕" : "共享窗口";
+}
+
+bool ScreenPickerBackend::windowShareSupported() const
+{
+#ifdef Q_OS_WIN
+    return true;
+#else
+    return false;
+#endif
 }
 
 void ScreenPickerBackend::refreshScreens()
@@ -111,6 +124,14 @@ void ScreenPickerBackend::refreshWindows()
 {
     windows_.clear();
     windowInfos_.clear();
+
+    if (!windowShareSupported()) {
+        selectedWindowIndex_ = -1;
+        emit selectedWindowIndexChanged();
+        emit windowsChanged();
+        emit selectionChanged();
+        return;
+    }
     
     const auto windowList = enumerateWindows();
     windowInfos_.reserve(windowList.size());
@@ -198,7 +219,7 @@ void ScreenPickerBackend::accept()
             selectedScreen_ = screenList[selectedScreenIndex_];
             selectionType_ = SelectionType::Screen;
         }
-    } else {
+    } else if (windowShareSupported()) {
         if (selectedWindowIndex_ >= 0 && selectedWindowIndex_ < windowInfos_.size()) {
             selectedWindowId_ = windowInfos_[selectedWindowIndex_].id;
             if (selectedWindowId_ != 0) {

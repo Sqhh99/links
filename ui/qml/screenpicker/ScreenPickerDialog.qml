@@ -24,13 +24,13 @@ Popup {
         id: backend
         
         onAccepted: {
-            if (currentTabIndex === 0) {
-                root.screenSelected(selectedScreenIndex)
-            } else {
+            if (currentTabIndex === 1 && windowShareSupported) {
                 var windowInfo = windows[selectedWindowIndex]
                 if (windowInfo) {
                     root.windowSelected(windowInfo.windowId)
                 }
+            } else {
+                root.screenSelected(selectedScreenIndex)
             }
             root.close()
         }
@@ -47,7 +47,9 @@ Popup {
     // Re-populate when opening
     onOpened: {
         backend.refreshScreens()
-        backend.refreshWindows()
+        if (backend.windowShareSupported) {
+            backend.refreshWindows()
+        }
     }
     
     // Cancel pending operations when closing
@@ -86,6 +88,7 @@ Popup {
                 id: tabBar
                 Layout.fillWidth: true
                 currentIndex: backend.currentTabIndex
+                windowShareSupported: backend.windowShareSupported
                 onCurrentIndexChanged: backend.currentTabIndex = currentIndex
             }
             

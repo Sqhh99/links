@@ -8,20 +8,27 @@ if(NOT DEFINED LIVEKIT_SDK_VERSION)
     set(LIVEKIT_SDK_VERSION "0.2.7")
 endif()
 
+# Shared SDK architecture selector across third-party fetch modules.
+# Supported values: x64, arm64. Default is x64.
+if(NOT DEFINED LINKS_SDK_ARCH)
+    set(LINKS_SDK_ARCH "x64")
+endif()
+string(TOLOWER "${LINKS_SDK_ARCH}" LIVEKIT_ARCH)
+if(NOT LIVEKIT_ARCH MATCHES "^(x64|arm64)$")
+    message(FATAL_ERROR "Unsupported LINKS_SDK_ARCH: ${LINKS_SDK_ARCH}. Expected x64 or arm64.")
+endif()
+
 # =============================================================================
 # Platform Detection
 # =============================================================================
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(LIVEKIT_PLATFORM "windows")
-    set(LIVEKIT_ARCH "x64")
     set(LIVEKIT_ARCHIVE_EXT "zip")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(LIVEKIT_PLATFORM "linux")
-    set(LIVEKIT_ARCH "x64")
     set(LIVEKIT_ARCHIVE_EXT "tar.gz")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(LIVEKIT_PLATFORM "macos")
-    set(LIVEKIT_ARCH "arm64")
     set(LIVEKIT_ARCHIVE_EXT "tar.gz")
 else()
     message(FATAL_ERROR "Unsupported platform: ${CMAKE_SYSTEM_NAME}")
@@ -106,6 +113,7 @@ endif()
 
 message(STATUS "LiveKit SDK Configuration:")
 message(STATUS "  Root: ${LIVEKIT_SDK_ROOT}")
+message(STATUS "  Arch: ${LIVEKIT_ARCH}")
 message(STATUS "  Include: ${LIVEKIT_INCLUDE_DIR}")
 message(STATUS "  Library: ${LIVEKIT_LIBRARY}")
 message(STATUS "  FFI Library: ${LIVEKIT_FFI_LIBRARY}")

@@ -678,7 +678,11 @@ Window {
                 backend: backend
                 settingsBackend: settingsBackendInstance
                 
-                onScreenShareClicked: screenPickerDialog.open()
+                onScreenShareClicked: {
+                    if (backend && backend.screenShareSupported) {
+                        screenPickerDialog.open()
+                    }
+                }
             }
         }
         

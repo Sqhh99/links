@@ -8,20 +8,27 @@ if(NOT DEFINED WEBRTC_APM_VERSION)
     set(WEBRTC_APM_VERSION "2.1.0-mirror.1")
 endif()
 
+# Shared SDK architecture selector across third-party fetch modules.
+# Supported values: x64, arm64. Default is x64.
+if(NOT DEFINED LINKS_SDK_ARCH)
+    set(LINKS_SDK_ARCH "x64")
+endif()
+string(TOLOWER "${LINKS_SDK_ARCH}" WEBRTC_ARCH)
+if(NOT WEBRTC_ARCH MATCHES "^(x64|arm64)$")
+    message(FATAL_ERROR "Unsupported LINKS_SDK_ARCH: ${LINKS_SDK_ARCH}. Expected x64 or arm64.")
+endif()
+
 # =============================================================================
 # Platform Detection
 # =============================================================================
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(WEBRTC_PLATFORM "windows")
-    set(WEBRTC_ARCH "x64")
     set(WEBRTC_ARCHIVE_EXT "zip")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(WEBRTC_PLATFORM "linux")
-    set(WEBRTC_ARCH "x64")
     set(WEBRTC_ARCHIVE_EXT "tar.gz")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(WEBRTC_PLATFORM "macos")
-    set(WEBRTC_ARCH "x64")
     set(WEBRTC_ARCHIVE_EXT "tar.gz")
 else()
     message(FATAL_ERROR "Unsupported platform: ${CMAKE_SYSTEM_NAME}")
@@ -106,6 +113,7 @@ endif()
 
 message(STATUS "WebRTC Audio Processing Configuration:")
 message(STATUS "  Root: ${WEBRTC_APM_ROOT}")
+message(STATUS "  Arch: ${WEBRTC_ARCH}")
 message(STATUS "  Include: ${WEBRTC_APM_INCLUDE_DIR}")
 message(STATUS "  Abseil Include: ${WEBRTC_ABSEIL_INCLUDE_DIR}")
 message(STATUS "  Library: ${WEBRTC_APM_LIBRARY}")

@@ -6,6 +6,7 @@ RowLayout {
     id: root
     
     property int currentIndex: 0
+    property bool windowShareSupported: true
     
     height: 44
     spacing: 0
@@ -18,6 +19,8 @@ RowLayout {
     
     TabItem {
         text: "窗口"
+        visible: root.windowShareSupported
+        enabled: root.windowShareSupported
         active: root.currentIndex === 1
         onClicked: root.currentIndex = 1
     }

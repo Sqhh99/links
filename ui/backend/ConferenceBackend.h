@@ -29,6 +29,7 @@ class ConferenceBackend : public QObject
     Q_PROPERTY(bool micEnabled READ micEnabled NOTIFY micEnabledChanged)
     Q_PROPERTY(bool camEnabled READ camEnabled NOTIFY camEnabledChanged)
     Q_PROPERTY(bool screenSharing READ screenSharing NOTIFY screenSharingChanged)
+    Q_PROPERTY(bool screenShareSupported READ screenShareSupported CONSTANT)
     
     // Share Mode
     Q_PROPERTY(ShareModeManager* shareMode READ shareMode CONSTANT)
@@ -66,6 +67,7 @@ public:
     bool micEnabled() const;
     bool camEnabled() const;
     bool screenSharing() const;
+    bool screenShareSupported() const;
     ShareModeManager* shareMode() const { return shareModeManager_; }
     bool isChatVisible() const { return isChatVisible_; }
     bool isParticipantsVisible() const { return isParticipantsVisible_; }

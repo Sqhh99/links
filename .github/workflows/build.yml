@@ -19,14 +19,17 @@ jobs:
             preset: release
             qt_version: "6.8.3"
             qt_arch: win64_msvc2022_64
+            sdk_arch: x64
           - os: ubuntu-latest
             preset: release
             qt_version: "6.8.3"
             qt_arch: linux_gcc_64
+            sdk_arch: x64
           - os: macos-latest
             preset: release
             qt_version: "6.8.3"
             qt_arch: clang_64
+            sdk_arch: x64
 
     runs-on: ${{ matrix.os }}
 
@@ -99,7 +102,7 @@ jobs:
 
     # Configure and Build
     - name: Configure CMake
-      run: cmake --preset ${{ matrix.preset }}
+      run: cmake --preset ${{ matrix.preset }} -DLINKS_SDK_ARCH=${{ matrix.sdk_arch }}
 
     - name: Build
       run: cmake --build --preset ${{ matrix.preset }}

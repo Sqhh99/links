@@ -127,6 +127,15 @@ bool ConferenceBackend::screenSharing() const
     return conferenceManager_ && conferenceManager_->isScreenSharing();
 }
 
+bool ConferenceBackend::screenShareSupported() const
+{
+#ifdef Q_OS_WIN
+    return true;
+#else
+    return false;
+#endif
+}
+
 // Property setters
 void ConferenceBackend::setIsChatVisible(bool visible)
 {
@@ -254,6 +263,11 @@ void ConferenceBackend::toggleCamera()
 
 void ConferenceBackend::toggleScreenShare()
 {
+    if (!screenShareSupported()) {
+        Logger::instance().warning("Screen sharing is not supported on this platform");
+        return;
+    }
+
     if (conferenceManager_) {
         // If already sharing, stop sharing
         if (conferenceManager_->isScreenSharing()) {
@@ -265,6 +279,11 @@ void ConferenceBackend::toggleScreenShare()
 
 void ConferenceBackend::startScreenShare(int screenIndex)
 {
+    if (!screenShareSupported()) {
+        Logger::instance().warning("Screen sharing is not supported on this platform");
+        return;
+    }
+
     if (!conferenceManager_) return;
     
     const auto screens = QGuiApplication::screens();
@@ -280,6 +299,11 @@ void ConferenceBackend::startScreenShare(int screenIndex)
 
 void ConferenceBackend::startWindowShare(qulonglong windowId)
 {
+    if (!screenShareSupported()) {
+        Logger::instance().warning("Screen sharing is not supported on this platform");
+        return;
+    }
+
     if (!conferenceManager_) return;
     
     WId id = static_cast<WId>(windowId);

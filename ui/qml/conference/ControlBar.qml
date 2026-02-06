@@ -89,9 +89,10 @@ Rectangle {
             IconOnlyButton {
                 iconSource: "qrc:/res/icon/monitor-up.png"
                 isActive: backend ? backend.screenSharing : false
+                enabled: backend ? backend.screenShareSupported : false
                 activeColor: "#D1FAE5" // emerald-100
                 activeIconColor: "#059669" // emerald-600
-                toolTip: "共享屏幕"
+                toolTip: backend && !backend.screenShareSupported ? "当前平台暂不支持屏幕共享" : "共享屏幕"
                 onClicked: {
                     if (backend) {
                         if (backend.screenSharing) backend.stopScreenShare()
@@ -388,6 +389,7 @@ Rectangle {
         
         implicitWidth: 48
         implicitHeight: 40
+        opacity: enabled ? 1.0 : 0.45
         
         background: Rectangle {
             color: iBtn.isActive ? iBtn.activeColor : "transparent"
@@ -431,7 +433,7 @@ Rectangle {
             anchors.fill: parent
             radius: 10
             color: "#000000"
-            opacity: (!iBtn.isActive && iBtn.hovered) ? 0.05 : 0
+            opacity: (iBtn.enabled && !iBtn.isActive && iBtn.hovered) ? 0.05 : 0
         }
         
         ToolTip.visible: toolTip.length > 0 && hovered
@@ -440,7 +442,7 @@ Rectangle {
         
         MouseArea {
             anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
+            cursorShape: iBtn.enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
             onPressed: function(mouse) { mouse.accepted = false }
         }
     }

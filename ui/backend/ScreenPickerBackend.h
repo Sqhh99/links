@@ -23,6 +23,7 @@ class ScreenPickerBackend : public QObject
     Q_PROPERTY(int selectedWindowIndex READ selectedWindowIndex WRITE setSelectedWindowIndex NOTIFY selectedWindowIndexChanged)
     Q_PROPERTY(bool hasSelection READ hasSelection NOTIFY selectionChanged)
     Q_PROPERTY(QString shareButtonText READ shareButtonText NOTIFY currentTabIndexChanged)
+    Q_PROPERTY(bool windowShareSupported READ windowShareSupported CONSTANT)
 
 public:
     enum class SelectionType {
@@ -51,6 +52,7 @@ public:
     
     bool hasSelection() const;
     QString shareButtonText() const;
+    bool windowShareSupported() const;
     
     // Selection results
     SelectionType selectionType() const { return selectionType_; }
