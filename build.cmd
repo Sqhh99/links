@@ -19,6 +19,8 @@ set "VCPKG_DIR=%PROJECT_ROOT%third_party\vcpkg"
 set "BUILD_DIR=%PROJECT_ROOT%build"
 set "SDK_ARCH=%LINKS_SDK_ARCH%"
 if "%SDK_ARCH%"=="" set "SDK_ARCH=x64"
+set "VCPKG_TRIPLET=%VCPKG_TARGET_TRIPLET%"
+if "%VCPKG_TRIPLET%"=="" set "VCPKG_TRIPLET=x64-windows"
 
 :: Setup Visual Studio environment if not already set
 if not defined VSINSTALLDIR (
@@ -103,7 +105,7 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo [*] Configuring Release build...
-cmake --preset release -DLINKS_SDK_ARCH=%SDK_ARCH%
+cmake --preset release -DLINKS_SDK_ARCH=%SDK_ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET%
 if errorlevel 1 (
     echo [!] CMake configuration failed
     exit /b 1

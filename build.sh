@@ -18,6 +18,25 @@ PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VCPKG_DIR="$PROJECT_ROOT/third_party/vcpkg"
 BUILD_DIR="$PROJECT_ROOT/build"
 SDK_ARCH="${LINKS_SDK_ARCH:-x64}"
+VCPKG_TRIPLET="${VCPKG_TARGET_TRIPLET:-}"
+
+if [ -z "$VCPKG_TRIPLET" ]; then
+    case "$(uname -s)" in
+        Darwin)
+            if [ "$SDK_ARCH" = "arm64" ]; then
+                VCPKG_TRIPLET="arm64-osx"
+            else
+                VCPKG_TRIPLET="x64-osx"
+            fi
+            ;;
+        Linux)
+            VCPKG_TRIPLET="x64-linux"
+            ;;
+        *)
+            VCPKG_TRIPLET=""
+            ;;
+    esac
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -108,7 +127,7 @@ build_release() {
     
     echo ""
     log_info "Configuring Release build..."
-    cmake --preset release -DLINKS_SDK_ARCH="$SDK_ARCH"
+    cmake --preset release -DLINKS_SDK_ARCH="$SDK_ARCH" -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET"
     if [ $? -ne 0 ]; then
         log_error "CMake configuration failed"
         exit 1
