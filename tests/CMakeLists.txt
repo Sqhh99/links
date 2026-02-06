@@ -77,6 +77,16 @@ target_include_directories(microphone_capturer_tests PRIVATE
     ${WEBRTC_ABSEIL_INCLUDE_DIR}
 )
 
+# Ensure test executables can resolve third-party shared libraries at runtime.
+if(UNIX)
+    set_target_properties(audio_processing_tests PROPERTIES
+        BUILD_RPATH "${WEBRTC_APM_BIN_DIR}"
+    )
+    set_target_properties(microphone_capturer_tests PROPERTIES
+        BUILD_RPATH "${WEBRTC_APM_BIN_DIR};${LIVEKIT_BIN_DIR}"
+    )
+endif()
+
 # =============================================================================
 # Desktop Capture Tests (existing)
 # =============================================================================
@@ -114,53 +124,42 @@ gtest_discover_tests(microphone_capturer_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(desktop_capture_tests DISCOVERY_MODE PRE_TEST)
 
 # =============================================================================
-# Copy DLLs to test output directories
+# Runtime dependencies for tests
 # =============================================================================
 
-# GTest DLLs (from vcpkg)
-set(GTEST_DLL_DIR "${CMAKE_SOURCE_DIR}/extern/vcpkg_installed/x64-windows/bin")
+function(copy_runtime_if_exists target source_file)
+    if(EXISTS "${source_file}")
+        add_custom_command(TARGET ${target} POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${source_file}"
+                "$<TARGET_FILE_DIR:${target}>/"
+            COMMENT "Copying runtime dependency for ${target}: ${source_file}"
+        )
+    endif()
+endfunction()
 
-# Copy GTest and WebRTC APM DLLs for audio_processing_tests
-add_custom_command(TARGET audio_processing_tests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GTEST_DLL_DIR}/gtest.dll"
-        "$<TARGET_FILE_DIR:audio_processing_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GTEST_DLL_DIR}/gtest_main.dll"
-        "$<TARGET_FILE_DIR:audio_processing_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${WEBRTC_APM_ROOT}/bin/webrtc-audio-processing-2-1.dll"
-        "$<TARGET_FILE_DIR:audio_processing_tests>/"
-    COMMENT "Copying DLLs for audio_processing_tests"
-)
+# On Windows, tests need runtime DLLs copied next to test binaries.
+# On Linux/macOS, shared library lookup is handled by loader paths/RPATH.
+if(WIN32)
+    if(DEFINED VCPKG_TARGET_TRIPLET AND NOT VCPKG_TARGET_TRIPLET STREQUAL "")
+        set(GTEST_DLL_DIR "${CMAKE_SOURCE_DIR}/third_party/vcpkg_installed/${VCPKG_TARGET_TRIPLET}/bin")
+    else()
+        set(GTEST_DLL_DIR "${CMAKE_SOURCE_DIR}/third_party/vcpkg_installed/x64-windows/bin")
+    endif()
 
-# Copy all required DLLs for microphone_capturer_tests
-add_custom_command(TARGET microphone_capturer_tests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GTEST_DLL_DIR}/gtest.dll"
-        "$<TARGET_FILE_DIR:microphone_capturer_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GTEST_DLL_DIR}/gtest_main.dll"
-        "$<TARGET_FILE_DIR:microphone_capturer_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${WEBRTC_APM_ROOT}/bin/webrtc-audio-processing-2-1.dll"
-        "$<TARGET_FILE_DIR:microphone_capturer_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${LIVEKIT_SDK_ROOT}/bin/livekit.dll"
-        "$<TARGET_FILE_DIR:microphone_capturer_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${LIVEKIT_SDK_ROOT}/bin/livekit_ffi.dll"
-        "$<TARGET_FILE_DIR:microphone_capturer_tests>/"
-    COMMENT "Copying DLLs for microphone_capturer_tests"
-)
+    # audio_processing_tests
+    copy_runtime_if_exists(audio_processing_tests "${GTEST_DLL_DIR}/gtest.dll")
+    copy_runtime_if_exists(audio_processing_tests "${GTEST_DLL_DIR}/gtest_main.dll")
+    copy_runtime_if_exists(audio_processing_tests "${WEBRTC_APM_SHARED_LIB}")
 
-# Copy GTest DLLs for desktop_capture_tests
-add_custom_command(TARGET desktop_capture_tests POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GTEST_DLL_DIR}/gtest.dll"
-        "$<TARGET_FILE_DIR:desktop_capture_tests>/"
-    COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${GTEST_DLL_DIR}/gtest_main.dll"
-        "$<TARGET_FILE_DIR:desktop_capture_tests>/"
-    COMMENT "Copying DLLs for desktop_capture_tests"
-)
+    # microphone_capturer_tests
+    copy_runtime_if_exists(microphone_capturer_tests "${GTEST_DLL_DIR}/gtest.dll")
+    copy_runtime_if_exists(microphone_capturer_tests "${GTEST_DLL_DIR}/gtest_main.dll")
+    copy_runtime_if_exists(microphone_capturer_tests "${WEBRTC_APM_SHARED_LIB}")
+    copy_runtime_if_exists(microphone_capturer_tests "${LIVEKIT_BIN_DIR}/livekit.dll")
+    copy_runtime_if_exists(microphone_capturer_tests "${LIVEKIT_BIN_DIR}/livekit_ffi.dll")
+
+    # desktop_capture_tests
+    copy_runtime_if_exists(desktop_capture_tests "${GTEST_DLL_DIR}/gtest.dll")
+    copy_runtime_if_exists(desktop_capture_tests "${GTEST_DLL_DIR}/gtest_main.dll")
+endif()

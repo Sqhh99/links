@@ -8,7 +8,7 @@ This repo contains a Qt-based client app plus core SDK integrations.
 - `tests/`: GoogleTest suite and test CMake configuration.
 - `server/`: signaling server code and static assets.
 - `res/`: UI icons and resources referenced by QML.
-- `extern/`: third-party dependencies (vcpkg, LiveKit SDK).
+- `third_party/`: third-party dependencies (vcpkg, LiveKit SDK).
 - `docs/`: app documentation.
 - `build/`: generated build artifacts (do not edit).
 
@@ -52,5 +52,5 @@ For PRs:
 
 ## Configuration Notes
 `CMakeLists.txt` currently sets Windows-specific paths for Qt and the
-LiveKit SDK (for example, `D:/Qt/...` and `extern/livekit-sdk-windows`).
+LiveKit SDK (for example, `D:/Qt/...` and `third_party/livekit-sdk-windows`).
 Adjust these locally or pass cache variables if your setup differs.

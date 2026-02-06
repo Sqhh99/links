@@ -15,8 +15,12 @@ setlocal EnableDelayedExpansion
 :: =============================================================================
 
 set "PROJECT_ROOT=%~dp0"
-set "VCPKG_DIR=%PROJECT_ROOT%extern\vcpkg"
+set "VCPKG_DIR=%PROJECT_ROOT%third_party\vcpkg"
 set "BUILD_DIR=%PROJECT_ROOT%build"
+set "SDK_ARCH=%LINKS_SDK_ARCH%"
+if "%SDK_ARCH%"=="" set "SDK_ARCH=x64"
+set "VCPKG_TRIPLET=%VCPKG_TARGET_TRIPLET%"
+if "%VCPKG_TRIPLET%"=="" set "VCPKG_TRIPLET=x64-windows"
 
 :: Setup Visual Studio environment if not already set
 if not defined VSINSTALLDIR (
@@ -101,7 +105,7 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo [*] Configuring Release build...
-cmake --preset release
+cmake --preset release -DLINKS_SDK_ARCH=%SDK_ARCH% -DVCPKG_TARGET_TRIPLET=%VCPKG_TRIPLET%
 if errorlevel 1 (
     echo [!] CMake configuration failed
     exit /b 1
@@ -137,7 +141,7 @@ goto :eof
 call :build_release
 if errorlevel 1 exit /b 1
 
-set "VCPKG_BIN=%PROJECT_ROOT%extern\vcpkg_installed\x64-windows\bin"
+set "VCPKG_BIN=%PROJECT_ROOT%third_party\vcpkg_installed\x64-windows\bin"
 set "QT_BIN=D:/Qt/6.10.0/msvc2022_64/bin"
 if exist "%VCPKG_BIN%" set "PATH=%VCPKG_BIN%;%PATH%"
 if exist "%QT_BIN%" set "PATH=%QT_BIN%;%PATH%"
