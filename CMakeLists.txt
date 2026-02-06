@@ -63,6 +63,7 @@ set(SOURCES
     core/room_event_delegate.cpp
     core/platform_window_ops.cpp
     core/thumbnail_service.cpp
+    ui/adapters/qt/qt_capture_adapter.cpp
     # Desktop Capture module
     core/desktop_capture/desktop_frame.cpp
     core/desktop_capture/desktop_capturer.cpp
@@ -105,6 +106,7 @@ set(HEADERS
     core/screen_capturer.h
     core/room_event_delegate.h
     core/window_types.h
+    core/image_types.h
     core/platform_window_ops.h
     core/thumbnail_service.h
     # Utils
@@ -116,6 +118,7 @@ set(HEADERS
     ui/backend/ConferenceBackend.h
     ui/backend/VideoRenderer.h
     ui/backend/ScreenPickerBackend.h
+    ui/adapters/qt/qt_capture_adapter.h
     ui/backend/ShareModeManager.h
     ui/backend/AuthBackend.h
 )

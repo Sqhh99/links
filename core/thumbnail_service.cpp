@@ -1,144 +1,103 @@
 #include "thumbnail_service.h"
+
 #include "platform_window_ops.h"
-#include <QGuiApplication>
-#include <QScreen>
-#include <QPixmap>
-#include <QtGui/qwindowdefs.h>
-#include <QtConcurrent/QtConcurrent>
+
+#include <algorithm>
+#include <cstddef>
+#include <cmath>
+#include <cstring>
+#include <utility>
 
 namespace links {
 namespace core {
 namespace {
 
-bool isGeometryUsable(const QRect& rect)
+bool isTargetSizeValid(const ImageSize& size)
 {
-    return rect.width() > 80 && rect.height() > 60;
+    return size.width > 0 && size.height > 0;
+}
+
+RawImage resizeKeepAspect(const RawImage& src, const ImageSize& target)
+{
+    const double srcAspect = static_cast<double>(src.width) / static_cast<double>(src.height);
+    int outputWidth = target.width;
+    int outputHeight = static_cast<int>(std::lround(static_cast<double>(outputWidth) / srcAspect));
+
+    if (outputHeight > target.height) {
+        outputHeight = target.height;
+        outputWidth = static_cast<int>(std::lround(static_cast<double>(outputHeight) * srcAspect));
+    }
+
+    outputWidth = std::max(outputWidth, 1);
+    outputHeight = std::max(outputHeight, 1);
+
+    RawImage resized;
+    resized.width = outputWidth;
+    resized.height = outputHeight;
+    resized.stride = outputWidth * 4;
+    resized.format = src.format;
+    resized.pixels.resize(static_cast<std::size_t>(resized.stride) * static_cast<std::size_t>(resized.height));
+
+    for (int y = 0; y < outputHeight; ++y) {
+        const int srcY = std::min((y * src.height) / outputHeight, src.height - 1);
+        const std::uint8_t* srcRow = src.pixels.data() + static_cast<std::size_t>(srcY) * static_cast<std::size_t>(src.stride);
+        std::uint8_t* dstRow = resized.pixels.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(resized.stride);
+
+        for (int x = 0; x < outputWidth; ++x) {
+            const int srcX = std::min((x * src.width) / outputWidth, src.width - 1);
+            const std::uint8_t* srcPixel = srcRow + srcX * 4;
+            std::uint8_t* dstPixel = dstRow + x * 4;
+            std::memcpy(dstPixel, srcPixel, 4);
+        }
+    }
+
+    return resized;
 }
 
 }  // namespace
 
-ThumbnailService::ThumbnailService(QObject* parent)
-    : QObject(parent)
+std::vector<std::optional<RawImage>> ThumbnailService::captureWindowThumbnails(
+    const std::vector<WindowInfo>& windows,
+    ImageSize targetSize) const
 {
-}
+    std::vector<std::optional<RawImage>> thumbnails;
+    thumbnails.reserve(windows.size());
 
-ThumbnailService::~ThumbnailService()
-{
-    cancelAndWait();
-}
-
-void ThumbnailService::requestWindowThumbnails(const QVector<WindowInfo>& windows, const QSize& targetSize)
-{
-    cancelAndWait();
-
-    auto capturedThumbnails = std::make_shared<QVector<QImage>>(windows.size());
-    auto cancelled = std::make_shared<std::atomic<bool>>(false);
-
-    watcher_ = new QFutureWatcher<void>(this);
-
-    connect(watcher_, &QFutureWatcher<void>::finished, this,
-            [this, capturedThumbnails, cancelled]() {
-                if (cancelled->load()) {
-                    clearWatcher();
-                    return;
-                }
-
-                emit thumbnailsReady(*capturedThumbnails);
-                clearWatcher();
-            });
-
-    auto cancelledPtr = cancelled;
-    connect(watcher_, &QFutureWatcher<void>::canceled, this, [cancelledPtr]() {
-        cancelledPtr->store(true);
-    });
-
-    auto future = QtConcurrent::run([this, windows, targetSize, capturedThumbnails, cancelled]() {
-        for (int i = 0; i < windows.size(); ++i) {
-            if (cancelled->load()) {
-                return;
-            }
-            (*capturedThumbnails)[i] = grabWindowThumbnail(windows[i], targetSize);
-        }
-    });
-
-    watcher_->setFuture(future);
-}
-
-void ThumbnailService::cancel()
-{
-    if (!watcher_) {
-        return;
+    for (const auto& window : windows) {
+        thumbnails.push_back(captureWindowThumbnail(window, targetSize));
     }
-    watcher_->cancel();
-    watcher_->disconnect();
-    watcher_->deleteLater();
-    watcher_ = nullptr;
+
+    return thumbnails;
 }
 
-QImage ThumbnailService::grabWindowThumbnail(const WindowInfo& info, const QSize& targetSize) const
+std::optional<RawImage> ThumbnailService::captureWindowThumbnail(const WindowInfo& info, ImageSize targetSize) const
 {
     if (info.id == 0) {
-        return {};
+        return std::nullopt;
     }
 
-#ifdef Q_OS_WIN
-    QPixmap winrtPix = grabWindowWithWinRt(info.id);
-    if (!winrtPix.isNull()) {
-        return winrtPix.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation).toImage();
-    }
-#endif
-
-    QScreen* screen = nullptr;
-    if (isGeometryUsable(info.geometry)) {
-        screen = QGuiApplication::screenAt(info.geometry.center());
-    }
-    if (!screen) {
-        screen = QGuiApplication::primaryScreen();
-    }
-    if (!screen) {
-        return {};
+    std::optional<RawImage> image = captureWindowWithWinRt(info.id);
+    if (!image || !image->isValid()) {
+        image = captureWindowWithPrintApi(info.id);
     }
 
-    QPixmap pix = screen->grabWindow(static_cast<WId>(info.id));
-#ifdef Q_OS_WIN
-    if (pix.isNull()) {
-        pix = grabWindowWithPrintApi(info.id);
-    }
-#endif
-    if (pix.isNull() && isGeometryUsable(info.geometry)) {
-        QRect screenGeo = screen->geometry();
-        QRect target = info.geometry.intersected(screenGeo);
-        if (!target.isEmpty()) {
-            QPixmap screenPix = screen->grabWindow(0);
-            if (!screenPix.isNull()) {
-                QRect localRect = target.translated(-screenGeo.topLeft());
-                pix = screenPix.copy(localRect);
-            }
-        }
-    }
-    if (pix.isNull()) {
-        return {};
+    if (!image || !image->isValid()) {
+        return std::nullopt;
     }
 
-    return pix.scaled(targetSize, Qt::KeepAspectRatio, Qt::SmoothTransformation).toImage();
-}
-
-void ThumbnailService::clearWatcher()
-{
-    if (watcher_) {
-        watcher_->deleteLater();
-        watcher_ = nullptr;
+    if (!isTargetSizeValid(targetSize)) {
+        return image;
     }
-}
 
-void ThumbnailService::cancelAndWait()
-{
-    if (!watcher_) {
-        return;
+    if (image->width <= targetSize.width && image->height <= targetSize.height) {
+        return image;
     }
-    watcher_->cancel();
-    watcher_->waitForFinished();
-    clearWatcher();
+
+    RawImage resized = resizeKeepAspect(*image, targetSize);
+    if (!resized.isValid()) {
+        return std::nullopt;
+    }
+    return resized;
 }
 
 }  // namespace core

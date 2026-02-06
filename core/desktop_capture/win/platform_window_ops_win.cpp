@@ -1,27 +1,33 @@
 #ifdef _WIN32
 
 #include "platform_window_ops_win.h"
+
 #include <Windows.h>
 #include <d3d11.h>
 #include <dxgi1_2.h>
-#include <winrt/base.h>
+#include <windows.graphics.capture.interop.h>
+#include <windows.graphics.directx.direct3d11.interop.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Graphics.Capture.h>
 #include <winrt/Windows.Graphics.DirectX.h>
 #include <winrt/Windows.Graphics.DirectX.Direct3D11.h>
-#include <windows.graphics.capture.interop.h>
-#include <windows.graphics.directx.direct3d11.interop.h>
-#include <QImage>
-#include <QVector>
+#include <winrt/base.h>
+
 #include <chrono>
+#include <cstddef>
+#include <cstdint>
+#include <cwctype>
+#include <optional>
+#include <string>
 #include <thread>
+#include <utility>
+#include <vector>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "dxgi.lib")
 #pragma comment(lib, "windowsapp.lib")
 
-struct __declspec(uuid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")) IDirect3DDxgiInterfaceAccess : public IUnknown
-{
+struct __declspec(uuid("A9B3D012-3DF2-4EE3-B8D1-8695F457D3C1")) IDirect3DDxgiInterfaceAccess : public IUnknown {
     virtual HRESULT STDMETHODCALLTYPE GetInterface(REFIID iid, void** p) = 0;
 };
 
@@ -32,19 +38,125 @@ namespace {
 
 HWND toHwnd(WindowId id)
 {
-    return reinterpret_cast<HWND>(static_cast<quintptr>(id));
+    return reinterpret_cast<HWND>(static_cast<std::uintptr_t>(id));
 }
 
-bool isShareableWindow(HWND hwnd);
+bool isShareableWindow(HWND hwnd)
+{
+    if (!IsWindow(hwnd) || !IsWindowVisible(hwnd) || IsIconic(hwnd)) {
+        return false;
+    }
+
+    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
+    if (exStyle & WS_EX_TOOLWINDOW) {
+        return false;
+    }
+
+    HWND owner = GetWindow(hwnd, GW_OWNER);
+    if (owner != nullptr && IsWindowVisible(owner)) {
+        return false;
+    }
+
+    RECT rect{};
+    if (!GetWindowRect(hwnd, &rect)) {
+        return false;
+    }
+
+    if ((rect.right - rect.left) < 100 || (rect.bottom - rect.top) < 80) {
+        return false;
+    }
+
+    wchar_t title[512];
+    return GetWindowTextW(hwnd, title, 512) > 0;
+}
+
+std::wstring toLower(const std::wstring& value)
+{
+    std::wstring result = value;
+    for (auto& ch : result) {
+        ch = static_cast<wchar_t>(std::towlower(ch));
+    }
+    return result;
+}
+
+bool containsKeyword(const std::wstring& titleLower)
+{
+    return titleLower.find(L"thumbnail") != std::wstring::npos
+        || titleLower.find(L"windows input experience") != std::wstring::npos
+        || titleLower.find(L"\x7F29\x7565\x56FE") != std::wstring::npos
+        || titleLower.find(L"\x8F93\x5165\x4F53\x9A8C") != std::wstring::npos
+        || titleLower.find(L"\x8BBE\x7F6E") != std::wstring::npos;
+}
+
+std::string toUtf8(const std::wstring& value)
+{
+    if (value.empty()) {
+        return {};
+    }
+
+    int size = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
+    if (size <= 0) {
+        return {};
+    }
+
+    std::string result(static_cast<std::size_t>(size), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), result.data(), size, nullptr, nullptr);
+    return result;
+}
+
+template<typename T>
+winrt::com_ptr<T> getDxgiInterfaceFromObject(const winrt::Windows::Foundation::IInspectable& object)
+{
+    winrt::com_ptr<T> result;
+    winrt::com_ptr<IDirect3DDxgiInterfaceAccess> access;
+    auto unk = object.as<IUnknown>();
+    if (!unk) {
+        return result;
+    }
+
+    if (FAILED(unk->QueryInterface(__uuidof(IDirect3DDxgiInterfaceAccess), access.put_void())) || !access) {
+        return result;
+    }
+
+    if (SUCCEEDED(access->GetInterface(winrt::guid_of<T>(), result.put_void()))) {
+        return result;
+    }
+
+    return nullptr;
+}
+
+RawImage makeRgbaImageFromBgra(const std::uint8_t* src, int width, int height, int srcStride)
+{
+    RawImage image;
+    image.width = width;
+    image.height = height;
+    image.stride = width * 4;
+    image.format = PixelFormat::RGBA8888;
+    image.pixels.resize(static_cast<std::size_t>(image.stride) * static_cast<std::size_t>(height));
+
+    for (int y = 0; y < height; ++y) {
+        const std::uint8_t* srcRow = src + static_cast<std::size_t>(y) * static_cast<std::size_t>(srcStride);
+        std::uint8_t* dstRow = image.pixels.data() + static_cast<std::size_t>(y) * static_cast<std::size_t>(image.stride);
+        for (int x = 0; x < width; ++x) {
+            const std::uint8_t b = srcRow[x * 4 + 0];
+            const std::uint8_t g = srcRow[x * 4 + 1];
+            const std::uint8_t r = srcRow[x * 4 + 2];
+            const std::uint8_t a = srcRow[x * 4 + 3];
+            dstRow[x * 4 + 0] = r;
+            dstRow[x * 4 + 1] = g;
+            dstRow[x * 4 + 2] = b;
+            dstRow[x * 4 + 3] = a;
+        }
+    }
+
+    return image;
+}
 
 struct EnumContext {
-    QVector<WindowInfo>* windows{nullptr};
-    const QString* keywordThumbnail{nullptr};
-    const QString* keywordInputExperience{nullptr};
-    const QString* keywordSettings{nullptr};
+    std::vector<WindowInfo>* windows{nullptr};
 };
 
-static BOOL CALLBACK collectWindowsProc(HWND hwnd, LPARAM lParam)
+BOOL CALLBACK collectWindowsProc(HWND hwnd, LPARAM lParam)
 {
     auto* context = reinterpret_cast<EnumContext*>(lParam);
     if (!context || !context->windows) {
@@ -55,96 +167,45 @@ static BOOL CALLBACK collectWindowsProc(HWND hwnd, LPARAM lParam)
         return TRUE;
     }
 
-    WindowInfo info;
-    info.id = static_cast<WindowId>(reinterpret_cast<quintptr>(hwnd));
-    RECT rect{};
-    if (GetWindowRect(hwnd, &rect)) {
-        info.geometry = QRect(rect.left, rect.top, rect.right - rect.left, rect.bottom - rect.top);
-    }
     wchar_t title[512];
-    int len = GetWindowTextW(hwnd, title, 512);
-    if (len > 0) {
-        info.title = QString::fromWCharArray(title, len).trimmed();
-    }
-    QString lower = info.title.toLower();
-    if (info.title.isEmpty()
-        || lower.contains(*context->keywordThumbnail)
-        || lower.contains("thumbnail")
-        || lower.contains("windows input experience")
-        || lower.contains(*context->keywordInputExperience)
-        || lower.contains(*context->keywordSettings)) {
+    const int titleLength = GetWindowTextW(hwnd, title, 512);
+    if (titleLength <= 0) {
         return TRUE;
     }
 
-    context->windows->append(info);
-    return TRUE;
-}
+    std::wstring windowTitle(title, static_cast<std::size_t>(titleLength));
+    const std::wstring lower = toLower(windowTitle);
+    if (containsKeyword(lower)) {
+        return TRUE;
+    }
 
-bool isShareableWindow(HWND hwnd)
-{
-    if (!IsWindow(hwnd) || !IsWindowVisible(hwnd)) {
-        return false;
-    }
-    if (IsIconic(hwnd)) {
-        return false;
-    }
-    LONG_PTR exStyle = GetWindowLongPtr(hwnd, GWL_EXSTYLE);
-    if (exStyle & WS_EX_TOOLWINDOW) {
-        return false;
-    }
-    HWND owner = GetWindow(hwnd, GW_OWNER);
-    if (owner != nullptr && IsWindowVisible(owner)) {
-        return false;
-    }
+    WindowInfo info;
+    info.id = static_cast<WindowId>(reinterpret_cast<std::uintptr_t>(hwnd));
+    info.title = toUtf8(windowTitle);
+
     RECT rect{};
-    if (!GetWindowRect(hwnd, &rect)) {
-        return false;
+    if (GetWindowRect(hwnd, &rect)) {
+        info.geometry = {
+            rect.left,
+            rect.top,
+            rect.right - rect.left,
+            rect.bottom - rect.top
+        };
     }
-    if ((rect.right - rect.left) < 100 || (rect.bottom - rect.top) < 80) {
-        return false;
-    }
-    wchar_t title[512];
-    int len = GetWindowTextW(hwnd, title, 512);
-    return len > 0;
-}
 
-template<typename T>
-winrt::com_ptr<T> getDxgiInterfaceFromObject(const winrt::Windows::Foundation::IInspectable& object)
-{
-    winrt::com_ptr<T> result;
-    winrt::com_ptr<IDirect3DDxgiInterfaceAccess> access;
-    auto unk = object.as<IUnknown>();
-    if (!unk) return result;
-    if (FAILED(unk->QueryInterface(__uuidof(IDirect3DDxgiInterfaceAccess), access.put_void())) || !access) {
-        return result;
-    }
-    if (SUCCEEDED(access->GetInterface(winrt::guid_of<T>(), result.put_void()))) {
-        return result;
-    }
-    return nullptr;
+    context->windows->push_back(std::move(info));
+    return TRUE;
 }
 
 }  // namespace
 
-QList<WindowInfo> enumerateWindows()
+std::vector<WindowInfo> enumerateWindows()
 {
-    QVector<WindowInfo> collected;
-    const QString keywordThumbnail = QString::fromUtf8("\xE7\xBC\xA9\xE7\x95\xA5\xE5\x9B\xBE");
-    const QString keywordInputExperience = QString::fromUtf8("\xE8\xBE\x93\xE5\x85\xA5\xE4\xBD\x93\xE9\xAA\x8C");
-    const QString keywordSettings = QString::fromUtf8("\xE8\xAE\xBE\xE7\xBD\xAE");
+    std::vector<WindowInfo> collected;
     EnumContext context;
     context.windows = &collected;
-    context.keywordThumbnail = &keywordThumbnail;
-    context.keywordInputExperience = &keywordInputExperience;
-    context.keywordSettings = &keywordSettings;
     EnumWindows(&collectWindowsProc, reinterpret_cast<LPARAM>(&context));
-
-    QList<WindowInfo> result;
-    result.reserve(collected.size());
-    for (const auto& info : collected) {
-        result.append(info);
-    }
-    return result;
+    return collected;
 }
 
 bool bringWindowToForeground(WindowId id)
@@ -153,6 +214,7 @@ bool bringWindowToForeground(WindowId id)
     if (!IsWindow(hwnd)) {
         return false;
     }
+
     if (IsIconic(hwnd)) {
         ShowWindow(hwnd, SW_RESTORE);
     }
@@ -185,7 +247,7 @@ bool isWindowMinimized(WindowId id)
     return hwnd != nullptr && IsIconic(hwnd);
 }
 
-QPixmap grabWindowWithWinRt(WindowId id)
+std::optional<RawImage> captureWindowWithWinRt(WindowId id)
 {
     static bool winrtInit = false;
     if (!winrtInit) {
@@ -198,7 +260,7 @@ QPixmap grabWindowWithWinRt(WindowId id)
 
     HWND hwnd = toHwnd(id);
     if (!hwnd || !IsWindow(hwnd)) {
-        return {};
+        return std::nullopt;
     }
 
     D3D_FEATURE_LEVEL featureLevels[] = {
@@ -222,6 +284,7 @@ QPixmap grabWindowWithWinRt(WindowId id)
         d3dDevice.put(),
         nullptr,
         d3dContext.put());
+
     if (FAILED(hr)) {
         hr = D3D11CreateDevice(
             nullptr,
@@ -235,27 +298,30 @@ QPixmap grabWindowWithWinRt(WindowId id)
             nullptr,
             d3dContext.put());
     }
+
     if (FAILED(hr) || !d3dDevice || !d3dContext) {
-        return {};
+        return std::nullopt;
     }
 
     winrt::com_ptr<IDXGIDevice> dxgiDevice;
     d3dDevice.as(dxgiDevice);
     if (!dxgiDevice) {
-        return {};
+        return std::nullopt;
     }
+
     winrt::com_ptr<IInspectable> inspectable;
     hr = CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.get(),
                                               reinterpret_cast<IInspectable**>(inspectable.put()));
     if (FAILED(hr) || !inspectable) {
-        return {};
-    }
-    auto winrtDevice = inspectable.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
-    if (!winrtDevice) {
-        return {};
+        return std::nullopt;
     }
 
-    winrt::Windows::Graphics::Capture::GraphicsCaptureItem item{ nullptr };
+    auto winrtDevice = inspectable.as<winrt::Windows::Graphics::DirectX::Direct3D11::IDirect3DDevice>();
+    if (!winrtDevice) {
+        return std::nullopt;
+    }
+
+    winrt::Windows::Graphics::Capture::GraphicsCaptureItem item{nullptr};
     try {
         winrt::com_ptr<IGraphicsCaptureItemInterop> interop =
             winrt::get_activation_factory<winrt::Windows::Graphics::Capture::GraphicsCaptureItem,
@@ -265,42 +331,50 @@ QPixmap grabWindowWithWinRt(WindowId id)
             winrt::guid_of<ABI::Windows::Graphics::Capture::IGraphicsCaptureItem>(),
             reinterpret_cast<void**>(winrt::put_abi(item)));
         if (FAILED(hr) || !item) {
-            return {};
+            return std::nullopt;
         }
     } catch (...) {
-        return {};
+        return std::nullopt;
     }
 
-    auto size = item.Size();
     auto framePool = winrt::Windows::Graphics::Capture::Direct3D11CaptureFramePool::CreateFreeThreaded(
         winrtDevice,
         winrt::Windows::Graphics::DirectX::DirectXPixelFormat::B8G8R8A8UIntNormalized,
         1,
-        size);
+        item.Size());
     auto session = framePool.CreateCaptureSession(item);
     session.IsCursorCaptureEnabled(false);
     session.StartCapture();
 
-    winrt::Windows::Graphics::Capture::Direct3D11CaptureFrame frame{ nullptr };
+    winrt::Windows::Graphics::Capture::Direct3D11CaptureFrame frame{nullptr};
     for (int i = 0; i < 6; ++i) {
         frame = framePool.TryGetNextFrame();
-        if (frame) break;
+        if (frame) {
+            break;
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
     }
+
     session.Close();
     framePool.Close();
 
     if (!frame) {
-        return {};
+        return std::nullopt;
     }
 
     auto surface = frame.Surface();
-    if (!surface) return {};
-    auto tex = getDxgiInterfaceFromObject<ID3D11Texture2D>(surface);
-    if (!tex) return {};
+    if (!surface) {
+        return std::nullopt;
+    }
+
+    auto texture = getDxgiInterfaceFromObject<ID3D11Texture2D>(surface);
+    if (!texture) {
+        return std::nullopt;
+    }
 
     D3D11_TEXTURE2D_DESC desc{};
-    tex->GetDesc(&desc);
+    texture->GetDesc(&desc);
+
     D3D11_TEXTURE2D_DESC stagingDesc = desc;
     stagingDesc.BindFlags = 0;
     stagingDesc.CPUAccessFlags = D3D11_CPU_ACCESS_READ;
@@ -311,48 +385,60 @@ QPixmap grabWindowWithWinRt(WindowId id)
 
     winrt::com_ptr<ID3D11Texture2D> staging;
     if (FAILED(d3dDevice->CreateTexture2D(&stagingDesc, nullptr, staging.put()))) {
-        return {};
+        return std::nullopt;
     }
-    d3dContext->CopyResource(staging.get(), tex.get());
+
+    d3dContext->CopyResource(staging.get(), texture.get());
 
     D3D11_MAPPED_SUBRESOURCE mapped{};
     if (FAILED(d3dContext->Map(staging.get(), 0, D3D11_MAP_READ, 0, &mapped))) {
-        return {};
+        return std::nullopt;
     }
-    QImage bgra(static_cast<uchar*>(mapped.pData),
-                static_cast<int>(desc.Width),
-                static_cast<int>(desc.Height),
-                static_cast<int>(mapped.RowPitch),
-                QImage::Format_ARGB32);
-    QImage copy = bgra.copy();
+
+    RawImage image = makeRgbaImageFromBgra(
+        static_cast<const std::uint8_t*>(mapped.pData),
+        static_cast<int>(desc.Width),
+        static_cast<int>(desc.Height),
+        static_cast<int>(mapped.RowPitch));
+
     d3dContext->Unmap(staging.get(), 0);
-    if (copy.isNull()) return {};
-    return QPixmap::fromImage(copy.convertToFormat(QImage::Format_RGBA8888));
+
+    if (!image.isValid()) {
+        return std::nullopt;
+    }
+    return image;
 }
 
-QPixmap grabWindowWithPrintApi(WindowId id)
+std::optional<RawImage> captureWindowWithPrintApi(WindowId id)
 {
     HWND hwnd = toHwnd(id);
     if (!hwnd || !IsWindow(hwnd)) {
-        return {};
+        return std::nullopt;
     }
 
-    RECT rect;
+    RECT rect{};
     if (!GetWindowRect(hwnd, &rect)) {
-        return {};
-    }
-    int width = rect.right - rect.left;
-    int height = rect.bottom - rect.top;
-    if (width <= 0 || height <= 0) {
-        return {};
+        return std::nullopt;
     }
 
-    HDC hdcWindow = GetWindowDC(hwnd);
-    if (!hdcWindow) {
-        return {};
+    const int width = rect.right - rect.left;
+    const int height = rect.bottom - rect.top;
+    if (width <= 0 || height <= 0) {
+        return std::nullopt;
     }
-    HDC hdcMemDC = CreateCompatibleDC(hdcWindow);
-    BITMAPINFO bmi = {};
+
+    HDC windowDc = GetWindowDC(hwnd);
+    if (!windowDc) {
+        return std::nullopt;
+    }
+
+    HDC memDc = CreateCompatibleDC(windowDc);
+    if (!memDc) {
+        ReleaseDC(hwnd, windowDc);
+        return std::nullopt;
+    }
+
+    BITMAPINFO bmi{};
     bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
     bmi.bmiHeader.biWidth = width;
     bmi.bmiHeader.biHeight = -height;
@@ -361,33 +447,33 @@ QPixmap grabWindowWithPrintApi(WindowId id)
     bmi.bmiHeader.biCompression = BI_RGB;
 
     void* bits = nullptr;
-    HBITMAP hbm = CreateDIBSection(hdcMemDC, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
-    if (!hbm || !bits) {
-        if (hbm) DeleteObject(hbm);
-        DeleteDC(hdcMemDC);
-        ReleaseDC(hwnd, hdcWindow);
-        return {};
+    HBITMAP bitmap = CreateDIBSection(memDc, &bmi, DIB_RGB_COLORS, &bits, nullptr, 0);
+    if (!bitmap || !bits) {
+        if (bitmap) {
+            DeleteObject(bitmap);
+        }
+        DeleteDC(memDc);
+        ReleaseDC(hwnd, windowDc);
+        return std::nullopt;
     }
 
-    HGDIOBJ old = SelectObject(hdcMemDC, hbm);
-    BOOL ok = PrintWindow(hwnd, hdcMemDC, PW_RENDERFULLCONTENT);
-    if (!ok) {
-        SelectObject(hdcMemDC, old);
-        DeleteObject(hbm);
-        DeleteDC(hdcMemDC);
-        ReleaseDC(hwnd, hdcWindow);
-        return {};
+    HGDIOBJ oldObject = SelectObject(memDc, bitmap);
+    const BOOL ok = PrintWindow(hwnd, memDc, PW_RENDERFULLCONTENT);
+
+    std::optional<RawImage> result;
+    if (ok) {
+        RawImage image = makeRgbaImageFromBgra(static_cast<const std::uint8_t*>(bits), width, height, width * 4);
+        if (image.isValid()) {
+            result = std::move(image);
+        }
     }
 
-    QImage image(reinterpret_cast<uchar*>(bits), width, height, QImage::Format_ARGB32);
-    QImage copy = image.copy();
+    SelectObject(memDc, oldObject);
+    DeleteObject(bitmap);
+    DeleteDC(memDc);
+    ReleaseDC(hwnd, windowDc);
 
-    SelectObject(hdcMemDC, old);
-    DeleteObject(hbm);
-    DeleteDC(hdcMemDC);
-    ReleaseDC(hwnd, hdcWindow);
-
-    return QPixmap::fromImage(copy);
+    return result;
 }
 
 }  // namespace win

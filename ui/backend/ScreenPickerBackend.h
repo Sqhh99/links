@@ -1,21 +1,26 @@
 #ifndef SCREENPICKERBACKEND_H
 #define SCREENPICKERBACKEND_H
 
+#include <QFutureWatcher>
+#include <QImage>
 #include <QObject>
+#include <QScreen>
 #include <QString>
 #include <QVariantList>
-#include <QScreen>
-#include <QImage>
-#include <QRect>
-#include <QVector>
 #include <QWindow>
-#include "../../core/window_types.h"
+
+#include <atomic>
+#include <cstdint>
+#include <optional>
+#include <vector>
+
 #include "../../core/thumbnail_service.h"
+#include "../../core/window_types.h"
 
 class ScreenPickerBackend : public QObject
 {
     Q_OBJECT
-    
+
     Q_PROPERTY(QVariantList screens READ screens NOTIFY screensChanged)
     Q_PROPERTY(QVariantList windows READ windows NOTIFY windowsChanged)
     Q_PROPERTY(int currentTabIndex READ currentTabIndex WRITE setCurrentTabIndex NOTIFY currentTabIndexChanged)
@@ -32,7 +37,7 @@ public:
         Cancel
     };
     Q_ENUM(SelectionType)
-    
+
     using WindowInfo = links::core::WindowInfo;
 
     explicit ScreenPickerBackend(QObject* parent = nullptr);
@@ -40,21 +45,20 @@ public:
 
     QVariantList screens() const { return screens_; }
     QVariantList windows() const { return windows_; }
-    
+
     int currentTabIndex() const { return currentTabIndex_; }
     void setCurrentTabIndex(int index);
-    
+
     int selectedScreenIndex() const { return selectedScreenIndex_; }
     void setSelectedScreenIndex(int index);
-    
+
     int selectedWindowIndex() const { return selectedWindowIndex_; }
     void setSelectedWindowIndex(int index);
-    
+
     bool hasSelection() const;
     QString shareButtonText() const;
     bool windowShareSupported() const;
-    
-    // Selection results
+
     SelectionType selectionType() const { return selectionType_; }
     QScreen* selectedScreen() const { return selectedScreen_; }
     WId selectedWindow() const { return static_cast<WId>(selectedWindowId_); }
@@ -76,27 +80,32 @@ signals:
     void rejected();
 
 private:
-    QList<WindowInfo> enumerateWindows() const;
+    using RawThumbnail = std::optional<links::core::RawImage>;
+    using ThumbnailBatch = std::vector<RawThumbnail>;
+
+    std::vector<WindowInfo> enumerateWindows() const;
     QImage grabScreenThumbnail(QScreen* screen) const;
     QImage placeholderThumbnail(const QString& label) const;
     void captureWindowThumbnailsAsync();
-    
+    void applyWindowThumbnails(const ThumbnailBatch& thumbnails);
+    void clearThumbnailWatcher();
+
     QVariantList screens_;
     QVariantList windows_;
-    QVector<WindowInfo> windowInfos_;
-    
+    std::vector<WindowInfo> windowInfos_;
+
     int currentTabIndex_{0};
     int selectedScreenIndex_{-1};
     int selectedWindowIndex_{-1};
-    
+
     SelectionType selectionType_{SelectionType::Cancel};
     QScreen* selectedScreen_{nullptr};
     links::core::WindowId selectedWindowId_{0};
-    
-    links::core::ThumbnailService* thumbnailService_{nullptr};
-    
+    QFutureWatcher<ThumbnailBatch>* thumbnailWatcher_{nullptr};
+    std::atomic<std::uint64_t> thumbnailGeneration_{0};
+
     static constexpr int kThumbWidth = 240;
     static constexpr int kThumbHeight = 140;
 };
 
-#endif // SCREENPICKERBACKEND_H
+#endif  // SCREENPICKERBACKEND_H
