@@ -16,17 +16,14 @@ jobs:
       matrix:
         include:
           - os: windows-latest
-            preset: release
             qt_version: "6.8.3"
             qt_arch: win64_msvc2022_64
             sdk_arch: x64
           - os: ubuntu-latest
-            preset: release
             qt_version: "6.8.3"
             qt_arch: linux_gcc_64
             sdk_arch: x64
           - os: macos-latest
-            preset: release
             qt_version: "6.8.3"
             qt_arch: clang_64
             sdk_arch: x64
@@ -42,6 +39,7 @@ jobs:
       with:
         version: ${{ matrix.qt_version }}
         arch: ${{ matrix.qt_arch }}
+        modules: qtmultimedia
         cache: true
 
     # Install Ninja
@@ -100,16 +98,22 @@ jobs:
         restore-keys: |
           vcpkg-${{ runner.os }}-
 
-    # Configure and Build
-    - name: Configure CMake
-      run: cmake --preset ${{ matrix.preset }} -DLINKS_SDK_ARCH=${{ matrix.sdk_arch }}
+    # Build + Test via repo scripts
+    - name: Build and Test (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      env:
+        LINKS_SDK_ARCH: ${{ matrix.sdk_arch }}
+      run: build.cmd test
 
-    - name: Build
-      run: cmake --build --preset ${{ matrix.preset }}
-
-    # Run Tests
-    - name: Run Tests
-      run: ctest --preset ${{ matrix.preset }} --output-on-failure
+    - name: Build and Test (Unix)
+      if: runner.os != 'Windows'
+      shell: bash
+      env:
+        LINKS_SDK_ARCH: ${{ matrix.sdk_arch }}
+      run: |
+        chmod +x ./build.sh
+        ./build.sh test
 
     # Upload build artifacts
     - name: Upload build artifacts

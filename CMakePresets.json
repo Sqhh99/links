@@ -15,57 +15,10 @@
       }
     },
     {
-      "name": "windows-base",
-      "hidden": true,
-      "inherits": "vcpkg-base",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Windows"
-      },
-      "architecture": {
-        "value": "x64",
-        "strategy": "external"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "cl.exe",
-        "CMAKE_CXX_COMPILER": "cl.exe"
-      }
-    },
-    {
-      "name": "linux-base",
-      "hidden": true,
-      "inherits": "vcpkg-base",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Linux"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "gcc",
-        "CMAKE_CXX_COMPILER": "g++"
-      }
-    },
-    {
-      "name": "macos-base",
-      "hidden": true,
-      "inherits": "vcpkg-base",
-      "condition": {
-        "type": "equals",
-        "lhs": "${hostSystemName}",
-        "rhs": "Darwin"
-      },
-      "cacheVariables": {
-        "CMAKE_C_COMPILER": "clang",
-        "CMAKE_CXX_COMPILER": "clang++",
-        "CMAKE_OSX_DEPLOYMENT_TARGET": "12.0"
-      }
-    },
-    {
       "name": "default",
       "displayName": "Default (Release)",
       "description": "Default Release build configuration",
-      "inherits": ["windows-base", "linux-base", "macos-base"],
+      "inherits": "vcpkg-base",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {

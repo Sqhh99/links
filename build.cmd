@@ -17,6 +17,8 @@ setlocal EnableDelayedExpansion
 set "PROJECT_ROOT=%~dp0"
 set "VCPKG_DIR=%PROJECT_ROOT%third_party\vcpkg"
 set "BUILD_DIR=%PROJECT_ROOT%build"
+set "SDK_ARCH=%LINKS_SDK_ARCH%"
+if "%SDK_ARCH%"=="" set "SDK_ARCH=x64"
 
 :: Setup Visual Studio environment if not already set
 if not defined VSINSTALLDIR (
@@ -101,7 +103,7 @@ if errorlevel 1 exit /b 1
 
 echo.
 echo [*] Configuring Release build...
-cmake --preset release
+cmake --preset release -DLINKS_SDK_ARCH=%SDK_ARCH%
 if errorlevel 1 (
     echo [!] CMake configuration failed
     exit /b 1
