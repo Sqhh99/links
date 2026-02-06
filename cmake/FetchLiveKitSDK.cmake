@@ -111,6 +111,47 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_ROOT}/lib")
 endif()
 
+if(APPLE)
+    if(EXISTS "${LIVEKIT_LIBRARY}")
+        execute_process(
+            COMMAND install_name_tool -id "@rpath/liblivekit.dylib" "${LIVEKIT_LIBRARY}"
+            RESULT_VARIABLE LIVEKIT_INSTALL_NAME_RESULT
+            ERROR_VARIABLE LIVEKIT_INSTALL_NAME_ERROR
+        )
+        if(NOT LIVEKIT_INSTALL_NAME_RESULT EQUAL 0)
+            message(WARNING "Failed to normalize install_name for livekit dylib: ${LIVEKIT_INSTALL_NAME_ERROR}")
+        endif()
+    endif()
+
+    if(EXISTS "${LIVEKIT_FFI_LIBRARY}")
+        execute_process(
+            COMMAND install_name_tool -id "@rpath/liblivekit_ffi.dylib" "${LIVEKIT_FFI_LIBRARY}"
+            RESULT_VARIABLE LIVEKIT_FFI_INSTALL_NAME_RESULT
+            ERROR_VARIABLE LIVEKIT_FFI_INSTALL_NAME_ERROR
+        )
+        if(NOT LIVEKIT_FFI_INSTALL_NAME_RESULT EQUAL 0)
+            message(WARNING "Failed to normalize install_name for livekit_ffi dylib: ${LIVEKIT_FFI_INSTALL_NAME_ERROR}")
+        endif()
+
+        execute_process(
+            COMMAND otool -L "${LIVEKIT_FFI_LIBRARY}"
+            OUTPUT_VARIABLE LIVEKIT_FFI_DEPS_OUTPUT
+            ERROR_QUIET
+        )
+        string(REGEX MATCH "(/[^\n ]*liblivekit\\.dylib)" LIVEKIT_FFI_ABS_LIVEKIT_DEP "${LIVEKIT_FFI_DEPS_OUTPUT}")
+        if(NOT LIVEKIT_FFI_ABS_LIVEKIT_DEP STREQUAL "")
+            execute_process(
+                COMMAND install_name_tool -change "${LIVEKIT_FFI_ABS_LIVEKIT_DEP}" "@rpath/liblivekit.dylib" "${LIVEKIT_FFI_LIBRARY}"
+                RESULT_VARIABLE LIVEKIT_FFI_CHANGE_RESULT
+                ERROR_VARIABLE LIVEKIT_FFI_CHANGE_ERROR
+            )
+            if(NOT LIVEKIT_FFI_CHANGE_RESULT EQUAL 0)
+                message(WARNING "Failed to rewrite livekit_ffi dependency path: ${LIVEKIT_FFI_CHANGE_ERROR}")
+            endif()
+        endif()
+    endif()
+endif()
+
 message(STATUS "LiveKit SDK Configuration:")
 message(STATUS "  Root: ${LIVEKIT_SDK_ROOT}")
 message(STATUS "  Arch: ${LIVEKIT_ARCH}")

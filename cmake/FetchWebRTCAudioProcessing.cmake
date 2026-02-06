@@ -109,6 +109,18 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(WEBRTC_APM_LIBRARY "${WEBRTC_APM_ROOT}/lib/libwebrtc-audio-processing-2.dylib")
     set(WEBRTC_APM_BIN_DIR "${WEBRTC_APM_ROOT}/lib")
     set(WEBRTC_APM_SHARED_LIB "${WEBRTC_APM_ROOT}/lib/libwebrtc-audio-processing-2.1.dylib")
+    set(WEBRTC_APM_LIBRARY "${WEBRTC_APM_SHARED_LIB}")
+endif()
+
+if(APPLE AND EXISTS "${WEBRTC_APM_SHARED_LIB}")
+    execute_process(
+        COMMAND install_name_tool -id "@rpath/libwebrtc-audio-processing-2.1.dylib" "${WEBRTC_APM_SHARED_LIB}"
+        RESULT_VARIABLE WEBRTC_APM_INSTALL_NAME_RESULT
+        ERROR_VARIABLE WEBRTC_APM_INSTALL_NAME_ERROR
+    )
+    if(NOT WEBRTC_APM_INSTALL_NAME_RESULT EQUAL 0)
+        message(WARNING "Failed to normalize install_name for WebRTC APM dylib: ${WEBRTC_APM_INSTALL_NAME_ERROR}")
+    endif()
 endif()
 
 message(STATUS "WebRTC Audio Processing Configuration:")

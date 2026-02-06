@@ -77,6 +77,16 @@ target_include_directories(microphone_capturer_tests PRIVATE
     ${WEBRTC_ABSEIL_INCLUDE_DIR}
 )
 
+# Ensure test executables can resolve third-party shared libraries at runtime.
+if(UNIX)
+    set_target_properties(audio_processing_tests PROPERTIES
+        BUILD_RPATH "${WEBRTC_APM_BIN_DIR}"
+    )
+    set_target_properties(microphone_capturer_tests PROPERTIES
+        BUILD_RPATH "${WEBRTC_APM_BIN_DIR};${LIVEKIT_BIN_DIR}"
+    )
+endif()
+
 # =============================================================================
 # Desktop Capture Tests (existing)
 # =============================================================================
