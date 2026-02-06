@@ -8,9 +8,9 @@
 #include <dispatch/dispatch.h>
 
 #include <algorithm>
-#include <cstring>
 #include <atomic>
 #include <cstdint>
+#include <cstring>
 #include <optional>
 #include <utility>
 
@@ -27,12 +27,10 @@
 #define LINKS_AUTORELEASE(value) (value)
 #endif
 
-namespace {
-
 using links::core::PixelFormat;
 using links::core::RawImage;
 
-std::optional<RawImage> toRawImage(CVPixelBufferRef pixelBuffer)
+static std::optional<RawImage> toRawImage(CVPixelBufferRef pixelBuffer)
 {
     if (!pixelBuffer) {
         return std::nullopt;
@@ -134,8 +132,8 @@ API_AVAILABLE(macos(12.3))
 
 @end
 
-SCShareableContent* requestShareableContent() API_AVAILABLE(macos(12.3));
-SCShareableContent* requestShareableContent()
+API_AVAILABLE(macos(12.3))
+static SCShareableContent* requestShareableContent()
 {
     __block SCShareableContent* content = nil;
     dispatch_semaphore_t semaphore = dispatch_semaphore_create(0);
@@ -154,8 +152,8 @@ SCShareableContent* requestShareableContent()
     return content;
 }
 
-std::optional<RawImage> captureDisplayWithFilter(SCContentFilter* filter, std::uint32_t displayId) API_AVAILABLE(macos(12.3));
-std::optional<RawImage> captureDisplayWithFilter(SCContentFilter* filter, std::uint32_t displayId)
+API_AVAILABLE(macos(12.3))
+static std::optional<RawImage> captureDisplayWithFilter(SCContentFilter* filter, std::uint32_t displayId)
 {
     if (!filter) {
         return std::nullopt;
@@ -174,7 +172,8 @@ std::optional<RawImage> captureDisplayWithFilter(SCContentFilter* filter, std::u
     configuration.minimumFrameInterval = CMTimeMake(1, 30);
 
     OneShotCaptureContext context;
-    OneShotStreamOutput* output = LINKS_AUTORELEASE([[OneShotStreamOutput alloc] initWithContext:&context]);
+    OneShotCaptureContext* contextPtr = &context;
+    OneShotStreamOutput* output = LINKS_AUTORELEASE([[OneShotStreamOutput alloc] initWithContext:contextPtr]);
     dispatch_queue_t queue = dispatch_queue_create("links.sck.oneshot", DISPATCH_QUEUE_SERIAL);
 
     SCStream* stream = LINKS_AUTORELEASE([[SCStream alloc] initWithFilter:filter
@@ -193,13 +192,13 @@ std::optional<RawImage> captureDisplayWithFilter(SCContentFilter* filter, std::u
     }
 
     [stream startCaptureWithCompletionHandler:^(NSError* error) {
-        if (error && !context.finished.exchange(true)) {
-            dispatch_semaphore_signal(context.completionSemaphore);
+        if (error && !contextPtr->finished.exchange(true)) {
+            dispatch_semaphore_signal(contextPtr->completionSemaphore);
         }
     }];
 
     const dispatch_time_t captureTimeout = dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC);
-    const long waitResult = dispatch_semaphore_wait(context.completionSemaphore, captureTimeout);
+    const long waitResult = dispatch_semaphore_wait(contextPtr->completionSemaphore, captureTimeout);
 
     dispatch_semaphore_t stopSemaphore = dispatch_semaphore_create(0);
     [stream stopCaptureWithCompletionHandler:^(NSError* error) {
@@ -212,12 +211,10 @@ std::optional<RawImage> captureDisplayWithFilter(SCContentFilter* filter, std::u
         return std::nullopt;
     }
 
-    return context.image;
+    return contextPtr->image;
 }
 
 #endif  // HAS_SCREEN_CAPTURE_KIT
-
-}  // namespace
 
 namespace links {
 namespace core {
