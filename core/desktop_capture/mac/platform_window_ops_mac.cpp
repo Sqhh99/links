@@ -5,6 +5,8 @@
 #include <CoreFoundation/CoreFoundation.h>
 #include <CoreGraphics/CoreGraphics.h>
 
+#include <dlfcn.h>
+
 #include <cstring>
 
 #include <string>
@@ -130,6 +132,32 @@ std::optional<RawImage> captureCgImage(CGImageRef image)
     }
 
     return raw;
+}
+
+using CGWindowListCreateImageFn = CGImageRef (*)(
+    CGRect,
+    CGWindowListOption,
+    CGWindowID,
+    CGWindowImageOption);
+
+using CGDisplayCreateImageFn = CGImageRef (*)(CGDirectDisplayID);
+
+CGWindowListCreateImageFn resolveWindowImageCreator()
+{
+    const void* symbol = dlsym(RTLD_DEFAULT, "CGWindowListCreateImage");
+    if (!symbol) {
+        return nullptr;
+    }
+    return reinterpret_cast<CGWindowListCreateImageFn>(const_cast<void*>(symbol));
+}
+
+CGDisplayCreateImageFn resolveDisplayImageCreator()
+{
+    const void* symbol = dlsym(RTLD_DEFAULT, "CGDisplayCreateImage");
+    if (!symbol) {
+        return nullptr;
+    }
+    return reinterpret_cast<CGDisplayCreateImageFn>(const_cast<void*>(symbol));
 }
 
 }  // namespace
@@ -273,8 +301,13 @@ std::optional<RawImage> captureWindowWithCoreGraphics(WindowId id)
         return std::nullopt;
     }
 
+    const auto createImage = resolveWindowImageCreator();
+    if (!createImage) {
+        return std::nullopt;
+    }
+
     const CGWindowID windowId = static_cast<CGWindowID>(id);
-    const CGImageRef image = CGWindowListCreateImage(
+    const CGImageRef image = createImage(
         CGRectNull,
         kCGWindowListOptionIncludingWindow,
         windowId,
@@ -289,7 +322,12 @@ std::optional<RawImage> captureWindowWithCoreGraphics(WindowId id)
 
 std::optional<RawImage> captureDisplayWithCoreGraphics(std::uint32_t displayId)
 {
-    const CGImageRef image = CGDisplayCreateImage(static_cast<CGDirectDisplayID>(displayId));
+    const auto createImage = resolveDisplayImageCreator();
+    if (!createImage) {
+        return std::nullopt;
+    }
+
+    const CGImageRef image = createImage(static_cast<CGDirectDisplayID>(displayId));
     const auto result = captureCgImage(image);
     if (image) {
         CGImageRelease(image);

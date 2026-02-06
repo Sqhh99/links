@@ -12,14 +12,18 @@ TEST(ThumbnailServiceTest, EmptyInputReturnsEmptyBatch)
     EXPECT_TRUE(result.empty());
 }
 
-TEST(ThumbnailServiceTest, InvalidTargetSizeReturnsNoThumbnail)
+TEST(ThumbnailServiceTest, InvalidWindowReturnsNoThumbnail)
 {
     links::core::ThumbnailService service;
 
     links::core::WindowInfo window;
-    window.id = 1;
-    window.title = "invalid-target";
+    window.id = 0;
+    window.title = "invalid-window";
 
-    const auto thumbnail = service.captureWindowThumbnail(window, links::core::ImageSize{0, 100});
-    EXPECT_FALSE(thumbnail.has_value());
+    const auto thumbnails = service.captureWindowThumbnails(
+        std::vector<links::core::WindowInfo>{window},
+        links::core::ImageSize{0, 100});
+
+    ASSERT_EQ(thumbnails.size(), 1u);
+    EXPECT_FALSE(thumbnails.front().has_value());
 }
