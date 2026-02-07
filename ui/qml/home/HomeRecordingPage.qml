@@ -7,8 +7,6 @@ Item {
 
     property bool isGuest: true
 
-    signal requestLogin()
-
     ColumnLayout {
         anchors.fill: parent
         spacing: 16
@@ -24,7 +22,7 @@ Item {
             }
 
             Text {
-                text: root.isGuest ? "游客模式可查看本地录制" : "管理本地与云端录制"
+                text: "管理本地录制"
                 color: "#6B7280"
                 font.pixelSize: 12
             }
@@ -62,30 +60,6 @@ Item {
                         text: "查看录制文件夹"
                     }
                 }
-            }
-        }
-
-        Item { height: 12 }
-
-        ColumnLayout {
-            spacing: 10
-
-            Text {
-                text: "云录制"
-                color: "#111827"
-                font.pixelSize: 13
-                font.weight: Font.Medium
-            }
-
-            LoginPromptCard {
-                Layout.fillWidth: true
-                title: "登录以启用云录制"
-                message: "支持云端存储、共享与回放管理。"
-                showSecondary: false
-                primaryWidth: 200
-                centerPrimary: true
-                onPrimaryClicked: root.requestLogin()
-                onSecondaryClicked: {}
             }
         }
 

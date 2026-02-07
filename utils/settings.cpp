@@ -183,12 +183,17 @@ void Settings::setAuthToken(const QString& token)
 
 QString Settings::getUserId() const
 {
-    return settings_.value("auth/user_id", "").toString();
+    QString userId = settings_.value("auth/user_id", "").toString();
+    if (userId.isEmpty()) {
+        userId = settings_.value("auth/userId", "").toString();
+    }
+    return userId;
 }
 
 void Settings::setUserId(const QString& userId)
 {
     settings_.setValue("auth/user_id", userId);
+    settings_.setValue("auth/userId", userId);
     settings_.sync();
 }
 
@@ -216,13 +221,15 @@ void Settings::setDisplayName(const QString& name)
 
 bool Settings::hasAuthData() const
 {
-    return !getAuthToken().isEmpty() && !getUserId().isEmpty();
+    return !getAuthToken().isEmpty()
+        && (!getUserId().isEmpty() || !getUserEmail().isEmpty());
 }
 
 void Settings::clearAuthData()
 {
     settings_.remove("auth/token");
     settings_.remove("auth/user_id");
+    settings_.remove("auth/userId");
     settings_.remove("auth/email");
     settings_.remove("auth/display_name");
     settings_.sync();

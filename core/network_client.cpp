@@ -211,120 +211,186 @@ void NetworkClient::endRoom(const QString& roomName)
     });
 }
 
+
+QString NetworkClient::buildAuthErrorMessage(QNetworkReply* reply,
+                                             const QByteArray& responseData,
+                                             const QJsonObject& obj) const
+{
+    QString message;
+    if (obj.contains("error") && obj.value("error").isString()) {
+        message = obj.value("error").toString();
+    } else {
+        const QString rawResponse = QString::fromUtf8(responseData).trimmed();
+        message = rawResponse.isEmpty() ? reply->errorString() : rawResponse;
+    }
+
+    const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+    const QString reasonPhrase = reply->attribute(QNetworkRequest::HttpReasonPhraseAttribute).toString();
+    if (statusCode > 0) {
+        const QString statusText = reasonPhrase.isEmpty()
+            ? QString("HTTP %1").arg(statusCode)
+            : QString("HTTP %1 %2").arg(statusCode).arg(reasonPhrase);
+        message = QString("%1 (%2)").arg(message, statusText);
+    }
+
+    const QString allowHeader = QString::fromUtf8(reply->rawHeader("Allow")).trimmed();
+    if (!allowHeader.isEmpty()) {
+        message = QString("%1 [Allow: %2]").arg(message, allowHeader);
+    }
+
+    return message;
+}
+
+void NetworkClient::postAuthJsonWithFallback(
+    const QString& primaryPath,
+    const QString& fallbackPath,
+    const QJsonObject& payload,
+    const std::function<void(const QJsonObject&)>& onSuccess,
+    const std::function<void(const QString&)>& onFailure)
+{
+    const QJsonDocument doc(payload);
+    const QByteArray data = doc.toJson();
+
+    QNetworkRequest request(QUrl(apiUrl_ + primaryPath));
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+    QNetworkReply* reply = networkManager_->post(request, data);
+    connect(reply, &QNetworkReply::finished, this, [this,
+                                                     reply,
+                                                     primaryPath,
+                                                     fallbackPath,
+                                                     data,
+                                                     onSuccess,
+                                                     onFailure]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() == QNetworkReply::NoError) {
+            onSuccess(obj);
+            return;
+        }
+
+        const int statusCode = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+        const bool shouldFallback = !fallbackPath.isEmpty()
+            && fallbackPath != primaryPath
+            && statusCode == 404;
+
+        if (!shouldFallback) {
+            onFailure(buildAuthErrorMessage(reply, responseData, obj));
+            return;
+        }
+
+        Logger::instance().warning(
+            QString("Auth endpoint '%1' returned HTTP %2, retrying fallback '%3'")
+                .arg(primaryPath)
+                .arg(statusCode)
+                .arg(fallbackPath));
+
+        QNetworkRequest fallbackRequest(QUrl(apiUrl_ + fallbackPath));
+        fallbackRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+
+        QNetworkReply* fallbackReply = networkManager_->post(fallbackRequest, data);
+        connect(fallbackReply, &QNetworkReply::finished, this, [this, fallbackReply, onSuccess, onFailure]() {
+            fallbackReply->deleteLater();
+
+            const QByteArray fallbackResponseData = fallbackReply->readAll();
+            const QJsonDocument fallbackDoc = QJsonDocument::fromJson(fallbackResponseData);
+            const QJsonObject fallbackObj = fallbackDoc.isObject() ? fallbackDoc.object() : QJsonObject{};
+
+            if (fallbackReply->error() != QNetworkReply::NoError) {
+                onFailure(buildAuthErrorMessage(fallbackReply, fallbackResponseData, fallbackObj));
+                return;
+            }
+
+            onSuccess(fallbackObj);
+        });
+    });
+}
+
 // Auth API implementations
 void NetworkClient::login(const QString& email, const QString& password)
 {
     Logger::instance().info(QString("Attempting login for email: %1").arg(email));
-    
-    QUrl url(apiUrl_ + "/api/auth/login");
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    QJsonObject json;
-    json["email"] = email;
-    json["password"] = password;
-    
-    QJsonDocument doc(json);
-    QByteArray data = doc.toJson();
-    
-    QNetworkReply* reply = networkManager_->post(request, data);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        
-        QByteArray responseData = reply->readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(responseData);
-        QJsonObject obj = doc.object();
-        
-        if (reply->error() != QNetworkReply::NoError) {
-            QString errorMsg = obj.contains("error") ? obj["error"].toString() 
-                                                      : reply->errorString();
+
+    QJsonObject payload;
+    payload["email"] = email;
+    payload["password"] = password;
+
+    postAuthJsonWithFallback(
+        "/api/auth/login",
+        "/auth/login",
+        payload,
+        [this](const QJsonObject& obj) {
+            QString userId = obj.value("userId").toString();
+            if (userId.isEmpty()) {
+                userId = obj.value("user_id").toString();
+            }
+            const QString responseEmail = obj.value("email").toString();
+            const QString token = obj.value("token").toString();
+
+            Logger::instance().info("Login successful for: " + responseEmail);
+            emit loginSuccess(userId, responseEmail, token);
+        },
+        [this](const QString& errorMsg) {
             Logger::instance().error("Login failed: " + errorMsg);
             emit authError(errorMsg);
-            return;
-        }
-        
-        QString userId = obj["user_id"].toString();
-        QString email = obj["email"].toString();
-        QString token = obj["token"].toString();
-        
-        Logger::instance().info("Login successful for: " + email);
-        emit loginSuccess(userId, email, token);
-    });
+        });
 }
 
 void NetworkClient::requestVerificationCode(const QString& email)
 {
     Logger::instance().info(QString("Requesting verification code for: %1").arg(email));
-    
-    QUrl url(apiUrl_ + "/api/auth/register/request-code");
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    QJsonObject json;
-    json["email"] = email;
-    
-    QJsonDocument doc(json);
-    QByteArray data = doc.toJson();
-    
-    QNetworkReply* reply = networkManager_->post(request, data);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        
-        QByteArray responseData = reply->readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(responseData);
-        QJsonObject obj = doc.object();
-        
-        if (reply->error() != QNetworkReply::NoError) {
-            QString errorMsg = obj.contains("error") ? obj["error"].toString() 
-                                                      : reply->errorString();
+
+    QJsonObject payload;
+    payload["email"] = email;
+
+    postAuthJsonWithFallback(
+        "/api/auth/register/request-code",
+        "/auth/register/request-code",
+        payload,
+        [this](const QJsonObject& obj) {
+            int retryAfterSecs = obj.value("retryAfterSecs").toInt(0);
+            if (retryAfterSecs <= 0) {
+                retryAfterSecs = obj.value("expires_in_secs").toInt(600);
+            }
+            Logger::instance().info("Verification code sent successfully");
+            emit codeRequestSuccess(retryAfterSecs);
+        },
+        [this](const QString& errorMsg) {
             Logger::instance().error("Request code failed: " + errorMsg);
             emit authError(errorMsg);
-            return;
-        }
-        
-        int expiresInSecs = obj["expires_in_secs"].toInt(600);
-        Logger::instance().info("Verification code sent successfully");
-        emit codeRequestSuccess(expiresInSecs);
-    });
+        });
 }
 
 void NetworkClient::registerUser(const QString& email, const QString& password, const QString& code)
 {
     Logger::instance().info(QString("Registering user: %1").arg(email));
-    
-    QUrl url(apiUrl_ + "/api/auth/register");
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    QJsonObject json;
-    json["email"] = email;
-    json["password"] = password;
-    json["code"] = code;
-    
-    QJsonDocument doc(json);
-    QByteArray data = doc.toJson();
-    
-    QNetworkReply* reply = networkManager_->post(request, data);
-    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-        reply->deleteLater();
-        
-        QByteArray responseData = reply->readAll();
-        QJsonDocument doc = QJsonDocument::fromJson(responseData);
-        QJsonObject obj = doc.object();
-        
-        if (reply->error() != QNetworkReply::NoError) {
-            QString errorMsg = obj.contains("error") ? obj["error"].toString() 
-                                                      : reply->errorString();
+
+    QJsonObject payload;
+    payload["email"] = email;
+    payload["password"] = password;
+    payload["code"] = code;
+
+    postAuthJsonWithFallback(
+        "/api/auth/register",
+        "/auth/register",
+        payload,
+        [this](const QJsonObject& obj) {
+            QString userId = obj.value("userId").toString();
+            if (userId.isEmpty()) {
+                userId = obj.value("user_id").toString();
+            }
+            const QString responseEmail = obj.value("email").toString();
+            const QString token = obj.value("token").toString();
+
+            Logger::instance().info("Registration successful for: " + responseEmail);
+            emit registerSuccess(userId, responseEmail, token);
+        },
+        [this](const QString& errorMsg) {
             Logger::instance().error("Registration failed: " + errorMsg);
             emit authError(errorMsg);
-            return;
-        }
-        
-        QString userId = obj["user_id"].toString();
-        QString email = obj["email"].toString();
-        QString token = obj["token"].toString();
-        
-        Logger::instance().info("Registration successful for: " + email);
-        emit registerSuccess(userId, email, token);
-    });
+        });
 }

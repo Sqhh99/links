@@ -28,12 +28,6 @@ Window {
         id: localMeetingsModel
     }
 
-    ListModel {
-        id: cloudMeetingsModel
-        ListElement { title: "产品评审"; time: "今天 10:00 - 11:00"; tag: "云端" }
-        ListElement { title: "周会同步"; time: "明天 09:30 - 10:00"; tag: "云端" }
-    }
-
     LoginBackend {
         id: joinBackend
         onJoinConference: function(url, token, roomName, userName, isHost) {
@@ -118,7 +112,6 @@ Window {
 
                         HomeRecordingPage {
                             isGuest: root.isGuest
-                            onRequestLogin: root.openAuthModal()
                         }
                     }
                 }
@@ -128,10 +121,10 @@ Window {
                     Layout.fillHeight: true
                     visible: root.currentIndex === 0
                     isGuest: root.isGuest
-                    headerTitle: root.isGuest ? "本地最近会议记录" : "云端会议"
+                    headerTitle: "会议记录"
                     headerTag: ""
                     actionText: "查看全部 >"
-                    meetingsModel: root.isGuest ? localMeetingsModel : cloudMeetingsModel
+                    meetingsModel: localMeetingsModel
                     onQuickMeetingClicked: meetingPage.openAction("quick")
                     onJoinMeetingClicked: meetingPage.openAction("join")
                 }

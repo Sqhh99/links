@@ -6,6 +6,7 @@
 #include <QNetworkReply>
 #include <QString>
 #include <QJsonObject>
+#include <functional>
 
 struct TokenResponse {
     QString token;
@@ -57,6 +58,12 @@ private slots:
     
 private:
     void handleNetworkError(QNetworkReply* reply);
+    QString buildAuthErrorMessage(QNetworkReply* reply, const QByteArray& responseData, const QJsonObject& obj) const;
+    void postAuthJsonWithFallback(const QString& primaryPath,
+                                  const QString& fallbackPath,
+                                  const QJsonObject& payload,
+                                  const std::function<void(const QJsonObject&)>& onSuccess,
+                                  const std::function<void(const QString&)>& onFailure);
     
     QNetworkAccessManager* networkManager_;
     QString apiUrl_;

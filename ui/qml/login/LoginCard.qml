@@ -63,9 +63,9 @@ Item {
                 opacity: root.mode === "login" ? 1 : 0
                 x: root.mode === "login" ? 0 : -24
                 enabled: root.mode === "login"
-                onLoginRequested: {
+                onLoginRequested: function(requestEmail, requestPassword) {
                     if (root.authBackend) {
-                        root.authBackend.login(email, password)
+                        root.authBackend.login(requestEmail, requestPassword)
                     }
                 }
 
@@ -85,14 +85,14 @@ Item {
                 opacity: root.mode === "register" ? 1 : 0
                 x: root.mode === "register" ? 0 : 24
                 enabled: root.mode === "register"
-                onRegisterRequested: {
+                onRegisterRequested: function(requestDisplayName, requestEmail, requestCode, requestPassword) {
                     if (root.authBackend) {
-                        root.authBackend.registerUser(displayName, email, code, password)
+                        root.authBackend.registerUser(requestDisplayName, requestEmail, requestCode, requestPassword)
                     }
                 }
-                onRequestCodeClicked: {
+                onRequestCodeClicked: function(requestEmail) {
                     if (root.authBackend) {
-                        root.authBackend.requestCode(email)
+                        root.authBackend.requestCode(requestEmail)
                     }
                 }
 
