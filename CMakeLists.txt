@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 project(links LANGUAGES CXX)
 
+if(APPLE)
+    enable_language(OBJCXX)
+endif()
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -63,6 +67,7 @@ set(SOURCES
     core/room_event_delegate.cpp
     core/platform_window_ops.cpp
     core/thumbnail_service.cpp
+    ui/adapters/qt/qt_capture_adapter.cpp
     # Desktop Capture module
     core/desktop_capture/desktop_frame.cpp
     core/desktop_capture/desktop_capturer.cpp
@@ -88,6 +93,17 @@ if(WIN32)
         core/desktop_capture/win/dxgi_duplicator.cpp
         core/desktop_capture/win/gdi_capturer.cpp
     )
+elseif(APPLE)
+    list(APPEND SOURCES
+        core/desktop_capture/mac/platform_window_ops_mac.cpp
+        core/desktop_capture/mac/screen_capture_kit_adapter.mm
+        core/desktop_capture/mac/mac_capturer.cpp
+    )
+elseif(UNIX)
+    list(APPEND SOURCES
+        core/desktop_capture/linux/x11/platform_window_ops_linux_x11.cpp
+        core/desktop_capture/linux/x11/x11_capturer.cpp
+    )
 endif()
 
 set(HEADERS
@@ -105,8 +121,14 @@ set(HEADERS
     core/screen_capturer.h
     core/room_event_delegate.h
     core/window_types.h
+    core/image_types.h
     core/platform_window_ops.h
     core/thumbnail_service.h
+    core/desktop_capture/mac/platform_window_ops_mac.h
+    core/desktop_capture/mac/screen_capture_kit_adapter.h
+    core/desktop_capture/mac/mac_capturer.h
+    core/desktop_capture/linux/x11/platform_window_ops_linux_x11.h
+    core/desktop_capture/linux/x11/x11_capturer.h
     # Utils
     utils/logger.h
     utils/settings.h
@@ -116,6 +138,7 @@ set(HEADERS
     ui/backend/ConferenceBackend.h
     ui/backend/VideoRenderer.h
     ui/backend/ScreenPickerBackend.h
+    ui/adapters/qt/qt_capture_adapter.h
     ui/backend/ShareModeManager.h
     ui/backend/AuthBackend.h
 )
@@ -239,6 +262,30 @@ target_link_libraries(links PRIVATE
     Qt6::Qml
     Qt6::Concurrent
 )
+
+if(APPLE)
+    find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
+    find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    find_library(CORE_MEDIA_FRAMEWORK CoreMedia REQUIRED)
+    find_library(CORE_VIDEO_FRAMEWORK CoreVideo REQUIRED)
+    find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
+    find_library(SCREEN_CAPTURE_KIT_FRAMEWORK ScreenCaptureKit)
+    target_link_libraries(links PRIVATE
+        ${CORE_GRAPHICS_FRAMEWORK}
+        ${CORE_FOUNDATION_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${CORE_MEDIA_FRAMEWORK}
+        ${CORE_VIDEO_FRAMEWORK}
+        ${AVFOUNDATION_FRAMEWORK}
+    )
+    if(SCREEN_CAPTURE_KIT_FRAMEWORK)
+        target_link_libraries(links PRIVATE ${SCREEN_CAPTURE_KIT_FRAMEWORK})
+    endif()
+elseif(UNIX)
+    find_package(X11 REQUIRED)
+    target_link_libraries(links PRIVATE X11::X11)
+endif()
 
 # Include directories
 target_include_directories(links PRIVATE

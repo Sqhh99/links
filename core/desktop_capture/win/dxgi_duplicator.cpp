@@ -396,6 +396,8 @@ void DxgiDuplicator::Impl::releaseFrame() {
 DxgiDuplicator::DxgiDuplicator(const CaptureOptions& options)
     : impl_(std::make_unique<Impl>()) {
     options_ = options;
+    setBackend(CaptureBackend::Dxgi);
+    setLastError(CaptureError::Ok);
 }
 
 DxgiDuplicator::~DxgiDuplicator() {

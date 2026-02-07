@@ -1,67 +1,104 @@
 #include "platform_window_ops.h"
-#include <QGuiApplication>
-#include <QWindow>
 
-#ifdef Q_OS_WIN
+#ifdef _WIN32
 #include "desktop_capture/win/platform_window_ops_win.h"
+#elif defined(__APPLE__)
+#include "desktop_capture/mac/platform_window_ops_mac.h"
+#elif defined(__linux__)
+#include "desktop_capture/linux/x11/platform_window_ops_linux_x11.h"
 #endif
 
 namespace links {
 namespace core {
 
-QList<WindowInfo> enumerateWindows()
+std::vector<WindowInfo> enumerateWindows()
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     return win::enumerateWindows();
+#elif defined(__APPLE__)
+    return mac::enumerateWindows();
+#elif defined(__linux__)
+    return linux_x11::enumerateWindows();
 #else
-    QList<WindowInfo> result;
-    const QString unnamedWindow = QString::fromUtf8("\xE6\x9C\xAA\xE5\x91\xBD\xE5\x90\x8D\xE7\xAA\x97\xE5\x8F\xA3");
-    const QString keywordThumbnail = QString::fromUtf8("\xE7\xBC\xA9\xE7\x95\xA5\xE5\x9B\xBE");
-    const QString keywordInputExperience = QString::fromUtf8("\xE8\xBE\x93\xE5\x85\xA5\xE4\xBD\x93\xE9\xAA\x8C");
-    const auto topLevel = QGuiApplication::topLevelWindows();
-    for (auto* window : topLevel) {
-        if (!window->isVisible()) {
-            continue;
-        }
-        WindowInfo info;
-        info.id = static_cast<WindowId>(window->winId());
-        info.title = window->title().isEmpty() ? unnamedWindow : window->title();
-        QString lower = info.title.toLower();
-        if (lower.contains(keywordThumbnail) || lower.contains("thumbnail")
-            || lower.contains("windows input experience") || lower.contains(keywordInputExperience)) {
-            continue;
-        }
-        info.geometry = window->geometry();
-        result.append(info);
-    }
-    return result;
+    return {};
+#endif
+}
+
+bool isWindowShareSupportedOnCurrentPlatform()
+{
+#ifdef _WIN32
+    return true;
+#elif defined(__APPLE__)
+    return mac::isWindowShareSupported();
+#elif defined(__linux__)
+    return linux_x11::isWindowShareSupported();
+#else
+    return false;
+#endif
+}
+
+bool isScreenShareSupportedOnCurrentPlatform()
+{
+#ifdef _WIN32
+    return true;
+#elif defined(__APPLE__)
+    return mac::isScreenShareSupported();
+#elif defined(__linux__)
+    return linux_x11::isScreenShareSupported();
+#else
+    return false;
+#endif
+}
+
+bool hasScreenCapturePermission()
+{
+#ifdef _WIN32
+    return true;
+#elif defined(__APPLE__)
+    return mac::hasScreenRecordingPermission();
+#elif defined(__linux__)
+    return true;
+#else
+    return false;
 #endif
 }
 
 bool bringWindowToForeground(WindowId id)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     return win::bringWindowToForeground(id);
+#elif defined(__APPLE__)
+    return mac::bringWindowToForeground(id);
+#elif defined(__linux__)
+    return linux_x11::bringWindowToForeground(id);
 #else
-    Q_UNUSED(id);
+    (void)id;
     return false;
 #endif
 }
 
 bool excludeFromCapture(WindowId id)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     return win::excludeFromCapture(id);
+#elif defined(__APPLE__)
+    return mac::excludeFromCapture(id);
+#elif defined(__linux__)
+    return linux_x11::excludeFromCapture(id);
 #else
-    Q_UNUSED(id);
+    (void)id;
     return false;
 #endif
 }
 
 bool isWindowValid(WindowId id)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     return win::isWindowValid(id);
+#elif defined(__APPLE__)
+    return mac::isWindowValid(id);
+#elif defined(__linux__)
+    return linux_x11::isWindowValid(id);
 #else
     return id != 0;
 #endif
@@ -69,31 +106,39 @@ bool isWindowValid(WindowId id)
 
 bool isWindowMinimized(WindowId id)
 {
-#ifdef Q_OS_WIN
+#ifdef _WIN32
     return win::isWindowMinimized(id);
+#elif defined(__APPLE__)
+    return mac::isWindowMinimized(id);
+#elif defined(__linux__)
+    return linux_x11::isWindowMinimized(id);
 #else
-    Q_UNUSED(id);
+    (void)id;
     return false;
 #endif
 }
 
-QPixmap grabWindowWithWinRt(WindowId id)
+std::optional<RawImage> captureWindowWithWinRt(WindowId id)
 {
-#ifdef Q_OS_WIN
-    return win::grabWindowWithWinRt(id);
+#ifdef _WIN32
+    return win::captureWindowWithWinRt(id);
 #else
-    Q_UNUSED(id);
-    return {};
+    (void)id;
+    return std::nullopt;
 #endif
 }
 
-QPixmap grabWindowWithPrintApi(WindowId id)
+std::optional<RawImage> captureWindowWithPrintApi(WindowId id)
 {
-#ifdef Q_OS_WIN
-    return win::grabWindowWithPrintApi(id);
+#ifdef _WIN32
+    return win::captureWindowWithPrintApi(id);
+#elif defined(__APPLE__)
+    return mac::captureWindowWithCoreGraphics(id);
+#elif defined(__linux__)
+    return linux_x11::captureWindowWithX11(id);
 #else
-    Q_UNUSED(id);
-    return {};
+    (void)id;
+    return std::nullopt;
 #endif
 }
 

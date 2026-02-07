@@ -20,6 +20,8 @@ namespace win {
 
 GdiCapturer::GdiCapturer(const CaptureOptions& options) {
     options_ = options;
+    setBackend(CaptureBackend::Gdi);
+    setLastError(CaptureError::Ok);
 }
 
 GdiCapturer::~GdiCapturer() {

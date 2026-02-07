@@ -230,22 +230,16 @@ QImage ScreenCapturer::frameToQImage(const DesktopFrame& frame)
 
 bool ScreenCapturer::validateWindowHandle() const
 {
-#ifdef Q_OS_WIN
     return windowId_ != 0
         && links::core::isWindowValid(static_cast<links::core::WindowId>(windowId_));
-#else
-    return windowId_ != 0;
-#endif
 }
 
 bool ScreenCapturer::isWindowMinimized() const
 {
-#ifdef Q_OS_WIN
-    if (windowId_ == 0) return false;
+    if (windowId_ == 0) {
+        return false;
+    }
     return links::core::isWindowMinimized(static_cast<links::core::WindowId>(windowId_));
-#else
-    return false;
-#endif
 }
 
 DesktopCapturer::SourceId ScreenCapturer::screenSourceId() const

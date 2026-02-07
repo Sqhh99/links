@@ -1,39 +1,30 @@
 #include "ScreenPickerBackend.h"
+
+#include <QColor>
+#include <algorithm>
+#include <cstddef>
+#include <QFont>
 #include <QGuiApplication>
-#include <QScreen>
-#include <QPixmap>
 #include <QPainter>
 #include <QPen>
-#include <QFont>
-#include <QColor>
+#include <QPixmap>
+#include <QtConcurrent/QtConcurrent>
+
+#include "../adapters/qt/qt_capture_adapter.h"
 #include "../../core/platform_window_ops.h"
 
 namespace {
 const QSize kThumbSize(240, 140);
-} // namespace
+}  // namespace
 
 ScreenPickerBackend::ScreenPickerBackend(QObject* parent)
     : QObject(parent)
 {
-    thumbnailService_ = new links::core::ThumbnailService(this);
-    connect(thumbnailService_, &links::core::ThumbnailService::thumbnailsReady, this,
-            [this](const QVector<QImage>& thumbnails) {
-                for (int i = 0; i < windows_.size() && i < thumbnails.size(); ++i) {
-                    const QImage& thumb = thumbnails[i];
-                    if (!thumb.isNull()) {
-                        QVariantMap item = windows_[i].toMap();
-                        item["thumbnail"] = thumb;
-                        windows_[i] = item;
-                    }
-                }
-                emit windowsChanged();
-            });
-    // Don't scan windows on construction, only when dialog opens
-    // refreshScreens() and refreshWindows() will be called from QML
 }
 
 ScreenPickerBackend::~ScreenPickerBackend()
 {
+    cancelPendingOperations();
 }
 
 void ScreenPickerBackend::setCurrentTabIndex(int index)
@@ -41,6 +32,7 @@ void ScreenPickerBackend::setCurrentTabIndex(int index)
     if (!windowShareSupported() && index == 1) {
         index = 0;
     }
+
     if (currentTabIndex_ != index) {
         currentTabIndex_ = index;
         emit currentTabIndexChanged();
@@ -70,7 +62,8 @@ bool ScreenPickerBackend::hasSelection() const
 {
     if (currentTabIndex_ == 0) {
         return selectedScreenIndex_ >= 0 && selectedScreenIndex_ < screens_.size();
-    } else if (windowShareSupported()) {
+    }
+    if (windowShareSupported()) {
         return selectedWindowIndex_ >= 0 && selectedWindowIndex_ < windows_.size();
     }
     return false;
@@ -83,18 +76,14 @@ QString ScreenPickerBackend::shareButtonText() const
 
 bool ScreenPickerBackend::windowShareSupported() const
 {
-#ifdef Q_OS_WIN
-    return true;
-#else
-    return false;
-#endif
+    return links::core::isWindowShareSupportedOnCurrentPlatform();
 }
 
 void ScreenPickerBackend::refreshScreens()
 {
     screens_.clear();
     const auto screenList = QGuiApplication::screens();
-    
+
     for (int i = 0; i < screenList.size(); ++i) {
         QScreen* screen = screenList[i];
         QImage thumb = grabScreenThumbnail(screen);
@@ -102,7 +91,7 @@ void ScreenPickerBackend::refreshScreens()
                             .arg(i + 1)
                             .arg(screen->geometry().width())
                             .arg(screen->geometry().height());
-        
+
         QVariantMap item;
         item["index"] = i;
         item["title"] = label;
@@ -110,18 +99,20 @@ void ScreenPickerBackend::refreshScreens()
         item["tooltip"] = screen->name();
         screens_.append(item);
     }
-    
+
     if (!screens_.isEmpty() && selectedScreenIndex_ < 0) {
         selectedScreenIndex_ = 0;
         emit selectedScreenIndexChanged();
     }
-    
+
     emit screensChanged();
     emit selectionChanged();
 }
 
 void ScreenPickerBackend::refreshWindows()
 {
+    cancelPendingOperations();
+
     windows_.clear();
     windowInfos_.clear();
 
@@ -132,49 +123,100 @@ void ScreenPickerBackend::refreshWindows()
         emit selectionChanged();
         return;
     }
-    
-    const auto windowList = enumerateWindows();
-    windowInfos_.reserve(windowList.size());
-    
-    for (const auto& info : windowList) {
-        windowInfos_.append(info);
-    }
-    
-    // First, populate with placeholder thumbnails for immediate UI response
-    for (int i = 0; i < windowInfos_.size(); ++i) {
+
+    windowInfos_ = enumerateWindows();
+
+    for (int i = 0; i < static_cast<int>(windowInfos_.size()); ++i) {
         const auto& info = windowInfos_[i];
-        QImage placeholder = placeholderThumbnail(info.title);
-        
-        QVariantMap item;
-        item["index"] = i;
-        item["title"] = info.title;
-        item["thumbnail"] = placeholder;
-        item["tooltip"] = info.title;
-        item["windowId"] = static_cast<qulonglong>(info.id);
-        windows_.append(item);
+        const QImage placeholder = placeholderThumbnail(QString::fromStdString(info.title));
+        windows_.append(links::qt_adapter::makeWindowItem(i, info, placeholder));
     }
-    
+
     if (!windows_.isEmpty() && selectedWindowIndex_ < 0) {
         selectedWindowIndex_ = 0;
         emit selectedWindowIndexChanged();
     }
-    
+
     emit windowsChanged();
     emit selectionChanged();
-    
-    // Now capture real thumbnails asynchronously
+
     captureWindowThumbnailsAsync();
 }
 
 void ScreenPickerBackend::captureWindowThumbnailsAsync()
 {
-    if (!thumbnailService_) {
+    if (windowInfos_.empty()) {
         return;
     }
-    thumbnailService_->requestWindowThumbnails(windowInfos_, kThumbSize);
+
+    const std::uint64_t generation = thumbnailGeneration_.fetch_add(1) + 1;
+    const std::vector<WindowInfo> windows = windowInfos_;
+    const links::core::ImageSize targetSize{kThumbWidth, kThumbHeight};
+    clearThumbnailWatcher();
+
+    thumbnailWatcher_ = new QFutureWatcher<ThumbnailBatch>(this);
+    connect(thumbnailWatcher_, &QFutureWatcher<ThumbnailBatch>::finished, this, [this, generation]() {
+        if (!thumbnailWatcher_) {
+            return;
+        }
+
+        ThumbnailBatch thumbnails = thumbnailWatcher_->result();
+        clearThumbnailWatcher();
+
+        if (generation != thumbnailGeneration_.load()) {
+            return;
+        }
+
+        applyWindowThumbnails(thumbnails);
+    });
+
+    auto future = QtConcurrent::run([windows, targetSize]() {
+        links::core::ThumbnailService service;
+        return service.captureWindowThumbnails(windows, targetSize);
+    });
+
+    thumbnailWatcher_->setFuture(future);
 }
 
-QList<ScreenPickerBackend::WindowInfo> ScreenPickerBackend::enumerateWindows() const
+void ScreenPickerBackend::applyWindowThumbnails(const ThumbnailBatch& thumbnails)
+{
+    bool updated = false;
+    const int count = std::min(static_cast<int>(windows_.size()), static_cast<int>(thumbnails.size()));
+
+    for (int i = 0; i < count; ++i) {
+        if (!thumbnails[static_cast<std::size_t>(i)].has_value()) {
+            continue;
+        }
+
+        const QImage thumb = links::qt_adapter::toQImage(*thumbnails[static_cast<std::size_t>(i)]);
+        if (thumb.isNull()) {
+            continue;
+        }
+
+        QVariantMap item = windows_[i].toMap();
+        item["thumbnail"] = thumb;
+        windows_[i] = item;
+        updated = true;
+    }
+
+    if (updated) {
+        emit windowsChanged();
+    }
+}
+
+void ScreenPickerBackend::clearThumbnailWatcher()
+{
+    if (!thumbnailWatcher_) {
+        return;
+    }
+
+    thumbnailWatcher_->disconnect(this);
+    thumbnailWatcher_->cancel();
+    thumbnailWatcher_->deleteLater();
+    thumbnailWatcher_ = nullptr;
+}
+
+std::vector<ScreenPickerBackend::WindowInfo> ScreenPickerBackend::enumerateWindows() const
 {
     return links::core::enumerateWindows();
 }
@@ -189,6 +231,7 @@ QImage ScreenPickerBackend::grabScreenThumbnail(QScreen* screen) const
     if (pix.isNull()) {
         return placeholderThumbnail(screen->name());
     }
+
     return pix.scaled(kThumbSize, Qt::KeepAspectRatio, Qt::SmoothTransformation).toImage();
 }
 
@@ -220,11 +263,11 @@ void ScreenPickerBackend::accept()
             selectionType_ = SelectionType::Screen;
         }
     } else if (windowShareSupported()) {
-        if (selectedWindowIndex_ >= 0 && selectedWindowIndex_ < windowInfos_.size()) {
+        if (selectedWindowIndex_ >= 0
+            && selectedWindowIndex_ < static_cast<int>(windowInfos_.size())) {
             selectedWindowId_ = windowInfos_[selectedWindowIndex_].id;
             if (selectedWindowId_ != 0) {
                 selectionType_ = SelectionType::Window;
-                // Bring selected window to foreground so it's visible
                 links::core::bringWindowToForeground(selectedWindowId_);
             }
         }
@@ -246,7 +289,6 @@ void ScreenPickerBackend::cancel()
 
 void ScreenPickerBackend::cancelPendingOperations()
 {
-    if (thumbnailService_) {
-        thumbnailService_->cancel();
-    }
+    thumbnailGeneration_.fetch_add(1);
+    clearThumbnailWatcher();
 }

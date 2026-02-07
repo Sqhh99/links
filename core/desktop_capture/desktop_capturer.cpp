@@ -9,6 +9,11 @@
 #include "win/wgc_capturer.h"
 #include "win/dxgi_duplicator.h"
 #include "win/gdi_capturer.h"
+#elif defined(__APPLE__)
+#include "mac/mac_capturer.h"
+#elif defined(__linux__)
+#include "linux/x11/x11_capturer.h"
+#include "linux/x11/platform_window_ops_linux_x11.h"
 #endif
 
 namespace links {
@@ -17,18 +22,21 @@ namespace desktop_capture {
 std::unique_ptr<DesktopCapturer> DesktopCapturer::createScreenCapturer(
     const CaptureOptions& options) {
 #ifdef _WIN32
-    // Prefer WGC for screen capture when available.
     if (win::WgcCapturer::isSupported()) {
         return std::make_unique<win::WgcCapturer>(options);
     }
-    // Fallback to DXGI if WGC isn't available.
     if (win::DxgiDuplicator::isSupported()) {
         return std::make_unique<win::DxgiDuplicator>(options);
     }
-    // Last resort: no screen capture available (GdiCapturer doesn't support it)
     return nullptr;
+#elif defined(__APPLE__)
+    return std::make_unique<mac::MacScreenCapturer>(options);
+#elif defined(__linux__)
+    if (!core::linux_x11::isScreenShareSupported()) {
+        return nullptr;
+    }
+    return std::make_unique<linux_x11::X11ScreenCapturer>(options);
 #else
-    // TODO: Implement for other platforms
     return nullptr;
 #endif
 }
@@ -36,7 +44,6 @@ std::unique_ptr<DesktopCapturer> DesktopCapturer::createScreenCapturer(
 std::unique_ptr<DesktopCapturer> DesktopCapturer::createWindowCapturer(
     const CaptureOptions& options) {
 #ifdef _WIN32
-    // Prefer WGC if available, fallback to DXGI, then GDI
     if (options.preferredMethod != CaptureOptions::CaptureMethod::kSoftware) {
         if (win::WgcCapturer::isSupported()) {
             return std::make_unique<win::WgcCapturer>(options);
@@ -45,10 +52,15 @@ std::unique_ptr<DesktopCapturer> DesktopCapturer::createWindowCapturer(
             return std::make_unique<win::DxgiDuplicator>(options);
         }
     }
-    // Software/fallback
     return std::make_unique<win::GdiCapturer>(options);
+#elif defined(__APPLE__)
+    return std::make_unique<mac::MacWindowCapturer>(options);
+#elif defined(__linux__)
+    if (!core::linux_x11::isWindowShareSupported()) {
+        return nullptr;
+    }
+    return std::make_unique<linux_x11::X11WindowCapturer>(options);
 #else
-    // TODO: Implement for other platforms
     return nullptr;
 #endif
 }

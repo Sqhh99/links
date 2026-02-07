@@ -1,19 +1,25 @@
 #ifndef CORE_WINDOW_TYPES_H
 #define CORE_WINDOW_TYPES_H
 
-#include <QRect>
-#include <QString>
-#include <QtGlobal>
+#include <cstdint>
+#include <string>
 
 namespace links {
 namespace core {
 
-using WindowId = quint64;
+using WindowId = std::uint64_t;
+
+struct WindowRect {
+    int x{0};
+    int y{0};
+    int width{0};
+    int height{0};
+};
 
 struct WindowInfo {
-    QString title;
+    std::string title;
     WindowId id{0};
-    QRect geometry;
+    WindowRect geometry;
 };
 
 }  // namespace core

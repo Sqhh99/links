@@ -392,6 +392,8 @@ void WgcCapturer::Impl::shutdown() {
 WgcCapturer::WgcCapturer(const CaptureOptions& options)
     : impl_(std::make_unique<Impl>()) {
     options_ = options;
+    setBackend(CaptureBackend::Wgc);
+    setLastError(CaptureError::Ok);
 }
 
 WgcCapturer::~WgcCapturer() {
