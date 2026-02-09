@@ -23,20 +23,21 @@ ConferenceBackend::~ConferenceBackend()
 }
 
 void ConferenceBackend::initialize(const QString& url, const QString& token,
-                                   const QString& roomName, const QString& userName, bool isHost)
+                                   const QString& roomName, const QString& meetingNo, const QString& userName, bool isHost)
 {
     url_ = url;
     token_ = token;
     roomName_ = roomName;
+    meetingNo_ = meetingNo;
     userName_ = userName;
     isHost_ = isHost;
-    
-    Logger::instance().info(QString("ConferenceBackend initialized for room: %1, isHost: %2")
-                           .arg(roomName).arg(isHost));
+    Logger::instance().info(QString("ConferenceBackend initialized for room: %1, meetingNo: %2, isHost: %3")
+                           .arg(roomName).arg(meetingNo).arg(isHost));
     
     setupConnections();
     conferenceManager_->connect(url, token);
     
+    emit meetingNoChanged();
     emit roomNameChanged();
     emit userNameChanged();
 }

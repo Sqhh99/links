@@ -24,22 +24,55 @@ Window {
         authModal.open()
     }
 
+    function reloadMeetingRecords() {
+        if (authBackend.isLoggedIn) {
+            joinBackend.loadMeetingRecords()
+        } else {
+            localMeetingsModel.clear()
+        }
+    }
+
     ListModel {
         id: localMeetingsModel
     }
 
     LoginBackend {
         id: joinBackend
-        onJoinConference: function(url, token, roomName, userName, isHost) {
+
+        onJoinConference: function(url, token, roomName, meetingNo, userName, isHost) {
             meetingPage.closeActionDialog()
             root.hide()
+        }
+
+        onMeetingRecordsLoaded: function(records) {
+            localMeetingsModel.clear()
+            for (var i = 0; i < records.length; ++i) {
+                localMeetingsModel.append(records[i])
+            }
         }
     }
 
     AuthBackend {
         id: authBackend
-        onLoginSucceeded: authModal.close()
-        onRegisterSucceeded: authModal.close()
+        onLoginSucceeded: {
+            authModal.close()
+            root.reloadMeetingRecords()
+        }
+        onRegisterSucceeded: {
+            authModal.close()
+            root.reloadMeetingRecords()
+        }
+    }
+
+    Connections {
+        target: authBackend
+        function onIsLoggedInChanged() {
+            root.reloadMeetingRecords()
+        }
+    }
+
+    Component.onCompleted: {
+        root.reloadMeetingRecords()
     }
 
     Rectangle {
@@ -78,7 +111,10 @@ Window {
                     currentIndex: root.currentIndex
                     onNavChanged: function(index) { root.currentIndex = index }
                     onLoginRequested: root.openAuthModal()
-                    onLogoutRequested: authBackend.logout()
+                    onLogoutRequested: {
+                        authBackend.logout()
+                        localMeetingsModel.clear()
+                    }
                     onAccountSettingsRequested: settingsDialog.open()
                     onSettingsRequested: settingsDialog.open()
                 }

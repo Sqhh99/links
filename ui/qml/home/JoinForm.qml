@@ -32,7 +32,7 @@ ColumnLayout {
     }
     
     Text {
-        text: "会议号 / 房间名"
+        text: "会议号 / 分享链接"
         color: "#374151"
         font.pixelSize: 13
         font.weight: Font.DemiBold
@@ -41,7 +41,7 @@ ColumnLayout {
     TextField {
         id: roomNameInput
         Layout.fillWidth: true
-        placeholderText: "如 daily-standup 或会议号"
+        placeholderText: "如 123456789 或分享链接"
         
         Keys.onReturnPressed: root.joinClicked()
     }

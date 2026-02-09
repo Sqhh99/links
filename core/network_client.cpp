@@ -1,9 +1,11 @@
 #include "network_client.h"
 #include "../utils/logger.h"
+
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QJsonArray>
 #include <QNetworkRequest>
+#include <QUrlQuery>
 
 NetworkClient::NetworkClient(QObject* parent)
     : QObject(parent),
@@ -18,7 +20,6 @@ NetworkClient::~NetworkClient()
 
 void NetworkClient::setApiUrl(const QString& url)
 {
-    // Remove trailing slash to prevent double slashes in URL construction
     apiUrl_ = url;
     if (apiUrl_.endsWith('/')) {
         apiUrl_.chop(1);
@@ -26,64 +27,179 @@ void NetworkClient::setApiUrl(const QString& url)
     Logger::instance().info("API URL set to: " + apiUrl_);
 }
 
+QNetworkRequest NetworkClient::createJsonRequest(const QUrl& url) const
+{
+    QNetworkRequest request(url);
+    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
+    return request;
+}
+
+QNetworkRequest NetworkClient::createAuthorizedJsonRequest(const QUrl& url, const QString& authToken) const
+{
+    QNetworkRequest request = createJsonRequest(url);
+    if (!authToken.trimmed().isEmpty()) {
+        request.setRawHeader("Authorization", QString("Bearer %1").arg(authToken.trimmed()).toUtf8());
+    }
+    return request;
+}
+
 void NetworkClient::requestToken(const QString& roomName, const QString& participantName)
 {
     Logger::instance().info(QString("Requesting token for room '%1', participant '%2'")
-                           .arg(roomName, participantName));
-    
-    QUrl url(apiUrl_ + "/api/token");
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
+                               .arg(roomName, participantName));
+
     QJsonObject json;
     json["roomName"] = roomName;
     json["participantName"] = participantName;
-    
-    QJsonDocument doc(json);
-    QByteArray data = doc.toJson();
-    
-    QNetworkReply* reply = networkManager_->post(request, data);
+
+    const QJsonDocument doc(json);
+    QNetworkReply* reply = networkManager_->post(createJsonRequest(QUrl(apiUrl_ + "/api/token")), doc.toJson());
     connect(reply, &QNetworkReply::finished, this, &NetworkClient::onTokenReplyFinished);
+}
+
+void NetworkClient::createMeeting(const QString& authToken)
+{
+    Logger::instance().info("Creating meeting via /api/meetings");
+
+    QNetworkReply* reply = networkManager_->post(
+        createAuthorizedJsonRequest(QUrl(apiUrl_ + "/api/meetings"), authToken),
+        QByteArray());
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Create meeting failed: " + errorMsg);
+            emit error(errorMsg);
+            return;
+        }
+
+        const QString meetingNo = obj.value("meetingNo").toString();
+        const QString roomName = obj.value("roomName").toString();
+        const QString shareUrl = obj.value("shareUrl").toString();
+        Logger::instance().info(QString("Meeting created successfully: meetingNo=%1, roomName=%2")
+                                   .arg(meetingNo, roomName));
+        emit meetingCreated(meetingNo, roomName, shareUrl);
+    });
+}
+
+void NetworkClient::joinMeeting(const QString& meetingNo,
+                                const QString& participantName,
+                                const QString& authToken)
+{
+    Logger::instance().info(QString("Joining meeting '%1' via /api/meetings/{meetingNo}/join").arg(meetingNo));
+
+    QJsonObject payload;
+    if (!participantName.trimmed().isEmpty()) {
+        payload["participantName"] = participantName.trimmed();
+    }
+
+    const QJsonDocument doc(payload);
+    const QString path = QString("/api/meetings/%1/join").arg(meetingNo);
+
+    QNetworkReply* reply = networkManager_->post(
+        createAuthorizedJsonRequest(QUrl(apiUrl_ + path), authToken),
+        doc.toJson());
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, meetingNo]() {
+        reply->deleteLater();
+
+        TokenResponse response;
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            response.success = false;
+            response.error = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Join meeting failed: " + response.error);
+            emit error(response.error);
+            emit tokenReceived(response);
+            return;
+        }
+
+        response.token = obj.value("token").toString();
+        response.url = obj.value("url").toString();
+        response.roomName = obj.value("roomName").toString();
+        response.meetingNo = obj.value("meetingNo").toString();
+        if (response.meetingNo.isEmpty()) {
+            response.meetingNo = meetingNo;
+        }
+        response.isHost = obj.value("isHost").toBool(false);
+        response.success = true;
+
+        Logger::instance().info(QString("Join meeting succeeded: meetingNo=%1, roomName=%2")
+                                   .arg(response.meetingNo, response.roomName));
+        emit tokenReceived(response);
+    });
+}
+
+void NetworkClient::fetchMeetingRecords(const QString& authToken, int page, int pageSize)
+{
+    QUrl url(apiUrl_ + "/api/me/meeting-records");
+    QUrlQuery query;
+    query.addQueryItem("page", QString::number(page));
+    query.addQueryItem("pageSize", QString::number(pageSize));
+    url.setQuery(query);
+
+    QNetworkReply* reply = networkManager_->get(createAuthorizedJsonRequest(url, authToken));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Fetch meeting records failed: " + errorMsg);
+            emit error(errorMsg);
+            emit meetingRecordsReceived(QJsonArray{});
+            return;
+        }
+
+        const QJsonArray records = obj.value("records").toArray();
+        Logger::instance().info(QString("Fetched %1 meeting records").arg(records.size()));
+        emit meetingRecordsReceived(records);
+    });
 }
 
 void NetworkClient::createRoom(const QString& roomName)
 {
     Logger::instance().info("Creating room: " + roomName);
-    
-    QUrl url(apiUrl_ + "/api/rooms");
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
+
     QJsonObject json;
     json["name"] = roomName;
-    
-    QJsonDocument doc(json);
-    QByteArray data = doc.toJson();
-    
-    QNetworkReply* reply = networkManager_->post(request, data);
+
+    const QJsonDocument doc(json);
+    QNetworkReply* reply = networkManager_->post(createJsonRequest(QUrl(apiUrl_ + "/api/rooms")), doc.toJson());
     connect(reply, &QNetworkReply::finished, this, &NetworkClient::onCreateRoomReplyFinished);
 }
 
 void NetworkClient::listRooms()
 {
     Logger::instance().info("Listing rooms");
-    
-    QUrl url(apiUrl_ + "/api/rooms");
-    QNetworkRequest request(url);
-    
-    QNetworkReply* reply = networkManager_->get(request);
+
+    QNetworkReply* reply = networkManager_->get(QNetworkRequest(QUrl(apiUrl_ + "/api/rooms")));
     connect(reply, &QNetworkReply::finished, this, &NetworkClient::onListRoomsReplyFinished);
 }
 
 void NetworkClient::onTokenReplyFinished()
 {
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) return;
-    
+    if (!reply) {
+        return;
+    }
+
     reply->deleteLater();
-    
+
     TokenResponse response;
-    
+
     if (reply->error() != QNetworkReply::NoError) {
         handleNetworkError(reply);
         response.success = false;
@@ -91,46 +207,50 @@ void NetworkClient::onTokenReplyFinished()
         emit tokenReceived(response);
         return;
     }
-    
-    QByteArray data = reply->readAll();
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    
-    if (doc.isObject()) {
-        QJsonObject obj = doc.object();
-        response.token = obj["token"].toString();
-        response.url = obj["url"].toString();
-        response.roomName = obj["roomName"].toString();
-        response.isHost = obj["isHost"].toBool(false);
-        response.success = true;
-        
-        Logger::instance().info(QString("Token received successfully (isHost: %1)").arg(response.isHost));
-        emit tokenReceived(response);
-    } else {
+
+    const QByteArray data = reply->readAll();
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+
+    if (!doc.isObject()) {
         response.success = false;
         response.error = "Invalid response format";
         Logger::instance().error("Invalid token response format");
         emit tokenReceived(response);
+        return;
     }
+
+    const QJsonObject obj = doc.object();
+    response.token = obj.value("token").toString();
+    response.url = obj.value("url").toString();
+    response.roomName = obj.value("roomName").toString();
+    response.meetingNo = obj.value("meetingNo").toString();
+    response.isHost = obj.value("isHost").toBool(false);
+    response.success = true;
+
+    Logger::instance().info(QString("Token received successfully (isHost: %1)").arg(response.isHost));
+    emit tokenReceived(response);
 }
 
 void NetworkClient::onCreateRoomReplyFinished()
 {
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) return;
-    
+    if (!reply) {
+        return;
+    }
+
     reply->deleteLater();
-    
+
     if (reply->error() != QNetworkReply::NoError) {
         handleNetworkError(reply);
         return;
     }
-    
-    QByteArray data = reply->readAll();
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    
+
+    const QByteArray data = reply->readAll();
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+
     if (doc.isObject()) {
-        QJsonObject obj = doc.object();
-        QString roomName = obj["name"].toString();
+        const QJsonObject obj = doc.object();
+        const QString roomName = obj.value("name").toString();
         Logger::instance().info("Room created: " + roomName);
         emit roomCreated(roomName);
     }
@@ -139,20 +259,22 @@ void NetworkClient::onCreateRoomReplyFinished()
 void NetworkClient::onListRoomsReplyFinished()
 {
     QNetworkReply* reply = qobject_cast<QNetworkReply*>(sender());
-    if (!reply) return;
-    
+    if (!reply) {
+        return;
+    }
+
     reply->deleteLater();
-    
+
     if (reply->error() != QNetworkReply::NoError) {
         handleNetworkError(reply);
         return;
     }
-    
-    QByteArray data = reply->readAll();
-    QJsonDocument doc = QJsonDocument::fromJson(data);
-    
+
+    const QByteArray data = reply->readAll();
+    const QJsonDocument doc = QJsonDocument::fromJson(data);
+
     if (doc.isArray()) {
-        QJsonArray rooms = doc.array();
+        const QJsonArray rooms = doc.array();
         Logger::instance().info(QString("Received %1 rooms").arg(rooms.size()));
         emit roomsListed(rooms);
     }
@@ -160,7 +282,7 @@ void NetworkClient::onListRoomsReplyFinished()
 
 void NetworkClient::handleNetworkError(QNetworkReply* reply)
 {
-    QString errorMsg = QString("Network error: %1").arg(reply->errorString());
+    const QString errorMsg = QString("Network error: %1").arg(reply->errorString());
     Logger::instance().error(errorMsg);
     emit error(errorMsg);
 }
@@ -168,22 +290,19 @@ void NetworkClient::handleNetworkError(QNetworkReply* reply)
 void NetworkClient::kickParticipant(const QString& roomName, const QString& identity)
 {
     Logger::instance().info(QString("Kicking participant '%1' from room '%2'").arg(identity, roomName));
-    
+
     QUrl url(apiUrl_ + QString("/api/rooms/%1/participants/%2").arg(roomName, identity));
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    QNetworkReply* reply = networkManager_->deleteResource(request);
+    QNetworkReply* reply = networkManager_->deleteResource(createJsonRequest(url));
     connect(reply, &QNetworkReply::finished, this, [this, reply, identity]() {
         reply->deleteLater();
-        
+
         if (reply->error() != QNetworkReply::NoError) {
-            QString errorMsg = QString("Failed to kick participant: %1").arg(reply->errorString());
+            const QString errorMsg = QString("Failed to kick participant: %1").arg(reply->errorString());
             Logger::instance().error(errorMsg);
             emit error(errorMsg);
             return;
         }
-        
+
         Logger::instance().info(QString("Successfully kicked participant '%1'").arg(identity));
     });
 }
@@ -191,26 +310,22 @@ void NetworkClient::kickParticipant(const QString& roomName, const QString& iden
 void NetworkClient::endRoom(const QString& roomName)
 {
     Logger::instance().info(QString("Ending room '%1'").arg(roomName));
-    
+
     QUrl url(apiUrl_ + QString("/api/rooms/%1/end").arg(roomName));
-    QNetworkRequest request(url);
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-    
-    QNetworkReply* reply = networkManager_->post(request, QByteArray());
+    QNetworkReply* reply = networkManager_->post(createJsonRequest(url), QByteArray());
     connect(reply, &QNetworkReply::finished, this, [this, reply, roomName]() {
         reply->deleteLater();
-        
+
         if (reply->error() != QNetworkReply::NoError) {
-            QString errorMsg = QString("Failed to end room: %1").arg(reply->errorString());
+            const QString errorMsg = QString("Failed to end room: %1").arg(reply->errorString());
             Logger::instance().error(errorMsg);
             emit error(errorMsg);
             return;
         }
-        
+
         Logger::instance().info(QString("Successfully ended room '%1'").arg(roomName));
     });
 }
-
 
 QString NetworkClient::buildAuthErrorMessage(QNetworkReply* reply,
                                              const QByteArray& responseData,
@@ -251,10 +366,7 @@ void NetworkClient::postAuthJsonWithFallback(
     const QJsonDocument doc(payload);
     const QByteArray data = doc.toJson();
 
-    QNetworkRequest request(QUrl(apiUrl_ + primaryPath));
-    request.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-    QNetworkReply* reply = networkManager_->post(request, data);
+    QNetworkReply* reply = networkManager_->post(createJsonRequest(QUrl(apiUrl_ + primaryPath)), data);
     connect(reply, &QNetworkReply::finished, this, [this,
                                                      reply,
                                                      primaryPath,
@@ -289,10 +401,7 @@ void NetworkClient::postAuthJsonWithFallback(
                 .arg(statusCode)
                 .arg(fallbackPath));
 
-        QNetworkRequest fallbackRequest(QUrl(apiUrl_ + fallbackPath));
-        fallbackRequest.setHeader(QNetworkRequest::ContentTypeHeader, "application/json");
-
-        QNetworkReply* fallbackReply = networkManager_->post(fallbackRequest, data);
+        QNetworkReply* fallbackReply = networkManager_->post(createJsonRequest(QUrl(apiUrl_ + fallbackPath)), data);
         connect(fallbackReply, &QNetworkReply::finished, this, [this, fallbackReply, onSuccess, onFailure]() {
             fallbackReply->deleteLater();
 
@@ -310,7 +419,6 @@ void NetworkClient::postAuthJsonWithFallback(
     });
 }
 
-// Auth API implementations
 void NetworkClient::login(const QString& email, const QString& password)
 {
     Logger::instance().info(QString("Attempting login for email: %1").arg(email));

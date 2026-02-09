@@ -3,6 +3,8 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
+
 #include "../core/network_client.h"
 
 class LoginBackend : public QObject
@@ -22,25 +24,26 @@ public:
 
     QString userName() const { return userName_; }
     void setUserName(const QString& name);
-    
+
     QString roomName() const { return roomName_; }
     void setRoomName(const QString& name);
-    
+
     bool micEnabled() const { return micEnabled_; }
     void setMicEnabled(bool enabled);
-    
+
     bool camEnabled() const { return camEnabled_; }
     void setCamEnabled(bool enabled);
-    
+
     bool loading() const { return loading_; }
     QString errorMessage() const { return errorMessage_; }
-    
+
     QString scheduledTime() const { return scheduledTime_; }
     void setScheduledTime(const QString& time);
 
     Q_INVOKABLE void join();
     Q_INVOKABLE void quickJoin();
     Q_INVOKABLE void createScheduledRoom();
+    Q_INVOKABLE void loadMeetingRecords();
     Q_INVOKABLE void showSettings();
     Q_INVOKABLE QString currentTime() const;
     Q_INVOKABLE QString currentDate() const;
@@ -53,12 +56,19 @@ signals:
     void loadingChanged();
     void errorMessageChanged();
     void scheduledTimeChanged();
-    void joinConference(const QString& url, const QString& token, 
-                        const QString& roomName, const QString& userName, bool isHost);
+    void joinConference(const QString& url,
+                        const QString& token,
+                        const QString& roomName,
+                        const QString& meetingNo,
+                        const QString& userName,
+                        bool isHost);
+    void meetingRecordsLoaded(const QVariantList& records);
     void settingsRequested();
 
 private slots:
     void onTokenReceived(const TokenResponse& response);
+    void onMeetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl);
+    void onMeetingRecordsReceived(const QJsonArray& records);
     void onNetworkError(const QString& error);
 
 private:
@@ -66,6 +76,10 @@ private:
     void setErrorMessage(const QString& message);
     void saveSettings();
     void loadSettings();
+    bool hasAuthToken() const;
+    QString authToken() const;
+    static bool isMeetingNo(const QString& value);
+    static QString extractMeetingNo(const QString& value);
 
     NetworkClient* networkClient_;
     QString userName_;
