@@ -43,6 +43,28 @@ QNetworkRequest NetworkClient::createAuthorizedJsonRequest(const QUrl& url, cons
     return request;
 }
 
+bool NetworkClient::isUnauthorized(QNetworkReply* reply) const
+{
+    if (!reply) {
+        return false;
+    }
+
+    return reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 401;
+}
+
+void NetworkClient::emitAuthExpiredIfNeeded(QNetworkReply* reply,
+                                            const QByteArray& responseData,
+                                            const QJsonObject& obj)
+{
+    if (!isUnauthorized(reply)) {
+        return;
+    }
+
+    const QString message = buildAuthErrorMessage(reply, responseData, obj);
+    Logger::instance().warning("Auth expired: " + message);
+    emit authExpired(message);
+}
+
 void NetworkClient::requestToken(const QString& roomName, const QString& participantName)
 {
     Logger::instance().info(QString("Requesting token for room '%1', participant '%2'")
@@ -73,6 +95,7 @@ void NetworkClient::createMeeting(const QString& authToken)
         const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
 
         if (reply->error() != QNetworkReply::NoError) {
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
             const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
             Logger::instance().error("Create meeting failed: " + errorMsg);
             emit error(errorMsg);
@@ -117,6 +140,7 @@ void NetworkClient::joinMeeting(const QString& meetingNo,
         if (reply->error() != QNetworkReply::NoError) {
             response.success = false;
             response.error = buildAuthErrorMessage(reply, responseData, obj);
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
             Logger::instance().error("Join meeting failed: " + response.error);
             emit error(response.error);
             emit tokenReceived(response);
@@ -139,6 +163,43 @@ void NetworkClient::joinMeeting(const QString& meetingNo,
     });
 }
 
+void NetworkClient::leaveMeeting(const QString& meetingNo, const QString& authToken)
+{
+    Logger::instance().info(QString("Leaving meeting '%1' via /api/meetings/{meetingNo}/leave").arg(meetingNo));
+
+    const QString path = QString("/api/meetings/%1/leave").arg(meetingNo.trimmed());
+    QNetworkReply* reply = networkManager_->post(
+        createAuthorizedJsonRequest(QUrl(apiUrl_ + path), authToken),
+        QByteArray());
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply, meetingNo]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
+            const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Leave meeting failed: " + errorMsg);
+            emit error(errorMsg);
+            return;
+        }
+
+        const QString responseMeetingNo = obj.value("meetingNo").toString().isEmpty()
+            ? meetingNo
+            : obj.value("meetingNo").toString();
+        const bool left = obj.value("left").toBool(true);
+        const QString roomName = obj.value("roomName").toString();
+        const QString identity = obj.value("identity").toString();
+        Logger::instance().info(QString("Leave meeting succeeded: meetingNo=%1, left=%2")
+                                   .arg(responseMeetingNo)
+                                   .arg(left ? "true" : "false"));
+        emit meetingLeft(responseMeetingNo, left, roomName, identity);
+    });
+}
+
 void NetworkClient::fetchMeetingRecords(const QString& authToken, int page, int pageSize)
 {
     QUrl url(apiUrl_ + "/api/me/meeting-records");
@@ -156,6 +217,7 @@ void NetworkClient::fetchMeetingRecords(const QString& authToken, int page, int 
         const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
 
         if (reply->error() != QNetworkReply::NoError) {
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
             const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
             Logger::instance().error("Fetch meeting records failed: " + errorMsg);
             emit error(errorMsg);
@@ -166,6 +228,49 @@ void NetworkClient::fetchMeetingRecords(const QString& authToken, int page, int 
         const QJsonArray records = obj.value("records").toArray();
         Logger::instance().info(QString("Fetched %1 meeting records").arg(records.size()));
         emit meetingRecordsReceived(records);
+    });
+}
+
+void NetworkClient::refreshAuthToken(const QString& authToken)
+{
+    Logger::instance().info("Refreshing auth token via /api/auth/refresh");
+
+    QNetworkReply* reply = networkManager_->post(
+        createAuthorizedJsonRequest(QUrl(apiUrl_ + "/api/auth/refresh"), authToken),
+        QByteArray());
+
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
+            const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Refresh auth token failed: " + errorMsg);
+            emit authError(errorMsg);
+            return;
+        }
+
+        QString userId = obj.value("userId").toString();
+        if (userId.isEmpty()) {
+            userId = obj.value("user_id").toString();
+        }
+        const QString email = obj.value("email").toString();
+        const QString token = obj.value("token").toString();
+        const int expiresInSecs = obj.value("expiresInSecs").toInt(0);
+
+        if (userId.isEmpty() || email.isEmpty() || token.isEmpty()) {
+            const QString errorMsg = "Invalid refresh response format";
+            Logger::instance().error(errorMsg);
+            emit authError(errorMsg);
+            return;
+        }
+
+        Logger::instance().info("Auth token refreshed for: " + email);
+        emit authRefreshed(userId, email, token, expiresInSecs);
     });
 }
 
@@ -287,17 +392,24 @@ void NetworkClient::handleNetworkError(QNetworkReply* reply)
     emit error(errorMsg);
 }
 
-void NetworkClient::kickParticipant(const QString& roomName, const QString& identity)
+void NetworkClient::kickParticipant(const QString& roomName,
+                                    const QString& identity,
+                                    const QString& authToken)
 {
     Logger::instance().info(QString("Kicking participant '%1' from room '%2'").arg(identity, roomName));
 
     QUrl url(apiUrl_ + QString("/api/rooms/%1/participants/%2").arg(roomName, identity));
-    QNetworkReply* reply = networkManager_->deleteResource(createJsonRequest(url));
+    QNetworkReply* reply = networkManager_->deleteResource(createAuthorizedJsonRequest(url, authToken));
     connect(reply, &QNetworkReply::finished, this, [this, reply, identity]() {
         reply->deleteLater();
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
 
         if (reply->error() != QNetworkReply::NoError) {
-            const QString errorMsg = QString("Failed to kick participant: %1").arg(reply->errorString());
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
+            const QString errorMsg = QString("Failed to kick participant: %1")
+                .arg(buildAuthErrorMessage(reply, responseData, obj));
             Logger::instance().error(errorMsg);
             emit error(errorMsg);
             return;
@@ -307,17 +419,22 @@ void NetworkClient::kickParticipant(const QString& roomName, const QString& iden
     });
 }
 
-void NetworkClient::endRoom(const QString& roomName)
+void NetworkClient::endRoom(const QString& roomName, const QString& authToken)
 {
     Logger::instance().info(QString("Ending room '%1'").arg(roomName));
 
     QUrl url(apiUrl_ + QString("/api/rooms/%1/end").arg(roomName));
-    QNetworkReply* reply = networkManager_->post(createJsonRequest(url), QByteArray());
+    QNetworkReply* reply = networkManager_->post(createAuthorizedJsonRequest(url, authToken), QByteArray());
     connect(reply, &QNetworkReply::finished, this, [this, reply, roomName]() {
         reply->deleteLater();
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
 
         if (reply->error() != QNetworkReply::NoError) {
-            const QString errorMsg = QString("Failed to end room: %1").arg(reply->errorString());
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
+            const QString errorMsg = QString("Failed to end room: %1")
+                .arg(buildAuthErrorMessage(reply, responseData, obj));
             Logger::instance().error(errorMsg);
             emit error(errorMsg);
             return;

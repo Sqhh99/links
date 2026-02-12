@@ -11,6 +11,7 @@ Rectangle {
 
     signal navChanged(int index)
     signal loginRequested()
+    signal switchUserRequested()
     signal logoutRequested()
     signal accountSettingsRequested()
     signal settingsRequested()
@@ -32,6 +33,7 @@ Rectangle {
             userName: root.userName
             onLoginClicked: root.loginRequested()
             onSettingsRequested: root.accountSettingsRequested()
+            onSwitchUserRequested: root.switchUserRequested()
             onLogoutRequested: root.logoutRequested()
         }
 

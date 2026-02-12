@@ -15,6 +15,7 @@ Item {
 
     signal loginClicked()
     signal settingsRequested()
+    signal switchUserRequested()
     signal logoutRequested()
 
     implicitHeight: 80
@@ -184,6 +185,51 @@ Item {
                     onClicked: {
                         accountPopup.close()
                         root.settingsRequested()
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                height: 1
+                color: "#F3F4F6"
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 30
+                radius: 8
+                color: switchArea.containsMouse ? "#F9FAFB" : "transparent"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Image {
+                        source: "qrc:/res/icon/user.png"
+                        sourceSize.width: 12
+                        sourceSize.height: 12
+                        opacity: 0.65
+                    }
+
+                    Text {
+                        text: "切换账号"
+                        color: "#374151"
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                    }
+                }
+
+                MouseArea {
+                    id: switchArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        accountPopup.close()
+                        root.switchUserRequested()
                     }
                 }
             }

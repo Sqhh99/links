@@ -20,8 +20,23 @@ Window {
     property string userName: authBackend.isLoggedIn ? authBackend.userName : "游客"
     property int currentIndex: 0
 
-    function openAuthModal() {
-        authModal.open()
+    function openAuthModal(mode) {
+        authModal.openWithMode(mode ? mode : "login")
+    }
+
+    function handleSessionExpired(message) {
+        authBackend.logout()
+        localMeetingsModel.clear()
+
+        promptDialog.titleText = "登录已过期"
+        promptDialog.messageText = (message && message.length > 0)
+            ? message
+            : "登录状态已过期，请重新登录后继续。"
+        promptDialog.primaryText = "重新登录"
+        promptDialog.secondaryText = "稍后"
+        promptDialog.showCancel = false
+        promptDialog.showOptOut = false
+        promptDialog.open()
     }
 
     function reloadMeetingRecords() {
@@ -61,6 +76,19 @@ Window {
         onRegisterSucceeded: {
             authModal.close()
             root.reloadMeetingRecords()
+        }
+        onSwitchUserRequested: {
+            root.openAuthModal("login")
+        }
+        onSessionExpired: function(message) {
+            root.handleSessionExpired(message)
+        }
+    }
+
+    Connections {
+        target: joinBackend
+        function onSessionExpired(message) {
+            root.handleSessionExpired(message)
         }
     }
 
@@ -111,6 +139,10 @@ Window {
                     currentIndex: root.currentIndex
                     onNavChanged: function(index) { root.currentIndex = index }
                     onLoginRequested: root.openAuthModal()
+                    onSwitchUserRequested: {
+                        authBackend.switchUser()
+                        localMeetingsModel.clear()
+                    }
                     onLogoutRequested: {
                         authBackend.logout()
                         localMeetingsModel.clear()
@@ -179,6 +211,6 @@ Window {
 
     GuestPromptDialog {
         id: promptDialog
-        onPrimaryClicked: root.openAuthModal()
+        onPrimaryClicked: root.openAuthModal("login")
     }
 }

@@ -25,6 +25,7 @@ Authorization: Bearer <token>
 ```
 
 其中会议业务接口（`/api/meetings*`、`/api/me/meeting-records`）会强制校验用户 JWT。
+此外，`/api/rooms/{room_name}/participants/{identity}` 与 `/api/rooms/{room_name}/end` 在命中业务会议房间（`m-#########` 且存在于 `meetings`）时，也会强制校验主持人权限。
 
 ---
 
@@ -33,6 +34,7 @@ Authorization: Bearer <token>
 ### 1. 用户 JWT（账号体系）
 
 - 获取方式：`POST /api/auth/login` 或 `POST /api/auth/register`
+- 刷新方式：`POST /api/auth/refresh`（需携带当前用户 JWT）
 - 默认有效期：`604800` 秒（7 天，可通过 `JWT_EXPIRATION_SECS` 配置）
 - 用途：账号体系身份凭证（后续可用于受保护接口）
 
@@ -77,6 +79,7 @@ HTTP 状态码：`4xx` 或 `5xx`
 | 201 | Created | 资源创建成功（注册、创建房间） |
 | 400 | Bad Request | 请求参数无效、JSON 格式错误、验证码错误 |
 | 401 | Unauthorized | 登录认证失败 |
+| 403 | Forbidden | 已认证但无权限（如非主持人踢人/结束业务会议） |
 | 404 | Not Found | 资源不存在 |
 | 409 | Conflict | 资源冲突（邮箱已注册） |
 | 429 | Too Many Requests | 请求过于频繁（验证码发送限制） |

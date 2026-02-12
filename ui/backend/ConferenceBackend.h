@@ -2,6 +2,7 @@
 #define CONFERENCE_BACKEND_H
 
 #include <QObject>
+#include <QTimer>
 #include <QVariant>
 #include <QVariantList>
 #include <QImage>
@@ -174,6 +175,9 @@ private slots:
 
 private:
     void setupConnections();
+    void setupParticipantReconcileTimer();
+    void reconcileParticipantsNow(const char* reason);
+    void clearRemoteParticipantState();
     void updateParticipantsList();
     void addChatMessage(const ChatMessage& msg);
 
@@ -211,6 +215,7 @@ private:
     QMap<QString, bool> hiddenVideoParticipants_;
 
     QMap<QString, QPair<QString, bool>> trackInfoMap_;
+    QTimer participantReconcileTimer_;
 };
 
 #endif // CONFERENCE_BACKEND_H

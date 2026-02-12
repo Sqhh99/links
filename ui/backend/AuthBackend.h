@@ -32,6 +32,7 @@ public:
     Q_INVOKABLE void registerUser(const QString& displayName, const QString& email,
                                    const QString& code, const QString& password);
     Q_INVOKABLE void logout();
+    Q_INVOKABLE void switchUser();
     Q_INVOKABLE void tryAutoLogin();
 
 signals:
@@ -44,12 +45,16 @@ signals:
     
     void loginSucceeded();
     void registerSucceeded();
+    void switchUserRequested();
     void codeRequestSucceeded();
+    void sessionExpired(const QString& message);
     void authFailed(const QString& error);
 
 private slots:
     void onLoginSuccess(const QString& userId, const QString& email, const QString& token);
     void onRegisterSuccess(const QString& userId, const QString& email, const QString& token);
+    void onAuthRefreshed(const QString& userId, const QString& email, const QString& token, int expiresInSecs);
+    void onAuthExpired(const QString& message);
     void onCodeRequestSuccess(int expiresInSecs);
     void onAuthError(const QString& error);
     void onCooldownTick();

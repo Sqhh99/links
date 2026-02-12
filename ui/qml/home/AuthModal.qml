@@ -7,6 +7,12 @@ Popup {
     id: root
 
     property var authBackend: null
+    property string mode: "login"
+
+    function openWithMode(targetMode) {
+        mode = targetMode
+        open()
+    }
 
     modal: true
     focus: true
@@ -27,7 +33,9 @@ Popup {
         anchors.fill: parent
 
         LoginCard {
+            id: loginCard
             anchors.fill: parent
+            mode: root.mode
             authBackend: root.authBackend
         }
     }

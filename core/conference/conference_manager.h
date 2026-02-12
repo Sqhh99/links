@@ -49,10 +49,12 @@ public:
     // Participants
     QList<ParticipantInfo> getParticipants() const;
     int getParticipantCount() const;
+    void reconcileParticipants();
     
     // Room info
     QString getRoomName() const { return roomName_; }
     QString getLocalParticipantName() const { return participantName_; }
+    QString getLocalParticipantIdentity() const { return participantIdentity_; }
     
 signals:
     // Connection events
@@ -107,6 +109,7 @@ private:
     void onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
     
     void updateParticipantInfo(const QString& identity);
+    void reconcileParticipantsInternal(const char* source);
 
     std::unique_ptr<RoomController> roomController_;
     std::unique_ptr<RoomEventDelegate> roomDelegate_;
@@ -116,6 +119,7 @@ private:
 
     QString roomName_;
     QString participantName_;
+    QString participantIdentity_;
     bool connected_{false};
 };
 

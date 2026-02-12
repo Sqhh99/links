@@ -31,12 +31,15 @@ public:
     void requestToken(const QString& roomName, const QString& participantName);
     void createMeeting(const QString& authToken);
     void joinMeeting(const QString& meetingNo, const QString& participantName, const QString& authToken);
+    void leaveMeeting(const QString& meetingNo, const QString& authToken);
     void fetchMeetingRecords(const QString& authToken, int page = 1, int pageSize = 20);
+    void refreshAuthToken(const QString& authToken);
 
     void createRoom(const QString& roomName);
     void listRooms();
-    void kickParticipant(const QString& roomName, const QString& identity);
-    void endRoom(const QString& roomName);
+    void kickParticipant(const QString& roomName, const QString& identity,
+                         const QString& authToken = QString());
+    void endRoom(const QString& roomName, const QString& authToken = QString());
 
     void login(const QString& email, const QString& password);
     void requestVerificationCode(const QString& email);
@@ -48,14 +51,17 @@ public:
 signals:
     void tokenReceived(const TokenResponse& response);
     void meetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl);
+    void meetingLeft(const QString& meetingNo, bool left, const QString& roomName, const QString& identity);
     void meetingRecordsReceived(const QJsonArray& records);
     void roomCreated(const QString& roomName);
     void roomsListed(const QJsonArray& rooms);
     void error(const QString& message);
+    void authExpired(const QString& message);
 
     void loginSuccess(const QString& userId, const QString& email, const QString& token);
     void registerSuccess(const QString& userId, const QString& email, const QString& token);
     void codeRequestSuccess(int expiresInSecs);
+    void authRefreshed(const QString& userId, const QString& email, const QString& token, int expiresInSecs);
     void authError(const QString& message);
 
 private slots:
@@ -67,6 +73,8 @@ private:
     void handleNetworkError(QNetworkReply* reply);
     QNetworkRequest createJsonRequest(const QUrl& url) const;
     QNetworkRequest createAuthorizedJsonRequest(const QUrl& url, const QString& authToken) const;
+    bool isUnauthorized(QNetworkReply* reply) const;
+    void emitAuthExpiredIfNeeded(QNetworkReply* reply, const QByteArray& responseData, const QJsonObject& obj);
     QString buildAuthErrorMessage(QNetworkReply* reply, const QByteArray& responseData, const QJsonObject& obj) const;
     void postAuthJsonWithFallback(const QString& primaryPath,
                                   const QString& fallbackPath,

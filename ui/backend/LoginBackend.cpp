@@ -20,6 +20,8 @@ LoginBackend::LoginBackend(QObject* parent)
             this, &LoginBackend::onMeetingCreated);
     connect(networkClient_, &NetworkClient::meetingRecordsReceived,
             this, &LoginBackend::onMeetingRecordsReceived);
+    connect(networkClient_, &NetworkClient::authExpired,
+            this, &LoginBackend::onAuthExpired);
     connect(networkClient_, &NetworkClient::error,
             this, &LoginBackend::onNetworkError);
 
@@ -340,7 +342,19 @@ void LoginBackend::onMeetingRecordsReceived(const QJsonArray& records)
 void LoginBackend::onNetworkError(const QString& error)
 {
     setLoading(false);
+    if (error.contains(QStringLiteral("HTTP 401"))) {
+        return;
+    }
     setErrorMessage("Network error: " + error);
+}
+
+void LoginBackend::onAuthExpired(const QString& message)
+{
+    setLoading(false);
+    setErrorMessage("登录已过期，请重新登录");
+    if (Settings::instance().hasAuthData()) {
+        emit sessionExpired(message);
+    }
 }
 
 void LoginBackend::saveSettings()

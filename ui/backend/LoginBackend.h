@@ -63,12 +63,14 @@ signals:
                         const QString& userName,
                         bool isHost);
     void meetingRecordsLoaded(const QVariantList& records);
+    void sessionExpired(const QString& message);
     void settingsRequested();
 
 private slots:
     void onTokenReceived(const TokenResponse& response);
     void onMeetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl);
     void onMeetingRecordsReceived(const QJsonArray& records);
+    void onAuthExpired(const QString& message);
     void onNetworkError(const QString& error);
 
 private:

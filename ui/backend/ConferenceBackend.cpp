@@ -1,8 +1,11 @@
 #include "ConferenceBackend.h"
 #include "../utils/logger.h"
 #include "../utils/settings.h"
+#include <QCoreApplication>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QRegularExpression>
+#include <QSet>
 #include <QTimer>
 #include <QGuiApplication>
 #include <QScreen>
@@ -13,10 +16,12 @@ ConferenceBackend::ConferenceBackend(QObject* parent)
     , shareModeManager_(new ShareModeManager(this))
     , isHost_(false)
 {
+    setupParticipantReconcileTimer();
 }
 
 ConferenceBackend::~ConferenceBackend()
 {
+    participantReconcileTimer_.stop();
     if (conferenceManager_ && conferenceManager_->isConnected()) {
         conferenceManager_->disconnect();
     }
@@ -100,6 +105,66 @@ void ConferenceBackend::setupConnections()
                 updateParticipantsList();
                 // Note: localCameraEnded is emitted from toggleCamera() method
             });
+}
+
+void ConferenceBackend::setupParticipantReconcileTimer()
+{
+    participantReconcileTimer_.setInterval(2000);
+    participantReconcileTimer_.setSingleShot(false);
+    connect(&participantReconcileTimer_, &QTimer::timeout, this, [this]() {
+        reconcileParticipantsNow("timer");
+    });
+}
+
+void ConferenceBackend::reconcileParticipantsNow(const char* reason)
+{
+    Q_UNUSED(reason);
+    if (!conferenceManager_) {
+        return;
+    }
+
+    conferenceManager_->reconcileParticipants();
+    updateParticipantsList();
+    emit participantCountChanged();
+}
+
+void ConferenceBackend::clearRemoteParticipantState()
+{
+    QMutableMapIterator<QString, QString> nameIt(nameMap_);
+    while (nameIt.hasNext()) {
+        nameIt.next();
+        if (nameIt.key() != "local") {
+            nameIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> micIt(micState_);
+    while (micIt.hasNext()) {
+        micIt.next();
+        if (micIt.key() != "local") {
+            micIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> camIt(camState_);
+    while (camIt.hasNext()) {
+        camIt.next();
+        if (camIt.key() != "local") {
+            camIt.remove();
+        }
+    }
+
+    screenShareState_.clear();
+    remoteShowScreenShareInMain_.clear();
+    mutedParticipants_.clear();
+    hiddenVideoParticipants_.clear();
+    trackInfoMap_.clear();
+
+    if (!mainParticipantId_.isEmpty() && mainParticipantId_ != "local") {
+        mainParticipantId_.clear();
+        pinnedMain_ = false;
+        emit mainParticipantChanged();
+    }
 }
 
 // Property getters
@@ -358,9 +423,58 @@ void ConferenceBackend::leave()
 
 void ConferenceBackend::confirmLeave()
 {
-    if (conferenceManager_) {
-        conferenceManager_->disconnect();
+    if (!conferenceManager_) {
+        return;
     }
+
+    const QString authToken = Settings::instance().getAuthToken().trimmed();
+    const QString meetingNo = meetingNo_.trimmed();
+    const bool hasValidMeetingNo =
+        QRegularExpression(QStringLiteral("^\\d{9}$")).match(meetingNo).hasMatch();
+
+    QString selfIdentity = conferenceManager_->getLocalParticipantIdentity().trimmed();
+    if (selfIdentity.isEmpty()) {
+        selfIdentity = userName_.trimmed();
+    }
+
+    if (hasValidMeetingNo && !authToken.isEmpty()) {
+        auto* networkClient = new NetworkClient(QCoreApplication::instance());
+        networkClient->setApiUrl(Settings::instance().getSignalingServerUrl());
+        connect(networkClient, &NetworkClient::meetingLeft, this,
+                [meetingNo](const QString& leftMeetingNo, bool left,
+                            const QString& roomName, const QString& identity) {
+                    Logger::instance().info(QString(
+                        "Meeting leave acknowledged: meetingNo=%1, left=%2, room=%3, identity=%4")
+                            .arg(leftMeetingNo.isEmpty() ? meetingNo : leftMeetingNo)
+                            .arg(left ? "true" : "false")
+                            .arg(roomName, identity));
+                });
+        connect(networkClient, &NetworkClient::error, this,
+                [meetingNo](const QString& errorMsg) {
+                    Logger::instance().warning(
+                        QString("Meeting leave API failed for '%1': %2").arg(meetingNo, errorMsg));
+                });
+
+        Logger::instance().info(QString("Requesting meeting leave for meetingNo '%1'").arg(meetingNo));
+        networkClient->leaveMeeting(meetingNo, authToken);
+        QTimer::singleShot(3000, networkClient, &QObject::deleteLater);
+    } else if (!roomName_.trimmed().isEmpty() && !selfIdentity.isEmpty()) {
+        auto* networkClient = new NetworkClient(QCoreApplication::instance());
+        networkClient->setApiUrl(Settings::instance().getSignalingServerUrl());
+        connect(networkClient, &NetworkClient::error, this,
+                [selfIdentity](const QString& errorMsg) {
+                    Logger::instance().warning(
+                        QString("Self-remove API failed for '%1': %2").arg(selfIdentity, errorMsg));
+                });
+
+        Logger::instance().info(
+            QString("Requesting self-remove for '%1' from room '%2'")
+                .arg(selfIdentity, roomName_));
+        networkClient->kickParticipant(roomName_, selfIdentity, authToken);
+        QTimer::singleShot(3000, networkClient, &QObject::deleteLater);
+    }
+
+    conferenceManager_->disconnect();
 }
 
 // Chat
@@ -399,9 +513,10 @@ void ConferenceBackend::kickParticipant(const QString& identity)
     auto* networkClient = new NetworkClient(this);
     QString apiUrl = Settings::instance().getSignalingServerUrl();
     networkClient->setApiUrl(apiUrl);
+    const QString authToken = Settings::instance().getAuthToken().trimmed();
     
     Logger::instance().info(QString("Calling kick API for participant: %1").arg(identity));
-    networkClient->kickParticipant(roomName_, identity);
+    networkClient->kickParticipant(roomName_, identity, authToken);
     
     QTimer::singleShot(5000, networkClient, &QObject::deleteLater);
 }
@@ -450,13 +565,16 @@ void ConferenceBackend::onConnected()
     connectionStatus_ = "Connected";
     connectionColor_ = "#4caf50";
     emit connectionStatusChanged();
-    emit participantCountChanged();
     
     // Initialize local participant state
     micState_["local"] = conferenceManager_->isMicrophoneEnabled();
     camState_["local"] = conferenceManager_->isCameraEnabled();
     nameMap_["local"] = userName_;
-    updateParticipantsList();
+
+    if (!participantReconcileTimer_.isActive()) {
+        participantReconcileTimer_.start();
+    }
+    reconcileParticipantsNow("connected");
 }
 
 void ConferenceBackend::onDisconnected()
@@ -465,6 +583,11 @@ void ConferenceBackend::onDisconnected()
     connectionStatus_ = "Disconnected";
     connectionColor_ = "#ff5252";
     emit connectionStatusChanged();
+
+    participantReconcileTimer_.stop();
+    clearRemoteParticipantState();
+    updateParticipantsList();
+    emit participantCountChanged();
 }
 
 void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
@@ -491,20 +614,49 @@ void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
 
 void ConferenceBackend::onParticipantJoined(const ParticipantInfo& info)
 {
-    Logger::instance().info(QString("Participant joined: %1").arg(info.name));
+    if (info.identity.trimmed().isEmpty()) {
+        Logger::instance().warning("Ignoring participantJoined with empty identity");
+        reconcileParticipantsNow("backend_empty_join_identity");
+        return;
+    }
+
+    const bool isNewParticipant = !nameMap_.contains(info.identity);
+    Logger::instance().debug(QString("Participant joined (backend): %1").arg(info.name));
     
     nameMap_[info.identity] = info.name.isEmpty() ? info.identity : info.name;
     micState_[info.identity] = info.isMicrophoneEnabled;
     camState_[info.identity] = info.isCameraEnabled;
     
     updateParticipantsList();
-    emit participantCountChanged();
-    emit participantJoined(info.identity, nameMap_[info.identity]);
+    if (isNewParticipant) {
+        emit participantCountChanged();
+        emit participantJoined(info.identity, nameMap_[info.identity]);
+    } else {
+        Logger::instance().debug(QString("Duplicate participantJoined signal suppressed: %1")
+                                 .arg(info.identity));
+    }
 }
 
 void ConferenceBackend::onParticipantLeft(const QString& identity)
 {
-    Logger::instance().info(QString("Participant left: %1").arg(identity));
+    if (identity.trimmed().isEmpty()) {
+        Logger::instance().warning("Ignoring participantLeft with empty identity");
+        reconcileParticipantsNow("backend_empty_left_identity");
+        return;
+    }
+
+    const bool existed = nameMap_.contains(identity)
+        || micState_.contains(identity)
+        || camState_.contains(identity)
+        || screenShareState_.contains(identity)
+        || remoteShowScreenShareInMain_.contains(identity);
+    if (!existed) {
+        Logger::instance().debug(QString("Duplicate participantLeft signal suppressed: %1")
+                                 .arg(identity));
+        return;
+    }
+
+    Logger::instance().debug(QString("Participant left (backend): %1").arg(identity));
     
     nameMap_.remove(identity);
     micState_.remove(identity);
@@ -723,20 +875,106 @@ void ConferenceBackend::updateParticipantsList()
     localParticipant["isLocal"] = true;
     localParticipant["isHost"] = isHost_;
     participants_.append(localParticipant);
-    
-    // Add remote participants
-    for (auto it = nameMap_.cbegin(); it != nameMap_.cend(); ++it) {
-        if (it.key() != "local") {
-            QVariantMap participant;
-            participant["identity"] = it.key();
-            participant["name"] = it.value();
-            participant["micEnabled"] = micState_.value(it.key(), false);
-            participant["camEnabled"] = camState_.value(it.key(), false);
-            participant["screenSharing"] = screenShareState_.value(it.key(), false);  // Remote screen share state
-            participant["isLocal"] = false;
-            participant["isHost"] = false;
-            participants_.append(participant);
+
+    const QList<ParticipantInfo> remoteParticipants =
+        conferenceManager_ ? conferenceManager_->getParticipants() : QList<ParticipantInfo>{};
+    QSet<QString> remoteIds;
+    remoteIds.reserve(remoteParticipants.size());
+
+    for (const ParticipantInfo& info : remoteParticipants) {
+        if (info.identity.isEmpty()) {
+            continue;
         }
+
+        remoteIds.insert(info.identity);
+
+        const QString displayName = info.name.isEmpty() ? info.identity : info.name;
+        nameMap_[info.identity] = displayName;
+        micState_[info.identity] = micState_.value(info.identity, info.isMicrophoneEnabled);
+        camState_[info.identity] = camState_.value(info.identity, info.isCameraEnabled);
+        screenShareState_[info.identity] = screenShareState_.value(info.identity, info.isScreenSharing);
+
+        QVariantMap participant;
+        participant["identity"] = info.identity;
+        participant["name"] = nameMap_.value(info.identity, displayName);
+        participant["micEnabled"] = micState_.value(info.identity, info.isMicrophoneEnabled);
+        participant["camEnabled"] = camState_.value(info.identity, info.isCameraEnabled);
+        participant["screenSharing"] = screenShareState_.value(info.identity, info.isScreenSharing);
+        participant["isLocal"] = false;
+        participant["isHost"] = info.isHost;
+        participants_.append(participant);
+    }
+
+    QMutableMapIterator<QString, QString> nameIt(nameMap_);
+    while (nameIt.hasNext()) {
+        nameIt.next();
+        if (nameIt.key() != "local" && !remoteIds.contains(nameIt.key())) {
+            nameIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> micIt(micState_);
+    while (micIt.hasNext()) {
+        micIt.next();
+        if (micIt.key() != "local" && !remoteIds.contains(micIt.key())) {
+            micIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> camIt(camState_);
+    while (camIt.hasNext()) {
+        camIt.next();
+        if (camIt.key() != "local" && !remoteIds.contains(camIt.key())) {
+            camIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> screenShareIt(screenShareState_);
+    while (screenShareIt.hasNext()) {
+        screenShareIt.next();
+        if (!remoteIds.contains(screenShareIt.key())) {
+            screenShareIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> remoteMainViewIt(remoteShowScreenShareInMain_);
+    while (remoteMainViewIt.hasNext()) {
+        remoteMainViewIt.next();
+        if (!remoteIds.contains(remoteMainViewIt.key())) {
+            remoteMainViewIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> mutedIt(mutedParticipants_);
+    while (mutedIt.hasNext()) {
+        mutedIt.next();
+        if (!remoteIds.contains(mutedIt.key())) {
+            mutedIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> hiddenIt(hiddenVideoParticipants_);
+    while (hiddenIt.hasNext()) {
+        hiddenIt.next();
+        if (!remoteIds.contains(hiddenIt.key())) {
+            hiddenIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, QPair<QString, bool>> trackIt(trackInfoMap_);
+    while (trackIt.hasNext()) {
+        trackIt.next();
+        if (!remoteIds.contains(trackIt.value().first)) {
+            trackIt.remove();
+        }
+    }
+
+    if (!mainParticipantId_.isEmpty()
+        && mainParticipantId_ != "local"
+        && !remoteIds.contains(mainParticipantId_)) {
+        mainParticipantId_.clear();
+        pinnedMain_ = false;
+        emit mainParticipantChanged();
     }
     
     emit participantsChanged();

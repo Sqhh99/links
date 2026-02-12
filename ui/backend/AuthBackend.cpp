@@ -14,6 +14,10 @@ AuthBackend::AuthBackend(QObject* parent)
             this, &AuthBackend::onRegisterSuccess);
     connect(networkClient_, &NetworkClient::codeRequestSuccess,
             this, &AuthBackend::onCodeRequestSuccess);
+    connect(networkClient_, &NetworkClient::authRefreshed,
+            this, &AuthBackend::onAuthRefreshed);
+    connect(networkClient_, &NetworkClient::authExpired,
+            this, &AuthBackend::onAuthExpired);
     connect(networkClient_, &NetworkClient::authError,
             this, &AuthBackend::onAuthError);
     
@@ -63,20 +67,23 @@ void AuthBackend::logout()
     setLoggedIn(false);
     setUserEmail("");
     setUserName("");
+    setLoading(false);
     Logger::instance().info("User logged out");
+}
+
+void AuthBackend::switchUser()
+{
+    logout();
+    setErrorMessage("");
+    emit switchUserRequested();
 }
 
 void AuthBackend::tryAutoLogin()
 {
     if (Settings::instance().hasAuthData()) {
-        QString email = Settings::instance().getUserEmail();
-        QString displayName = Settings::instance().getDisplayName();
-        
-        setUserEmail(email);
-        setUserName(displayName.isEmpty() ? email.split("@").first() : displayName);
-        setLoggedIn(true);
-        
-        Logger::instance().info("Auto-login successful for: " + email);
+        setLoading(true);
+        setErrorMessage("");
+        networkClient_->refreshAuthToken(Settings::instance().getAuthToken());
     }
 }
 
@@ -137,9 +144,47 @@ void AuthBackend::onCodeRequestSuccess(int expiresInSecs)
     emit codeRequestSucceeded();
 }
 
+void AuthBackend::onAuthRefreshed(const QString& userId,
+                                  const QString& email,
+                                  const QString& token,
+                                  int expiresInSecs)
+{
+    Q_UNUSED(expiresInSecs);
+
+    setLoading(false);
+    Settings::instance().setAuthToken(token);
+    Settings::instance().setUserId(userId);
+    Settings::instance().setUserEmail(email);
+
+    QString displayName = Settings::instance().getDisplayName();
+    if (displayName.trimmed().isEmpty()) {
+        displayName = email.split("@").first();
+        Settings::instance().setDisplayName(displayName);
+    }
+
+    setUserEmail(email);
+    setUserName(displayName);
+    setLoggedIn(true);
+
+    Logger::instance().info("Auto-login token refresh successful for: " + email);
+}
+
+void AuthBackend::onAuthExpired(const QString& message)
+{
+    const bool hadSession = isLoggedIn_ || Settings::instance().hasAuthData();
+    logout();
+    setErrorMessage("登录已过期，请重新登录");
+    if (hadSession) {
+        emit sessionExpired(message);
+    }
+}
+
 void AuthBackend::onAuthError(const QString& error)
 {
     setLoading(false);
+    if (errorMessage_ == QStringLiteral("登录已过期，请重新登录")) {
+        return;
+    }
     setErrorMessage(error);
     Logger::instance().error("Auth error: " + error);
     emit authFailed(error);
