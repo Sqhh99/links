@@ -82,6 +82,9 @@ private:
     QString ensureGuestDisplayName();
     QString defaultAuthDisplayName() const;
     QString effectiveParticipantName(bool allowUserOverride = true);
+    bool isGuestMode() const;
+    static bool isBusinessRoomName(const QString& value);
+    static bool isBusinessMeetingInput(const QString& value);
     bool hasAuthToken() const;
     QString authToken() const;
     static bool isMeetingNo(const QString& value);

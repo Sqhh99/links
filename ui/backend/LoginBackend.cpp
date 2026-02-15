@@ -101,6 +101,11 @@ QString LoginBackend::authToken() const
     return Settings::instance().getAuthToken().trimmed();
 }
 
+bool LoginBackend::isGuestMode() const
+{
+    return !hasAuthToken();
+}
+
 bool LoginBackend::isMeetingNo(const QString& value)
 {
     static const QRegularExpression pattern(QStringLiteral("^\\d{9}$"));
@@ -128,9 +133,18 @@ void LoginBackend::join()
 {
     const QString name = effectiveParticipantName(true);
     const QString input = roomName_.trimmed();
+    const QString resolvedMeetingNo = extractMeetingNo(input);
+    const bool guestMode = isGuestMode();
 
     if (input.isEmpty()) {
-        setErrorMessage("Please enter a meeting number, share link, or room name");
+        setErrorMessage(guestMode
+                            ? "请输入已存在的普通房间名称"
+                            : "Please enter a meeting number, share link, or room name");
+        return;
+    }
+
+    if (guestMode && (!resolvedMeetingNo.isEmpty() || isBusinessMeetingInput(input))) {
+        setErrorMessage("游客不能通过会议号或业务会议链接入会，请登录后重试");
         return;
     }
 
@@ -138,7 +152,6 @@ void LoginBackend::join()
     setLoading(true);
     setErrorMessage("");
 
-    const QString resolvedMeetingNo = extractMeetingNo(input);
     if (hasAuthToken()) {
         if (resolvedMeetingNo.isEmpty()) {
             setLoading(false);
@@ -160,6 +173,11 @@ void LoginBackend::join()
 
 void LoginBackend::quickJoin()
 {
+    if (isGuestMode()) {
+        setErrorMessage("游客无法创建快速会议，请登录后使用");
+        return;
+    }
+
     const QString name = effectiveParticipantName(true);
 
     setLoading(true);
@@ -179,6 +197,11 @@ void LoginBackend::quickJoin()
 
 void LoginBackend::createScheduledRoom()
 {
+    if (isGuestMode()) {
+        setErrorMessage("游客无法预定会议，请登录后使用");
+        return;
+    }
+
     const QString name = effectiveParticipantName(true);
 
     setLoading(true);
@@ -236,7 +259,21 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
 
     if (!response.success) {
         pendingParticipantName_.clear();
-        setErrorMessage("Failed to get token: " + response.error);
+        QString mappedMessage;
+        const QString lowerError = response.error.toLower();
+        if (isGuestMode()) {
+            if (lowerError.contains("403") || lowerError.contains("forbidden")) {
+                mappedMessage = "该会议需要登录后通过会议号加入";
+            } else if (lowerError.contains("404") || lowerError.contains("not found")) {
+                mappedMessage = "房间不存在，请确认房间名称";
+            } else if (lowerError.contains("400") || lowerError.contains("bad request")) {
+                mappedMessage = "请输入已存在的普通房间名称";
+            }
+        }
+
+        setErrorMessage(mappedMessage.isEmpty()
+                            ? ("Failed to get token: " + response.error)
+                            : mappedMessage);
         Logger::instance().error("Token request failed: " + response.error);
         return;
     }
@@ -418,4 +455,35 @@ QString LoginBackend::effectiveParticipantName(bool allowUserOverride)
     const QString fallback = defaultAuthDisplayName();
     setUserName(fallback);
     return fallback;
+}
+
+bool LoginBackend::isBusinessRoomName(const QString& value)
+{
+    static const QRegularExpression pattern(QStringLiteral("^m-\\d{9}$"));
+    return pattern.match(value.trimmed()).hasMatch();
+}
+
+bool LoginBackend::isBusinessMeetingInput(const QString& value)
+{
+    const QString trimmed = value.trimmed();
+    if (isBusinessRoomName(trimmed)) {
+        return true;
+    }
+
+    const QUrl url(trimmed);
+    if (!url.isValid()) {
+        return false;
+    }
+
+    const QUrlQuery query(url);
+    const QString roomName = query.queryItemValue(QStringLiteral("roomName")).trimmed();
+    if (isBusinessRoomName(roomName)) {
+        return true;
+    }
+
+    QString path = url.path().trimmed();
+    if (path.startsWith('/')) {
+        path.remove(0, 1);
+    }
+    return isBusinessRoomName(path);
 }

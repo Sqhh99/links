@@ -18,7 +18,7 @@ ColumnLayout {
     spacing: 12
     
     Text {
-        text: "显示名称"
+        text: root.guestMode ? "游客名称" : "显示名称"
         color: "#374151"
         font.pixelSize: 13
         font.weight: Font.DemiBold
@@ -26,24 +26,36 @@ ColumnLayout {
     
     TextField {
         id: userNameInput
+        visible: !root.guestMode
         Layout.fillWidth: true
-        placeholderText: root.guestMode ? "Guest-XXXX" : "e.g. Alice Smith"
-        readOnly: root.guestMode
+        placeholderText: "e.g. Alice Smith"
+        readOnly: false
         
         Keys.onReturnPressed: root.joinClicked()
     }
 
-    Text {
+    Rectangle {
         visible: root.guestMode
-        text: "游客模式将使用固定名称格式：Guest-XXXX"
-        color: "#6B7280"
-        font.pixelSize: 12
         Layout.fillWidth: true
-        wrapMode: Text.WordWrap
+        implicitHeight: 44
+        radius: 10
+        color: "#F9FAFB"
+        border.color: "#E5E7EB"
+        border.width: 1
+
+        Text {
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.leftMargin: 12
+            text: root.userName
+            color: "#374151"
+            font.pixelSize: 13
+            font.weight: Font.Medium
+        }
     }
     
     Text {
-        text: "会议号 / 分享链接"
+        text: root.guestMode ? "房间名称（已存在）" : "会议号 / 分享链接"
         color: "#374151"
         font.pixelSize: 13
         font.weight: Font.DemiBold
@@ -52,7 +64,7 @@ ColumnLayout {
     TextField {
         id: roomNameInput
         Layout.fillWidth: true
-        placeholderText: "如 123456789 或分享链接"
+        placeholderText: root.guestMode ? "请输入已存在普通房间名称" : "如 123456789 或分享链接"
         
         Keys.onReturnPressed: root.joinClicked()
     }

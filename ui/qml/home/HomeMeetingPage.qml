@@ -12,7 +12,20 @@ Item {
 
     signal promptRequested(string titleText, string messageText, string primaryText, string secondaryText, bool showCancel, string cancelText)
 
+    function showGuestRestrictedPrompt() {
+        root.promptRequested("需要登录",
+                             "游客仅支持加入已存在普通房间，创建或预定会议请先登录。",
+                             "去登录",
+                             "稍后",
+                             false,
+                             "取消")
+    }
+
     function openAction(action) {
+        if (root.isGuest && (action === "quick" || action === "schedule")) {
+            showGuestRestrictedPrompt()
+            return
+        }
         root.currentAction = action
         actionDialog.open()
     }
@@ -52,7 +65,9 @@ Item {
             }
 
             Text {
-                text: "无需登录即可加入或创建会议"
+                text: root.isGuest
+                    ? "游客仅可加入已存在普通房间，创建会议需登录"
+                    : "可加入、创建与预定会议"
                 color: "#6B7280"
                 font.pixelSize: 12
             }
@@ -79,7 +94,7 @@ Item {
             QuickActionCard {
                 Layout.fillWidth: true
                 title: "快速会议"
-                subtitle: "一键创建临时会议"
+                subtitle: root.isGuest ? "登录后可创建临时会议" : "一键创建临时会议"
                 iconSource: "qrc:/res/icon/monitor-up.png"
                 accentColor: "#16A34A"
                 accentOpacity: 0.22
@@ -90,7 +105,7 @@ Item {
             QuickActionCard {
                 Layout.fillWidth: true
                 title: "预定会议"
-                subtitle: "设置时间并本地提醒"
+                subtitle: root.isGuest ? "登录后可预定会议" : "设置时间并本地提醒"
                 iconSource: "qrc:/res/icon/pin.png"
                 accentColor: "#F59E0B"
                 accentOpacity: 0.18
@@ -200,15 +215,11 @@ Item {
 
                     ScheduleForm {
                         onCreateRoomClicked: {
-                            actionDialog.close()
                             if (root.isGuest) {
-                                root.promptRequested("已保存到本地",
-                                                     "登录后可跨设备同步会议安排",
-                                                     "继续创建",
-                                                     "去登录",
-                                                     true,
-                                                     "取消")
+                                root.showGuestRestrictedPrompt()
+                                return
                             }
+                            actionDialog.close()
                             if (root.loginBackend) {
                                 root.loginBackend.createScheduledRoom()
                             }
