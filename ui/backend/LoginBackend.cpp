@@ -6,6 +6,7 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
@@ -31,8 +32,13 @@ LoginBackend::LoginBackend(QObject* parent)
 
 void LoginBackend::setUserName(const QString& name)
 {
-    if (userName_ != name) {
-        userName_ = name;
+    QString nextName = name.trimmed();
+    if (!hasAuthToken()) {
+        nextName = ensureGuestDisplayName();
+    }
+
+    if (userName_ != nextName) {
+        userName_ = nextName;
         emit userNameChanged();
     }
 }
@@ -120,13 +126,8 @@ QString LoginBackend::extractMeetingNo(const QString& value)
 
 void LoginBackend::join()
 {
-    const QString name = userName_.trimmed();
+    const QString name = effectiveParticipantName(true);
     const QString input = roomName_.trimmed();
-
-    if (name.isEmpty()) {
-        setErrorMessage("Please enter your name");
-        return;
-    }
 
     if (input.isEmpty()) {
         setErrorMessage("Please enter a meeting number, share link, or room name");
@@ -146,23 +147,20 @@ void LoginBackend::join()
         }
 
         Logger::instance().info(QString("Joining via meetingNo: %1").arg(resolvedMeetingNo));
+        pendingParticipantName_ = name;
         networkClient_->joinMeeting(resolvedMeetingNo, name, authToken());
         return;
     }
 
     Logger::instance().info(QString("Requesting token for room '%1', user '%2'")
                                .arg(input, name));
+    pendingParticipantName_ = name;
     networkClient_->requestToken(input, name);
 }
 
 void LoginBackend::quickJoin()
 {
-    const QString name = userName_.trimmed();
-
-    if (name.isEmpty()) {
-        setErrorMessage("Please enter your name");
-        return;
-    }
+    const QString name = effectiveParticipantName(true);
 
     setLoading(true);
     setErrorMessage("");
@@ -175,17 +173,13 @@ void LoginBackend::quickJoin()
 
     const QString randomRoom = QString("room-%1").arg(QDateTime::currentMSecsSinceEpoch());
     setRoomName(randomRoom);
+    pendingParticipantName_ = name;
     join();
 }
 
 void LoginBackend::createScheduledRoom()
 {
-    const QString name = userName_.trimmed();
-
-    if (name.isEmpty()) {
-        setErrorMessage("Please enter your name");
-        return;
-    }
+    const QString name = effectiveParticipantName(true);
 
     setLoading(true);
     setErrorMessage("");
@@ -202,6 +196,7 @@ void LoginBackend::createScheduledRoom()
     const QString privateRoom = QString("scheduled-%1").arg(suffix);
     setRoomName(privateRoom);
 
+    pendingParticipantName_ = name;
     join();
 }
 
@@ -213,6 +208,11 @@ void LoginBackend::loadMeetingRecords()
     }
 
     networkClient_->fetchMeetingRecords(authToken(), 1, 20);
+}
+
+void LoginBackend::syncParticipantNameFromSession()
+{
+    setUserName(hasAuthToken() ? defaultAuthDisplayName() : ensureGuestDisplayName());
 }
 
 void LoginBackend::showSettings()
@@ -235,17 +235,23 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
     setLoading(false);
 
     if (!response.success) {
+        pendingParticipantName_.clear();
         setErrorMessage("Failed to get token: " + response.error);
         Logger::instance().error("Token request failed: " + response.error);
         return;
     }
+
+    const QString participantName = pendingParticipantName_.trimmed().isEmpty()
+        ? effectiveParticipantName(true)
+        : pendingParticipantName_.trimmed();
+    pendingParticipantName_.clear();
 
     Logger::instance().info("Token received, joining conference");
     emit joinConference(response.url,
                         response.token,
                         response.roomName,
                         response.meetingNo,
-                        userName_,
+                        participantName,
                         response.isHost);
 
     loadMeetingRecords();
@@ -253,12 +259,7 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
 
 void LoginBackend::onMeetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl)
 {
-    const QString name = userName_.trimmed();
-    if (name.isEmpty()) {
-        setLoading(false);
-        setErrorMessage("Please enter your name");
-        return;
-    }
+    const QString name = effectiveParticipantName(true);
 
     const QString resolvedMeetingNo = !meetingNo.isEmpty() ? meetingNo : extractMeetingNo(shareUrl);
     if (!resolvedMeetingNo.isEmpty()) {
@@ -269,11 +270,13 @@ void LoginBackend::onMeetingCreated(const QString& meetingNo, const QString& roo
     saveSettings();
 
     if (!resolvedMeetingNo.isEmpty() && hasAuthToken()) {
+        pendingParticipantName_ = name;
         networkClient_->joinMeeting(resolvedMeetingNo, name, authToken());
         return;
     }
 
     if (!roomName.isEmpty() && !hasAuthToken()) {
+        pendingParticipantName_ = name;
         networkClient_->requestToken(roomName, name);
         return;
     }
@@ -359,12 +362,60 @@ void LoginBackend::onAuthExpired(const QString& message)
 
 void LoginBackend::saveSettings()
 {
-    Settings::instance().setLastUserName(userName_);
     Settings::instance().setLastRoomName(roomName_);
+    if (hasAuthToken()) {
+        Settings::instance().setLastUserName(userName_);
+    }
 }
 
 void LoginBackend::loadSettings()
 {
-    setUserName(Settings::instance().getLastUserName());
     setRoomName(Settings::instance().getLastRoomName());
+    syncParticipantNameFromSession();
+}
+
+QString LoginBackend::ensureGuestDisplayName()
+{
+    if (!guestDisplayName_.isEmpty()) {
+        return guestDisplayName_;
+    }
+
+    const quint32 value = QRandomGenerator::global()->bounded(0x10000u);
+    guestDisplayName_ = QString("Guest-%1")
+                            .arg(value, 4, 16, QChar('0'))
+                            .toUpper();
+    return guestDisplayName_;
+}
+
+QString LoginBackend::defaultAuthDisplayName() const
+{
+    QString displayName = Settings::instance().getDisplayName().trimmed();
+    if (!displayName.isEmpty()) {
+        return displayName;
+    }
+
+    const QString email = Settings::instance().getUserEmail().trimmed();
+    if (!email.isEmpty()) {
+        return email.split("@").first();
+    }
+
+    return QStringLiteral("User");
+}
+
+QString LoginBackend::effectiveParticipantName(bool allowUserOverride)
+{
+    if (!hasAuthToken()) {
+        const QString guestName = ensureGuestDisplayName();
+        setUserName(guestName);
+        return guestName;
+    }
+
+    if (allowUserOverride && !userName_.trimmed().isEmpty()) {
+        setUserName(userName_);
+        return userName_.trimmed();
+    }
+
+    const QString fallback = defaultAuthDisplayName();
+    setUserName(fallback);
+    return fallback;
 }

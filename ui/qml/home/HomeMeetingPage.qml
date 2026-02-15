@@ -21,14 +21,6 @@ Item {
         actionDialog.close()
     }
 
-    function ensureUserName() {
-        if (!root.loginBackend) return
-        var name = root.loginBackend.userName ? root.loginBackend.userName.trim() : ""
-        if (name.length === 0) {
-            root.loginBackend.userName = "Guest"
-        }
-    }
-
     function actionTitle() {
         switch (root.currentAction) {
         case "join":
@@ -184,6 +176,7 @@ Item {
                         id: joinForm
                         userName: root.loginBackend ? root.loginBackend.userName : ""
                         roomName: root.loginBackend ? root.loginBackend.roomName : ""
+                        guestMode: root.isGuest
                         onUserNameChanged: {
                             if (root.loginBackend) root.loginBackend.userName = userName
                         }
@@ -200,7 +193,6 @@ Item {
                     QuickStartForm {
                         onQuickJoinClicked: {
                             if (root.loginBackend) {
-                                root.ensureUserName()
                                 root.loginBackend.quickJoin()
                             }
                         }
@@ -218,7 +210,6 @@ Item {
                                                      "取消")
                             }
                             if (root.loginBackend) {
-                                root.ensureUserName()
                                 root.loginBackend.createScheduledRoom()
                             }
                         }

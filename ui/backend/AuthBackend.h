@@ -51,9 +51,12 @@ signals:
     void authFailed(const QString& error);
 
 private slots:
-    void onLoginSuccess(const QString& userId, const QString& email, const QString& token);
-    void onRegisterSuccess(const QString& userId, const QString& email, const QString& token);
-    void onAuthRefreshed(const QString& userId, const QString& email, const QString& token, int expiresInSecs);
+    void onLoginSuccess(const QString& userId, const QString& email, const QString& token,
+                        const QString& displayName);
+    void onRegisterSuccess(const QString& userId, const QString& email, const QString& token,
+                           const QString& displayName);
+    void onAuthRefreshed(const QString& userId, const QString& email, const QString& token,
+                         const QString& displayName, int expiresInSecs);
     void onAuthExpired(const QString& message);
     void onCodeRequestSuccess(int expiresInSecs);
     void onAuthError(const QString& error);
@@ -74,7 +77,6 @@ private:
     QString errorMessage_;
     QString userEmail_;
     QString userName_;
-    QString pendingDisplayName_;
     int codeCooldown_{0};
 };
 

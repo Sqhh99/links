@@ -43,7 +43,8 @@ public:
 
     void login(const QString& email, const QString& password);
     void requestVerificationCode(const QString& email);
-    void registerUser(const QString& email, const QString& password, const QString& code);
+    void registerUser(const QString& email, const QString& password,
+                      const QString& code, const QString& displayName);
 
     void setApiUrl(const QString& url);
     QString getApiUrl() const { return apiUrl_; }
@@ -58,10 +59,13 @@ signals:
     void error(const QString& message);
     void authExpired(const QString& message);
 
-    void loginSuccess(const QString& userId, const QString& email, const QString& token);
-    void registerSuccess(const QString& userId, const QString& email, const QString& token);
+    void loginSuccess(const QString& userId, const QString& email, const QString& token,
+                      const QString& displayName);
+    void registerSuccess(const QString& userId, const QString& email, const QString& token,
+                         const QString& displayName);
     void codeRequestSuccess(int expiresInSecs);
-    void authRefreshed(const QString& userId, const QString& email, const QString& token, int expiresInSecs);
+    void authRefreshed(const QString& userId, const QString& email, const QString& token,
+                       const QString& displayName, int expiresInSecs);
     void authError(const QString& message);
 
 private slots:

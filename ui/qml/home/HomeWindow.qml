@@ -70,10 +70,12 @@ Window {
     AuthBackend {
         id: authBackend
         onLoginSucceeded: {
+            joinBackend.syncParticipantNameFromSession()
             authModal.close()
             root.reloadMeetingRecords()
         }
         onRegisterSucceeded: {
+            joinBackend.syncParticipantNameFromSession()
             authModal.close()
             root.reloadMeetingRecords()
         }
@@ -95,11 +97,13 @@ Window {
     Connections {
         target: authBackend
         function onIsLoggedInChanged() {
+            joinBackend.syncParticipantNameFromSession()
             root.reloadMeetingRecords()
         }
     }
 
     Component.onCompleted: {
+        joinBackend.syncParticipantNameFromSession()
         root.reloadMeetingRecords()
     }
 

@@ -54,11 +54,10 @@ void AuthBackend::registerUser(const QString& displayName, const QString& email,
                                 const QString& code, const QString& password)
 {
     if (loading_) return;
-    
-    pendingDisplayName_ = displayName;
+
     setLoading(true);
     setErrorMessage("");
-    networkClient_->registerUser(email, password, code);
+    networkClient_->registerUser(email, password, code, displayName.trimmed());
 }
 
 void AuthBackend::logout()
@@ -87,7 +86,8 @@ void AuthBackend::tryAutoLogin()
     }
 }
 
-void AuthBackend::onLoginSuccess(const QString& userId, const QString& email, const QString& token)
+void AuthBackend::onLoginSuccess(const QString& userId, const QString& email, const QString& token,
+                                 const QString& displayName)
 {
     setLoading(false);
     
@@ -96,19 +96,22 @@ void AuthBackend::onLoginSuccess(const QString& userId, const QString& email, co
     Settings::instance().setUserId(userId);
     Settings::instance().setUserEmail(email);
     
-    // Extract display name from email if not set
-    QString displayName = email.split("@").first();
-    Settings::instance().setDisplayName(displayName);
-    
+    QString resolvedDisplayName = displayName.trimmed();
+    if (resolvedDisplayName.isEmpty()) {
+        resolvedDisplayName = email.split("@").first();
+    }
+    Settings::instance().setDisplayName(resolvedDisplayName);
+
     setUserEmail(email);
-    setUserName(displayName);
+    setUserName(resolvedDisplayName);
     setLoggedIn(true);
     
     Logger::instance().info("Login successful, user: " + email);
     emit loginSucceeded();
 }
 
-void AuthBackend::onRegisterSuccess(const QString& userId, const QString& email, const QString& token)
+void AuthBackend::onRegisterSuccess(const QString& userId, const QString& email, const QString& token,
+                                    const QString& displayName)
 {
     setLoading(false);
     
@@ -117,15 +120,16 @@ void AuthBackend::onRegisterSuccess(const QString& userId, const QString& email,
     Settings::instance().setUserId(userId);
     Settings::instance().setUserEmail(email);
     
-    QString displayName = pendingDisplayName_.isEmpty() ? email.split("@").first() : pendingDisplayName_;
-    Settings::instance().setDisplayName(displayName);
-    
+    QString resolvedDisplayName = displayName.trimmed();
+    if (resolvedDisplayName.isEmpty()) {
+        resolvedDisplayName = email.split("@").first();
+    }
+    Settings::instance().setDisplayName(resolvedDisplayName);
+
     setUserEmail(email);
-    setUserName(displayName);
+    setUserName(resolvedDisplayName);
     setLoggedIn(true);
-    
-    pendingDisplayName_.clear();
-    
+
     Logger::instance().info("Registration successful, user: " + email);
     emit registerSucceeded();
 }
@@ -147,6 +151,7 @@ void AuthBackend::onCodeRequestSuccess(int expiresInSecs)
 void AuthBackend::onAuthRefreshed(const QString& userId,
                                   const QString& email,
                                   const QString& token,
+                                  const QString& displayName,
                                   int expiresInSecs)
 {
     Q_UNUSED(expiresInSecs);
@@ -156,14 +161,17 @@ void AuthBackend::onAuthRefreshed(const QString& userId,
     Settings::instance().setUserId(userId);
     Settings::instance().setUserEmail(email);
 
-    QString displayName = Settings::instance().getDisplayName();
-    if (displayName.trimmed().isEmpty()) {
-        displayName = email.split("@").first();
-        Settings::instance().setDisplayName(displayName);
+    QString resolvedDisplayName = displayName.trimmed();
+    if (resolvedDisplayName.isEmpty()) {
+        resolvedDisplayName = Settings::instance().getDisplayName().trimmed();
     }
+    if (resolvedDisplayName.isEmpty()) {
+        resolvedDisplayName = email.split("@").first();
+    }
+    Settings::instance().setDisplayName(resolvedDisplayName);
 
     setUserEmail(email);
-    setUserName(displayName);
+    setUserName(resolvedDisplayName);
     setLoggedIn(true);
 
     Logger::instance().info("Auto-login token refresh successful for: " + email);

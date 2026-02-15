@@ -11,6 +11,7 @@ ColumnLayout {
     property alias micEnabled: micToggle.active
     property alias camEnabled: camToggle.active
     property bool loading: false
+    property bool guestMode: false
     
     signal joinClicked()
     
@@ -26,9 +27,19 @@ ColumnLayout {
     TextField {
         id: userNameInput
         Layout.fillWidth: true
-        placeholderText: "e.g. Alice Smith"
+        placeholderText: root.guestMode ? "Guest-XXXX" : "e.g. Alice Smith"
+        readOnly: root.guestMode
         
         Keys.onReturnPressed: root.joinClicked()
+    }
+
+    Text {
+        visible: root.guestMode
+        text: "游客模式将使用固定名称格式：Guest-XXXX"
+        color: "#6B7280"
+        font.pixelSize: 12
+        Layout.fillWidth: true
+        wrapMode: Text.WordWrap
     }
     
     Text {

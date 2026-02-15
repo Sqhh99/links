@@ -260,6 +260,10 @@ void NetworkClient::refreshAuthToken(const QString& authToken)
         }
         const QString email = obj.value("email").toString();
         const QString token = obj.value("token").toString();
+        QString displayName = obj.value("displayName").toString();
+        if (displayName.isEmpty()) {
+            displayName = obj.value("display_name").toString();
+        }
         const int expiresInSecs = obj.value("expiresInSecs").toInt(0);
 
         if (userId.isEmpty() || email.isEmpty() || token.isEmpty()) {
@@ -270,7 +274,7 @@ void NetworkClient::refreshAuthToken(const QString& authToken)
         }
 
         Logger::instance().info("Auth token refreshed for: " + email);
-        emit authRefreshed(userId, email, token, expiresInSecs);
+        emit authRefreshed(userId, email, token, displayName, expiresInSecs);
     });
 }
 
@@ -555,9 +559,13 @@ void NetworkClient::login(const QString& email, const QString& password)
             }
             const QString responseEmail = obj.value("email").toString();
             const QString token = obj.value("token").toString();
+            QString displayName = obj.value("displayName").toString();
+            if (displayName.isEmpty()) {
+                displayName = obj.value("display_name").toString();
+            }
 
             Logger::instance().info("Login successful for: " + responseEmail);
-            emit loginSuccess(userId, responseEmail, token);
+            emit loginSuccess(userId, responseEmail, token, displayName);
         },
         [this](const QString& errorMsg) {
             Logger::instance().error("Login failed: " + errorMsg);
@@ -590,7 +598,8 @@ void NetworkClient::requestVerificationCode(const QString& email)
         });
 }
 
-void NetworkClient::registerUser(const QString& email, const QString& password, const QString& code)
+void NetworkClient::registerUser(const QString& email, const QString& password,
+                                 const QString& code, const QString& displayName)
 {
     Logger::instance().info(QString("Registering user: %1").arg(email));
 
@@ -598,6 +607,9 @@ void NetworkClient::registerUser(const QString& email, const QString& password, 
     payload["email"] = email;
     payload["password"] = password;
     payload["code"] = code;
+    if (!displayName.trimmed().isEmpty()) {
+        payload["displayName"] = displayName.trimmed();
+    }
 
     postAuthJsonWithFallback(
         "/api/auth/register",
@@ -610,9 +622,13 @@ void NetworkClient::registerUser(const QString& email, const QString& password, 
             }
             const QString responseEmail = obj.value("email").toString();
             const QString token = obj.value("token").toString();
+            QString responseDisplayName = obj.value("displayName").toString();
+            if (responseDisplayName.isEmpty()) {
+                responseDisplayName = obj.value("display_name").toString();
+            }
 
             Logger::instance().info("Registration successful for: " + responseEmail);
-            emit registerSuccess(userId, responseEmail, token);
+            emit registerSuccess(userId, responseEmail, token, responseDisplayName);
         },
         [this](const QString& errorMsg) {
             Logger::instance().error("Registration failed: " + errorMsg);

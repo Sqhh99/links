@@ -44,6 +44,7 @@ public:
     Q_INVOKABLE void quickJoin();
     Q_INVOKABLE void createScheduledRoom();
     Q_INVOKABLE void loadMeetingRecords();
+    Q_INVOKABLE void syncParticipantNameFromSession();
     Q_INVOKABLE void showSettings();
     Q_INVOKABLE QString currentTime() const;
     Q_INVOKABLE QString currentDate() const;
@@ -78,6 +79,9 @@ private:
     void setErrorMessage(const QString& message);
     void saveSettings();
     void loadSettings();
+    QString ensureGuestDisplayName();
+    QString defaultAuthDisplayName() const;
+    QString effectiveParticipantName(bool allowUserOverride = true);
     bool hasAuthToken() const;
     QString authToken() const;
     static bool isMeetingNo(const QString& value);
@@ -91,6 +95,8 @@ private:
     bool camEnabled_{false};
     bool loading_{false};
     QString errorMessage_;
+    QString guestDisplayName_;
+    QString pendingParticipantName_;
 };
 
 #endif // LOGINBACKEND_H
