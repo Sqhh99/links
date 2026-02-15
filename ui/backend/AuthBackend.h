@@ -14,6 +14,7 @@ class AuthBackend : public QObject
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
     Q_PROPERTY(QString userEmail READ userEmail NOTIFY userEmailChanged)
     Q_PROPERTY(QString userName READ userName NOTIFY userNameChanged)
+    Q_PROPERTY(QString authToken READ authToken NOTIFY authTokenChanged)
     Q_PROPERTY(int codeCooldown READ codeCooldown NOTIFY codeCooldownChanged)
 
 public:
@@ -25,6 +26,7 @@ public:
     QString errorMessage() const { return errorMessage_; }
     QString userEmail() const { return userEmail_; }
     QString userName() const { return userName_; }
+    QString authToken() const { return authToken_; }
     int codeCooldown() const { return codeCooldown_; }
 
     Q_INVOKABLE void login(const QString& email, const QString& password);
@@ -41,6 +43,7 @@ signals:
     void errorMessageChanged();
     void userEmailChanged();
     void userNameChanged();
+    void authTokenChanged();
     void codeCooldownChanged();
     
     void loginSucceeded();
@@ -68,6 +71,7 @@ private:
     void setLoggedIn(bool loggedIn);
     void setUserEmail(const QString& email);
     void setUserName(const QString& name);
+    void setAuthToken(const QString& token);
     void startCooldownTimer();
 
     NetworkClient* networkClient_;
@@ -77,6 +81,7 @@ private:
     QString errorMessage_;
     QString userEmail_;
     QString userName_;
+    QString authToken_;
     int codeCooldown_{0};
 };
 

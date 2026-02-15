@@ -53,8 +53,10 @@ Window {
 
     LoginBackend {
         id: joinBackend
+        sessionLoggedIn: authBackend.isLoggedIn
+        sessionAuthToken: authBackend.authToken
 
-        onJoinConference: function(url, token, roomName, meetingNo, userName, isHost) {
+        onJoinConference: function(url, token, roomName, meetingNo, userName, isHost, userAuthToken, isGuest) {
             meetingPage.closeActionDialog()
             root.hide()
         }
@@ -97,13 +99,11 @@ Window {
     Connections {
         target: authBackend
         function onIsLoggedInChanged() {
-            joinBackend.syncParticipantNameFromSession()
             root.reloadMeetingRecords()
         }
     }
 
     Component.onCompleted: {
-        joinBackend.syncParticipantNameFromSession()
         root.reloadMeetingRecords()
     }
 

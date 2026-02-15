@@ -22,7 +22,9 @@ void createConferenceWindow(const QString& url,
                             const QString& roomName,
                             const QString& meetingNo,
                             const QString& userName,
-                            bool isHost)
+                            bool isHost,
+                            const QString& userAuthToken,
+                            bool isGuest)
 {
     if (!g_engine) {
         return;
@@ -51,11 +53,13 @@ void createConferenceWindow(const QString& url,
     object->setProperty("meetingNo", meetingNo);
     object->setProperty("userName", userName);
     object->setProperty("isHost", isHost);
+    object->setProperty("userAuthToken", userAuthToken);
+    object->setProperty("isGuest", isGuest);
 
-    QMetaObject::invokeMethod(object, [object, url, token, roomName, meetingNo, userName, isHost]() {
+    QMetaObject::invokeMethod(object, [object, url, token, roomName, meetingNo, userName, isHost, userAuthToken]() {
         auto backends = object->findChildren<ConferenceBackend*>();
         for (ConferenceBackend* backend : backends) {
-            backend->initialize(url, token, roomName, meetingNo, userName, isHost);
+            backend->initialize(url, token, roomName, meetingNo, userName, isHost, userAuthToken);
         }
     }, Qt::QueuedConnection);
 

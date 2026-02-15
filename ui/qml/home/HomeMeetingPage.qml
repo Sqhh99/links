@@ -206,6 +206,12 @@ Item {
                     }
 
                     QuickStartForm {
+                        allowGuestJoin: root.loginBackend ? root.loginBackend.allowGuestJoin : false
+                        onAllowGuestJoinToggled: function(checked) {
+                            if (root.loginBackend) {
+                                root.loginBackend.allowGuestJoin = checked
+                            }
+                        }
                         onQuickJoinClicked: {
                             if (root.loginBackend) {
                                 root.loginBackend.quickJoin()

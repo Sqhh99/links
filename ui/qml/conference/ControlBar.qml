@@ -23,6 +23,7 @@ Rectangle {
     
     property ConferenceBackend backend
     property var settingsBackend: null  // SettingsBackend for device lists
+    property bool isGuest: false
     
     signal screenShareClicked()
     
@@ -34,6 +35,8 @@ Rectangle {
         
         // --- Left Group: AV Controls with Split Button ---
         RowLayout {
+            visible: !root.isGuest
+            Layout.preferredWidth: root.isGuest ? 0 : implicitWidth
             spacing: 12
             Layout.alignment: Qt.AlignVCenter
             
@@ -87,6 +90,7 @@ Rectangle {
             Layout.alignment: Qt.AlignVCenter
             
             IconOnlyButton {
+                visible: !root.isGuest
                 iconSource: "qrc:/res/icon/monitor-up.png"
                 isActive: backend ? backend.screenSharing : false
                 enabled: backend ? backend.screenShareSupported : false
@@ -102,6 +106,7 @@ Rectangle {
             }
             
             IconOnlyButton {
+                visible: !root.isGuest
                 iconSource: "qrc:/res/icon/message.png"
                 isActive: backend ? backend.isChatVisible : false
                 toolTip: "聊天"

@@ -29,8 +29,9 @@ public:
     ~NetworkClient() override;
 
     void requestToken(const QString& roomName, const QString& participantName);
-    void createMeeting(const QString& authToken);
+    void createMeeting(const QString& authToken, bool allowGuestJoin = false);
     void joinMeeting(const QString& meetingNo, const QString& participantName, const QString& authToken);
+    void guestJoinMeeting(const QString& meetingNo, const QString& participantName);
     void leaveMeeting(const QString& meetingNo, const QString& authToken);
     void fetchMeetingRecords(const QString& authToken, int page = 1, int pageSize = 20);
     void refreshAuthToken(const QString& authToken);

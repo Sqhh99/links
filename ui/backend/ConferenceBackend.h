@@ -54,7 +54,8 @@ public:
                                 const QString& roomName,
                                 const QString& meetingNo,
                                 const QString& userName,
-                                bool isHost);
+                                bool isHost,
+                                const QString& userAuthToken = QString());
 
     QString roomName() const { return roomName_; }
     QString meetingNo() const { return meetingNo_; }
@@ -188,6 +189,7 @@ private:
     QString roomName_;
     QString meetingNo_;
     QString userName_;
+    QString userAuthToken_;
     bool isHost_;
 
     QString connectionStatus_{"Connecting..."};

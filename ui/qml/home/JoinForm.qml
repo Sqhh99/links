@@ -55,7 +55,7 @@ ColumnLayout {
     }
     
     Text {
-        text: root.guestMode ? "房间名称（已存在）" : "会议号 / 分享链接"
+        text: root.guestMode ? "会议号 / 分享链接 / 房间名称" : "会议号 / 分享链接"
         color: "#374151"
         font.pixelSize: 13
         font.weight: Font.DemiBold
@@ -64,7 +64,7 @@ ColumnLayout {
     TextField {
         id: roomNameInput
         Layout.fillWidth: true
-        placeholderText: root.guestMode ? "请输入已存在普通房间名称" : "如 123456789 或分享链接"
+        placeholderText: root.guestMode ? "如 123456789、分享链接，或普通房间名" : "如 123456789 或分享链接"
         
         Keys.onReturnPressed: root.joinClicked()
     }

@@ -26,6 +26,7 @@ Window {
     
     property ConferenceBackend backend
     property var settingsBackend: null
+    property bool isGuest: false
     property point dragStart: Qt.point(0, 0)
     property int edgePadding: 0
     
@@ -183,6 +184,7 @@ Window {
                 
                 // Microphone split button
                 SplitDeviceButton {
+                    visible: !root.isGuest
                     isActive: backend ? backend.micEnabled : false
                     iconOn: "qrc:/res/icon/Turn_on_the_microphone.png"
                     iconOff: "qrc:/res/icon/mute_the_microphone.png"
@@ -202,6 +204,7 @@ Window {
                 
                 // Camera split button
                 SplitDeviceButton {
+                    visible: !root.isGuest
                     isActive: backend ? backend.camEnabled : false
                     iconOn: "qrc:/res/icon/video.png"
                     iconOff: "qrc:/res/icon/close_video.png"
@@ -221,6 +224,7 @@ Window {
                 
                 // Separator
                 Rectangle {
+                    visible: !root.isGuest
                     width: 1
                     height: 20
                     color: "#E5E7EB"

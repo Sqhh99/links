@@ -22,7 +22,9 @@ Window {
     property string roomName: ""
     property string meetingNo: ""
     property string userName: ""
+    property string userAuthToken: ""
     property bool isHost: false
+    property bool isGuest: false
 
     // Backend
     ConferenceBackend {
@@ -30,7 +32,7 @@ Window {
 
         Component.onCompleted: {
             if (root.serverUrl && root.token) {
-                initialize(root.serverUrl, root.token, root.roomName, root.meetingNo, root.userName, root.isHost)
+                initialize(root.serverUrl, root.token, root.roomName, root.meetingNo, root.userName, root.isHost, root.userAuthToken)
             }
         }
 
@@ -678,6 +680,7 @@ Window {
                 Layout.fillWidth: true
                 backend: backend
                 settingsBackend: settingsBackendInstance
+                isGuest: root.isGuest
 
                 onScreenShareClicked: {
                     if (backend && backend.screenShareSupported) {
@@ -714,6 +717,7 @@ Window {
             width: 320
             visible: backend.isChatVisible || backend.isParticipantsVisible
             backend: backend
+            isGuest: root.isGuest
             z: 10
         }
 
@@ -744,6 +748,7 @@ Window {
         sourceComponent: FloatingControlBar {
             backend: root.conferenceBackend
             settingsBackend: settingsBackendInstance
+            isGuest: root.isGuest
             visible: true
 
             onStopSharingClicked: {

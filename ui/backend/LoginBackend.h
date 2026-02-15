@@ -17,6 +17,9 @@ class LoginBackend : public QObject
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
     Q_PROPERTY(QString scheduledTime READ scheduledTime WRITE setScheduledTime NOTIFY scheduledTimeChanged)
+    Q_PROPERTY(bool allowGuestJoin READ allowGuestJoin WRITE setAllowGuestJoin NOTIFY allowGuestJoinChanged)
+    Q_PROPERTY(bool sessionLoggedIn READ sessionLoggedIn WRITE setSessionLoggedIn NOTIFY sessionLoggedInChanged)
+    Q_PROPERTY(QString sessionAuthToken READ sessionAuthToken WRITE setSessionAuthToken NOTIFY sessionAuthTokenChanged)
 
 public:
     explicit LoginBackend(QObject* parent = nullptr);
@@ -39,6 +42,12 @@ public:
 
     QString scheduledTime() const { return scheduledTime_; }
     void setScheduledTime(const QString& time);
+    bool allowGuestJoin() const { return allowGuestJoin_; }
+    void setAllowGuestJoin(bool enabled);
+    bool sessionLoggedIn() const { return sessionLoggedIn_; }
+    void setSessionLoggedIn(bool loggedIn);
+    QString sessionAuthToken() const { return sessionAuthToken_; }
+    void setSessionAuthToken(const QString& token);
 
     Q_INVOKABLE void join();
     Q_INVOKABLE void quickJoin();
@@ -57,12 +66,17 @@ signals:
     void loadingChanged();
     void errorMessageChanged();
     void scheduledTimeChanged();
+    void allowGuestJoinChanged();
+    void sessionLoggedInChanged();
+    void sessionAuthTokenChanged();
     void joinConference(const QString& url,
                         const QString& token,
                         const QString& roomName,
                         const QString& meetingNo,
                         const QString& userName,
-                        bool isHost);
+                        bool isHost,
+                        const QString& userAuthToken,
+                        bool isGuest);
     void meetingRecordsLoaded(const QVariantList& records);
     void sessionExpired(const QString& message);
     void settingsRequested();
@@ -94,6 +108,9 @@ private:
     QString userName_;
     QString roomName_;
     QString scheduledTime_;
+    bool allowGuestJoin_{false};
+    bool sessionLoggedIn_{false};
+    QString sessionAuthToken_;
     bool micEnabled_{false};
     bool camEnabled_{false};
     bool loading_{false};

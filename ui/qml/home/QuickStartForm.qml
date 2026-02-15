@@ -7,8 +7,10 @@ ColumnLayout {
     id: root
     
     property bool loading: false
+    property bool allowGuestJoin: false
     
     signal quickJoinClicked()
+    signal allowGuestJoinToggled(bool checked)
     
     spacing: 12
     
@@ -28,6 +30,12 @@ ColumnLayout {
     }
     
     Item { height: 8 }
+
+    CheckBox {
+        text: "允许游客通过会议号加入"
+        checked: root.allowGuestJoin
+        onCheckedChanged: root.allowGuestJoinToggled(checked)
+    }
     
     PrimaryButton {
         Layout.fillWidth: true

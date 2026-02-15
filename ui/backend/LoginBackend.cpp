@@ -75,6 +75,37 @@ void LoginBackend::setScheduledTime(const QString& time)
     }
 }
 
+void LoginBackend::setAllowGuestJoin(bool enabled)
+{
+    if (allowGuestJoin_ != enabled) {
+        allowGuestJoin_ = enabled;
+        emit allowGuestJoinChanged();
+    }
+}
+
+void LoginBackend::setSessionLoggedIn(bool loggedIn)
+{
+    if (sessionLoggedIn_ == loggedIn) {
+        return;
+    }
+
+    sessionLoggedIn_ = loggedIn;
+    emit sessionLoggedInChanged();
+    syncParticipantNameFromSession();
+}
+
+void LoginBackend::setSessionAuthToken(const QString& token)
+{
+    const QString trimmed = token.trimmed();
+    if (sessionAuthToken_ == trimmed) {
+        return;
+    }
+
+    sessionAuthToken_ = trimmed;
+    emit sessionAuthTokenChanged();
+    syncParticipantNameFromSession();
+}
+
 void LoginBackend::setLoading(bool loading)
 {
     if (loading_ != loading) {
@@ -93,12 +124,12 @@ void LoginBackend::setErrorMessage(const QString& message)
 
 bool LoginBackend::hasAuthToken() const
 {
-    return !authToken().isEmpty();
+    return sessionLoggedIn_ && !authToken().isEmpty();
 }
 
 QString LoginBackend::authToken() const
 {
-    return Settings::instance().getAuthToken().trimmed();
+    return sessionAuthToken_.trimmed();
 }
 
 bool LoginBackend::isGuestMode() const
@@ -134,17 +165,22 @@ void LoginBackend::join()
     const QString name = effectiveParticipantName(true);
     const QString input = roomName_.trimmed();
     const QString resolvedMeetingNo = extractMeetingNo(input);
-    const bool guestMode = isGuestMode();
+    const bool authed = hasAuthToken();
 
     if (input.isEmpty()) {
-        setErrorMessage(guestMode
-                            ? "请输入已存在的普通房间名称"
+        setErrorMessage(!authed
+                            ? "请输入会议号、分享链接或普通房间名称"
                             : "Please enter a meeting number, share link, or room name");
         return;
     }
 
-    if (guestMode && (!resolvedMeetingNo.isEmpty() || isBusinessMeetingInput(input))) {
-        setErrorMessage("游客不能通过会议号或业务会议链接入会，请登录后重试");
+    if (authed && resolvedMeetingNo.isEmpty()) {
+        setErrorMessage("Please enter a valid 9-digit meeting number or share link");
+        return;
+    }
+
+    if (!authed && resolvedMeetingNo.isEmpty() && isBusinessMeetingInput(input)) {
+        setErrorMessage("请输入会议号或分享链接加入业务会议");
         return;
     }
 
@@ -152,16 +188,17 @@ void LoginBackend::join()
     setLoading(true);
     setErrorMessage("");
 
-    if (hasAuthToken()) {
-        if (resolvedMeetingNo.isEmpty()) {
-            setLoading(false);
-            setErrorMessage("Please enter a valid 9-digit meeting number or share link");
-            return;
-        }
-
+    if (authed) {
         Logger::instance().info(QString("Joining via meetingNo: %1").arg(resolvedMeetingNo));
         pendingParticipantName_ = name;
-        networkClient_->joinMeeting(resolvedMeetingNo, name, authToken());
+        networkClient_->joinMeeting(resolvedMeetingNo, name, authToken().trimmed());
+        return;
+    }
+
+    if (!resolvedMeetingNo.isEmpty()) {
+        Logger::instance().info(QString("Guest joining via meetingNo: %1").arg(resolvedMeetingNo));
+        pendingParticipantName_ = name;
+        networkClient_->guestJoinMeeting(resolvedMeetingNo, name);
         return;
     }
 
@@ -185,7 +222,7 @@ void LoginBackend::quickJoin()
 
     if (hasAuthToken()) {
         Logger::instance().info("Creating meeting for quick join");
-        networkClient_->createMeeting(authToken());
+        networkClient_->createMeeting(authToken(), allowGuestJoin_);
         return;
     }
 
@@ -209,7 +246,7 @@ void LoginBackend::createScheduledRoom()
 
     if (hasAuthToken()) {
         Logger::instance().info("Creating scheduled meeting via /api/meetings");
-        networkClient_->createMeeting(authToken());
+        networkClient_->createMeeting(authToken(), false);
         return;
     }
 
@@ -263,11 +300,13 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
         const QString lowerError = response.error.toLower();
         if (isGuestMode()) {
             if (lowerError.contains("403") || lowerError.contains("forbidden")) {
-                mappedMessage = "该会议需要登录后通过会议号加入";
+                mappedMessage = "该会议未开放游客加入";
             } else if (lowerError.contains("404") || lowerError.contains("not found")) {
-                mappedMessage = "房间不存在，请确认房间名称";
+                mappedMessage = "会议或房间不存在，请确认输入";
+            } else if (lowerError.contains("409") || lowerError.contains("conflict")) {
+                mappedMessage = "会议已结束";
             } else if (lowerError.contains("400") || lowerError.contains("bad request")) {
-                mappedMessage = "请输入已存在的普通房间名称";
+                mappedMessage = "请输入有效的会议号、分享链接或普通房间名称";
             }
         }
 
@@ -289,7 +328,9 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
                         response.roomName,
                         response.meetingNo,
                         participantName,
-                        response.isHost);
+                        response.isHost,
+                        authToken(),
+                        isGuestMode());
 
     loadMeetingRecords();
 }
@@ -392,7 +433,7 @@ void LoginBackend::onAuthExpired(const QString& message)
 {
     setLoading(false);
     setErrorMessage("登录已过期，请重新登录");
-    if (Settings::instance().hasAuthData()) {
+    if (sessionLoggedIn_ || !sessionAuthToken_.isEmpty()) {
         emit sessionExpired(message);
     }
 }

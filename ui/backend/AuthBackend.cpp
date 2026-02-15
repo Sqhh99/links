@@ -63,6 +63,7 @@ void AuthBackend::registerUser(const QString& displayName, const QString& email,
 void AuthBackend::logout()
 {
     Settings::instance().clearAuthData();
+    setAuthToken("");
     setLoggedIn(false);
     setUserEmail("");
     setUserName("");
@@ -95,6 +96,7 @@ void AuthBackend::onLoginSuccess(const QString& userId, const QString& email, co
     Settings::instance().setAuthToken(token);
     Settings::instance().setUserId(userId);
     Settings::instance().setUserEmail(email);
+    setAuthToken(token.trimmed());
     
     QString resolvedDisplayName = displayName.trimmed();
     if (resolvedDisplayName.isEmpty()) {
@@ -119,6 +121,7 @@ void AuthBackend::onRegisterSuccess(const QString& userId, const QString& email,
     Settings::instance().setAuthToken(token);
     Settings::instance().setUserId(userId);
     Settings::instance().setUserEmail(email);
+    setAuthToken(token.trimmed());
     
     QString resolvedDisplayName = displayName.trimmed();
     if (resolvedDisplayName.isEmpty()) {
@@ -160,6 +163,7 @@ void AuthBackend::onAuthRefreshed(const QString& userId,
     Settings::instance().setAuthToken(token);
     Settings::instance().setUserId(userId);
     Settings::instance().setUserEmail(email);
+    setAuthToken(token.trimmed());
 
     QString resolvedDisplayName = displayName.trimmed();
     if (resolvedDisplayName.isEmpty()) {
@@ -179,7 +183,7 @@ void AuthBackend::onAuthRefreshed(const QString& userId,
 
 void AuthBackend::onAuthExpired(const QString& message)
 {
-    const bool hadSession = isLoggedIn_ || Settings::instance().hasAuthData();
+    const bool hadSession = isLoggedIn_ || !authToken_.isEmpty();
     logout();
     setErrorMessage("登录已过期，请重新登录");
     if (hadSession) {
@@ -248,6 +252,17 @@ void AuthBackend::setUserName(const QString& name)
         userName_ = name;
         emit userNameChanged();
     }
+}
+
+void AuthBackend::setAuthToken(const QString& token)
+{
+    const QString trimmed = token.trimmed();
+    if (authToken_ == trimmed) {
+        return;
+    }
+
+    authToken_ = trimmed;
+    emit authTokenChanged();
 }
 
 void AuthBackend::startCooldownTimer()

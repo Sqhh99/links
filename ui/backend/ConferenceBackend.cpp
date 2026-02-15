@@ -28,13 +28,15 @@ ConferenceBackend::~ConferenceBackend()
 }
 
 void ConferenceBackend::initialize(const QString& url, const QString& token,
-                                   const QString& roomName, const QString& meetingNo, const QString& userName, bool isHost)
+                                   const QString& roomName, const QString& meetingNo, const QString& userName,
+                                   bool isHost, const QString& userAuthToken)
 {
     url_ = url;
     token_ = token;
     roomName_ = roomName;
     meetingNo_ = meetingNo;
     userName_ = userName;
+    userAuthToken_ = userAuthToken.trimmed();
     isHost_ = isHost;
     Logger::instance().info(QString("ConferenceBackend initialized for room: %1, meetingNo: %2, isHost: %3")
                            .arg(roomName).arg(meetingNo).arg(isHost));
@@ -427,7 +429,7 @@ void ConferenceBackend::confirmLeave()
         return;
     }
 
-    const QString authToken = Settings::instance().getAuthToken().trimmed();
+    const QString authToken = userAuthToken_.trimmed();
     const QString meetingNo = meetingNo_.trimmed();
     const bool hasValidMeetingNo =
         QRegularExpression(QStringLiteral("^\\d{9}$")).match(meetingNo).hasMatch();
@@ -513,7 +515,7 @@ void ConferenceBackend::kickParticipant(const QString& identity)
     auto* networkClient = new NetworkClient(this);
     QString apiUrl = Settings::instance().getSignalingServerUrl();
     networkClient->setApiUrl(apiUrl);
-    const QString authToken = Settings::instance().getAuthToken().trimmed();
+    const QString authToken = userAuthToken_.trimmed();
     
     Logger::instance().info(QString("Calling kick API for participant: %1").arg(identity));
     networkClient->kickParticipant(roomName_, identity, authToken);
