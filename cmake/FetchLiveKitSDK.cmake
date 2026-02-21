@@ -5,7 +5,7 @@
 
 # Version configuration (can be overridden before including this module)
 if(NOT DEFINED LIVEKIT_SDK_VERSION)
-    set(LIVEKIT_SDK_VERSION "0.2.7")
+    set(LIVEKIT_SDK_VERSION "0.3.1")
 endif()
 
 # Shared SDK architecture selector across third-party fetch modules.

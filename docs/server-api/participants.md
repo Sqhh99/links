@@ -53,7 +53,7 @@ curl -X GET http://localhost:8081/api/rooms/meeting-room-1/participants
 
 ```json
 {
-  "error": "Room not found"
+  "error": "Failed to list participants: ..."
 }
 ```
 
@@ -61,22 +61,19 @@ curl -X GET http://localhost:8081/api/rooms/meeting-room-1/participants
 
 | 字段 | 类型 | 描述 |
 |------|------|------|
-| `sid` | string | 参与者会话 ID |
+| `sid` | string \| null | 参与者会话 ID |
 | `identity` | string | 参与者唯一标识 |
-| `state` | number | 连接状态（1=已连接） |
-| `metadata` | string | 参与者元数据（JSON 字符串） |
-| `joinedAt` | number | 加入时间（Unix 时间戳，秒） |
-| `name` | string | 参与者显示名称 |
-| `isPublisher` | boolean | 是否正在发布音视频 |
+| `state` | number \| null | 连接状态（LiveKit 原始数值） |
+| `metadata` | string \| null | 参与者元数据（JSON 字符串） |
+| `joinedAt` | number \| null | 加入时间（Unix 时间戳，秒） |
+| `name` | string \| null | 参与者显示名称 |
+| `version` | number \| null | 协议版本 |
+| `region` | string \| null | 所在区域 |
+| `isPublisher` | boolean \| null | 是否正在发布音视频 |
 
-### 连接状态值
+### 关于 `state` 字段
 
-| 值 | 状态 | 描述 |
-|-----|------|------|
-| 0 | JOINING | 正在加入 |
-| 1 | JOINED | 已加入 |
-| 2 | ACTIVE | 活跃中 |
-| 3 | DISCONNECTED | 已断开 |
+`state` 来自 LiveKit SDK 原始值，服务端当前不做枚举转换，建议客户端按 LiveKit 官方定义解析。
 
 ---
 
@@ -84,10 +81,15 @@ curl -X GET http://localhost:8081/api/rooms/meeting-room-1/participants
 
 将指定参与者移出房间（踢人）。
 
+> 权限说明：
+> - 业务会议房间（`m-#########` 且存在于 `meetings` 表）只允许主持人调用；
+> - 普通房间保持原有行为。
+
 ### 请求
 
 ```bash
-curl -X DELETE http://localhost:8081/api/rooms/meeting-room-1/participants/user-002
+curl -X DELETE http://localhost:8081/api/rooms/meeting-room-1/participants/user-002 \
+  -H "Authorization: Bearer <user-jwt>"
 ```
 
 ### 路径参数
@@ -112,7 +114,21 @@ curl -X DELETE http://localhost:8081/api/rooms/meeting-room-1/participants/user-
 
 ```json
 {
-  "error": "Participant not found"
+  "error": "Failed to remove participant: ..."
+}
+```
+
+#### 未认证或无权限（业务会议房间）
+
+```json
+{
+  "error": "Authorization header required"
+}
+```
+
+```json
+{
+  "error": "Only meeting host can perform this action"
 }
 ```
 
@@ -142,7 +158,8 @@ curl -s http://localhost:8081/api/rooms/team-meeting/participants | \
 
 ```bash
 # 移除 identity 为 "user-002" 的参与者
-curl -X DELETE http://localhost:8081/api/rooms/team-meeting/participants/user-002
+curl -X DELETE http://localhost:8081/api/rooms/team-meeting/participants/user-002 \
+  -H "Authorization: Bearer <host-user-jwt>"
 ```
 
 ### 踢出所有非主持人
@@ -152,7 +169,8 @@ curl -X DELETE http://localhost:8081/api/rooms/team-meeting/participants/user-00
 curl -s http://localhost:8081/api/rooms/team-meeting/participants | \
   jq -r '.participants[] | select(.metadata | fromjson | .isHost != true) | .identity' | \
   while read identity; do
-    curl -X DELETE "http://localhost:8081/api/rooms/team-meeting/participants/$identity"
+    curl -X DELETE "http://localhost:8081/api/rooms/team-meeting/participants/$identity" \
+      -H "Authorization: Bearer <host-user-jwt>"
   done
 ```
 

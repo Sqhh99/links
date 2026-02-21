@@ -14,6 +14,7 @@ class AuthBackend : public QObject
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
     Q_PROPERTY(QString userEmail READ userEmail NOTIFY userEmailChanged)
     Q_PROPERTY(QString userName READ userName NOTIFY userNameChanged)
+    Q_PROPERTY(QString authToken READ authToken NOTIFY authTokenChanged)
     Q_PROPERTY(int codeCooldown READ codeCooldown NOTIFY codeCooldownChanged)
 
 public:
@@ -25,6 +26,7 @@ public:
     QString errorMessage() const { return errorMessage_; }
     QString userEmail() const { return userEmail_; }
     QString userName() const { return userName_; }
+    QString authToken() const { return authToken_; }
     int codeCooldown() const { return codeCooldown_; }
 
     Q_INVOKABLE void login(const QString& email, const QString& password);
@@ -32,6 +34,7 @@ public:
     Q_INVOKABLE void registerUser(const QString& displayName, const QString& email,
                                    const QString& code, const QString& password);
     Q_INVOKABLE void logout();
+    Q_INVOKABLE void switchUser();
     Q_INVOKABLE void tryAutoLogin();
 
 signals:
@@ -40,16 +43,24 @@ signals:
     void errorMessageChanged();
     void userEmailChanged();
     void userNameChanged();
+    void authTokenChanged();
     void codeCooldownChanged();
     
     void loginSucceeded();
     void registerSucceeded();
+    void switchUserRequested();
     void codeRequestSucceeded();
+    void sessionExpired(const QString& message);
     void authFailed(const QString& error);
 
 private slots:
-    void onLoginSuccess(const QString& userId, const QString& email, const QString& token);
-    void onRegisterSuccess(const QString& userId, const QString& email, const QString& token);
+    void onLoginSuccess(const QString& userId, const QString& email, const QString& token,
+                        const QString& displayName);
+    void onRegisterSuccess(const QString& userId, const QString& email, const QString& token,
+                           const QString& displayName);
+    void onAuthRefreshed(const QString& userId, const QString& email, const QString& token,
+                         const QString& displayName, int expiresInSecs);
+    void onAuthExpired(const QString& message);
     void onCodeRequestSuccess(int expiresInSecs);
     void onAuthError(const QString& error);
     void onCooldownTick();
@@ -60,6 +71,7 @@ private:
     void setLoggedIn(bool loggedIn);
     void setUserEmail(const QString& email);
     void setUserName(const QString& name);
+    void setAuthToken(const QString& token);
     void startCooldownTimer();
 
     NetworkClient* networkClient_;
@@ -69,7 +81,7 @@ private:
     QString errorMessage_;
     QString userEmail_;
     QString userName_;
-    QString pendingDisplayName_;
+    QString authToken_;
     int codeCooldown_{0};
 };
 

@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMetaType>
+#include <QSet>
+#include <QStringList>
 #include <QTimer>
 #include <vector>
 #include "livekit/audio_stream.h"
@@ -119,6 +121,7 @@ void ConferenceManager::disconnect()
 
         connected_ = false;
         participantStore_->clear();
+        participantIdentity_.clear();
 
         emit disconnected();
     } catch (const std::exception& e) {
@@ -222,21 +225,54 @@ int ConferenceManager::getParticipantCount() const
     return participantStore_->size() + 1;
 }
 
+void ConferenceManager::reconcileParticipants()
+{
+    reconcileParticipantsInternal("manual");
+}
+
 void ConferenceManager::onParticipantConnectedQueued(QString identity, QString sid, QString name)
 {
+    if (identity.trimmed().isEmpty()) {
+        Logger::instance().warning("Participant connected event has empty identity, triggering reconciliation");
+        reconcileParticipantsInternal("participant_connected_empty_identity");
+        return;
+    }
+
+    if (participantStore_->contains(identity)) {
+        Logger::instance().debug(QString("Duplicate participant connected ignored: %1").arg(identity));
+        reconcileParticipantsInternal("participant_connected_duplicate");
+        return;
+    }
+
     ParticipantInfo info = participantStore_->addParticipant(identity, sid, name);
 
-    Logger::instance().info("Participant joined: " + name);
+    Logger::instance().info(QString("Participant joined: %1")
+                                .arg(name.isEmpty() ? identity : name));
     emit participantJoined(info);
+    reconcileParticipantsInternal("participant_connected_event");
 }
 
 void ConferenceManager::onParticipantDisconnectedQueued(QString identity, int reason)
 {
     Q_UNUSED(reason);
+
+    if (identity.trimmed().isEmpty()) {
+        Logger::instance().warning("Participant disconnected event has empty identity, triggering reconciliation");
+        reconcileParticipantsInternal("participant_disconnected_empty_identity");
+        return;
+    }
+
+    if (!participantStore_->contains(identity)) {
+        Logger::instance().debug(QString("Duplicate participant disconnected ignored: %1").arg(identity));
+        reconcileParticipantsInternal("participant_disconnected_duplicate");
+        return;
+    }
+
     participantStore_->removeParticipant(identity);
 
     Logger::instance().info("Participant left: " + identity);
     emit participantLeft(identity);
+    reconcileParticipantsInternal("participant_disconnected_event");
 }
 
 void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString participantIdentity,
@@ -311,6 +347,7 @@ void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString partic
 
     emit trackSubscribed(info);
     updateParticipantInfo(participantIdentity);
+    reconcileParticipantsInternal("track_subscribed_event");
 }
 
 void ConferenceManager::onTrackUnsubscribedQueued(QString trackSid, QString participantIdentity)
@@ -328,6 +365,7 @@ void ConferenceManager::onTrackUnsubscribedQueued(QString trackSid, QString part
     participantStore_->removeTrack(trackSid);
 
     updateParticipantInfo(participantIdentity);
+    reconcileParticipantsInternal("track_unsubscribed_event");
 }
 
 void ConferenceManager::onTrackMutedQueued(QString trackSid, QString participantIdentity, int kind)
@@ -364,6 +402,7 @@ void ConferenceManager::onTrackUnpublishedQueued(QString trackSid, QString parti
     emit trackUnpublished(trackSid, participantIdentity, trackKind, trackSource);
 
     participantStore_->removeTrack(trackSid);
+    reconcileParticipantsInternal("track_unpublished_event");
 }
 
 void ConferenceManager::onConnectionStateChangedQueued(int state)
@@ -380,22 +419,16 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
         auto localParticipant = roomController_->localParticipant();
         if (localParticipant) {
             participantName_ = QString::fromStdString(localParticipant->name());
+            participantIdentity_ = QString::fromStdString(localParticipant->identity());
         }
 
-        auto remoteParticipants = roomController_->remoteParticipants();
-        for (const auto& participant : remoteParticipants) {
-            ParticipantInfo info = participantStore_->addParticipant(
-                QString::fromStdString(participant->identity()),
-                QString::fromStdString(participant->sid()),
-                QString::fromStdString(participant->name()));
-
-            emit participantJoined(info);
-        }
+        reconcileParticipantsInternal("connection_connected_state");
 
         emit connected();
     } else if (connState == livekit::ConnectionState::Disconnected) {
         connected_ = false;
         participantStore_->clear();
+        participantIdentity_.clear();
         emit disconnected();
     }
 
@@ -452,4 +485,82 @@ void ConferenceManager::updateParticipantInfo(const QString& identity)
 
     ParticipantInfo updated = participantStore_->refreshParticipantInfo(identity);
     emit participantUpdated(updated);
+}
+
+void ConferenceManager::reconcileParticipantsInternal(const char* source)
+{
+    if (!roomController_ || !participantStore_) {
+        return;
+    }
+
+    if (!roomController_->room()) {
+        return;
+    }
+
+    const auto remoteParticipants = roomController_->remoteParticipants();
+    QMap<QString, ParticipantInfo> remoteSnapshot;
+    for (const auto& participant : remoteParticipants) {
+        if (!participant) {
+            continue;
+        }
+
+        const QString identity = QString::fromStdString(participant->identity());
+        if (identity.isEmpty()) {
+            continue;
+        }
+
+        ParticipantInfo info;
+        info.identity = identity;
+        info.sid = QString::fromStdString(participant->sid());
+        info.name = QString::fromStdString(participant->name());
+        info.isMicrophoneEnabled = false;
+        info.isCameraEnabled = false;
+        info.isScreenSharing = false;
+        remoteSnapshot.insert(identity, info);
+    }
+
+    const QList<ParticipantInfo> storedParticipants = participantStore_->participants();
+    QSet<QString> storedIds;
+    storedIds.reserve(storedParticipants.size());
+
+    QStringList removedIds;
+    QStringList addedIds;
+
+    for (const ParticipantInfo& info : storedParticipants) {
+        if (info.identity.isEmpty()) {
+            continue;
+        }
+
+        storedIds.insert(info.identity);
+        if (!remoteSnapshot.contains(info.identity)) {
+            participantStore_->removeParticipant(info.identity);
+            emit participantLeft(info.identity);
+            removedIds.append(info.identity);
+        }
+    }
+
+    for (auto it = remoteSnapshot.cbegin(); it != remoteSnapshot.cend(); ++it) {
+        if (storedIds.contains(it.key())) {
+            continue;
+        }
+
+        const ParticipantInfo& snapshotInfo = it.value();
+        ParticipantInfo added = participantStore_->addParticipant(it.key(), snapshotInfo.sid, snapshotInfo.name);
+        emit participantJoined(added);
+        addedIds.append(it.key());
+    }
+
+    if (!removedIds.isEmpty() || !addedIds.isEmpty()) {
+        QString message = QString("Participant reconciliation (%1): before=%2, after=%3")
+            .arg(source ? source : "unknown")
+            .arg(storedParticipants.size())
+            .arg(participantStore_->size());
+        if (!addedIds.isEmpty()) {
+            message += QString(", added=[%1]").arg(addedIds.join(","));
+        }
+        if (!removedIds.isEmpty()) {
+            message += QString(", removed=[%1]").arg(removedIds.join(","));
+        }
+        Logger::instance().info(message);
+    }
 }

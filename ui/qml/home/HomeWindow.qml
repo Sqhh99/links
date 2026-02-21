@@ -20,32 +20,91 @@ Window {
     property string userName: authBackend.isLoggedIn ? authBackend.userName : "游客"
     property int currentIndex: 0
 
-    function openAuthModal() {
-        authModal.open()
+    function openAuthModal(mode) {
+        authModal.openWithMode(mode ? mode : "login")
+    }
+
+    function handleSessionExpired(message) {
+        authBackend.logout()
+        localMeetingsModel.clear()
+
+        promptDialog.titleText = "登录已过期"
+        promptDialog.messageText = (message && message.length > 0)
+            ? message
+            : "登录状态已过期，请重新登录后继续。"
+        promptDialog.primaryText = "重新登录"
+        promptDialog.secondaryText = "稍后"
+        promptDialog.showCancel = false
+        promptDialog.showOptOut = false
+        promptDialog.open()
+    }
+
+    function reloadMeetingRecords() {
+        if (authBackend.isLoggedIn) {
+            joinBackend.loadMeetingRecords()
+        } else {
+            localMeetingsModel.clear()
+        }
     }
 
     ListModel {
         id: localMeetingsModel
     }
 
-    ListModel {
-        id: cloudMeetingsModel
-        ListElement { title: "产品评审"; time: "今天 10:00 - 11:00"; tag: "云端" }
-        ListElement { title: "周会同步"; time: "明天 09:30 - 10:00"; tag: "云端" }
-    }
-
     LoginBackend {
         id: joinBackend
-        onJoinConference: function(url, token, roomName, userName, isHost) {
+        sessionLoggedIn: authBackend.isLoggedIn
+        sessionAuthToken: authBackend.authToken
+
+        onJoinConference: function(url, token, roomName, meetingNo, userName, isHost, userAuthToken, isGuest) {
             meetingPage.closeActionDialog()
             root.hide()
+        }
+
+        onMeetingRecordsLoaded: function(records) {
+            localMeetingsModel.clear()
+            for (var i = 0; i < records.length; ++i) {
+                localMeetingsModel.append(records[i])
+            }
         }
     }
 
     AuthBackend {
         id: authBackend
-        onLoginSucceeded: authModal.close()
-        onRegisterSucceeded: authModal.close()
+        onLoginSucceeded: {
+            joinBackend.syncParticipantNameFromSession()
+            authModal.close()
+            root.reloadMeetingRecords()
+        }
+        onRegisterSucceeded: {
+            joinBackend.syncParticipantNameFromSession()
+            authModal.close()
+            root.reloadMeetingRecords()
+        }
+        onSwitchUserRequested: {
+            root.openAuthModal("login")
+        }
+        onSessionExpired: function(message) {
+            root.handleSessionExpired(message)
+        }
+    }
+
+    Connections {
+        target: joinBackend
+        function onSessionExpired(message) {
+            root.handleSessionExpired(message)
+        }
+    }
+
+    Connections {
+        target: authBackend
+        function onIsLoggedInChanged() {
+            root.reloadMeetingRecords()
+        }
+    }
+
+    Component.onCompleted: {
+        root.reloadMeetingRecords()
     }
 
     Rectangle {
@@ -84,7 +143,14 @@ Window {
                     currentIndex: root.currentIndex
                     onNavChanged: function(index) { root.currentIndex = index }
                     onLoginRequested: root.openAuthModal()
-                    onLogoutRequested: authBackend.logout()
+                    onSwitchUserRequested: {
+                        authBackend.switchUser()
+                        localMeetingsModel.clear()
+                    }
+                    onLogoutRequested: {
+                        authBackend.logout()
+                        localMeetingsModel.clear()
+                    }
                     onAccountSettingsRequested: settingsDialog.open()
                     onSettingsRequested: settingsDialog.open()
                 }
@@ -118,7 +184,6 @@ Window {
 
                         HomeRecordingPage {
                             isGuest: root.isGuest
-                            onRequestLogin: root.openAuthModal()
                         }
                     }
                 }
@@ -128,10 +193,10 @@ Window {
                     Layout.fillHeight: true
                     visible: root.currentIndex === 0
                     isGuest: root.isGuest
-                    headerTitle: root.isGuest ? "本地最近会议记录" : "云端会议"
+                    headerTitle: "会议记录"
                     headerTag: ""
                     actionText: "查看全部 >"
-                    meetingsModel: root.isGuest ? localMeetingsModel : cloudMeetingsModel
+                    meetingsModel: localMeetingsModel
                     onQuickMeetingClicked: meetingPage.openAction("quick")
                     onJoinMeetingClicked: meetingPage.openAction("join")
                 }
@@ -150,6 +215,6 @@ Window {
 
     GuestPromptDialog {
         id: promptDialog
-        onPrimaryClicked: root.openAuthModal()
+        onPrimaryClicked: root.openAuthModal("login")
     }
 }

@@ -11,6 +11,7 @@ Rectangle {
     clip: true
     
     property ConferenceBackend backend
+    property bool isGuest: false
     
     // Shadow for sidebar
     // layer.enabled: true
@@ -48,7 +49,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 
                 Text {
-                    text: backend && backend.isChatVisible ? "消息讨论" : "参会成员"
+                    text: backend && !root.isGuest && backend.isChatVisible ? "消息讨论" : "参会成员"
                     color: "#111827" // Gray-900
                     font.pixelSize: 14
                     font.weight: Font.Bold
@@ -65,7 +66,7 @@ Rectangle {
                     Text {
                         id: countText
                         anchors.centerIn: parent
-                        text: backend ? (backend.isChatVisible ? backend.chatMessages.length : backend.participants.length) : "0"
+                        text: backend ? ((!root.isGuest && backend.isChatVisible) ? backend.chatMessages.length : backend.participants.length) : "0"
                         color: "#6B7280"
                         font.pixelSize: 11
                     }
@@ -101,7 +102,7 @@ Rectangle {
         StackLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: backend && backend.isChatVisible ? 1 : 0
+            currentIndex: backend && !root.isGuest && backend.isChatVisible ? 1 : 0
             
             // Index 0: Participants panel
             ScrollView {

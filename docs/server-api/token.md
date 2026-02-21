@@ -6,7 +6,7 @@
 
 ## POST /api/token
 
-生成 LiveKit 访问令牌。
+生成 LiveKit 访问令牌（仅用于加入已存在的普通房间）。
 
 ### 请求
 
@@ -24,9 +24,16 @@ curl -X POST http://localhost:8081/api/token \
 
 | 字段 | 类型 | 必填 | 默认值 | 描述 |
 |------|------|------|--------|------|
-| `roomName` | string | 否 | `"default-room"` | 房间名称 |
+| `roomName` | string | 是 | 无 | 已存在的普通房间名称 |
 | `participantName` | string | 否 | `"user-{timestamp}"` | 参与者名称 |
-| `isHost` | boolean | 否 | `false` | 是否请求主持人权限 |
+| `isHost` | boolean | 否 | `false` | 客户端可传，但服务端游客模式下固定返回 `false` |
+
+> 字符串字段会先 `trim`。
+>
+> 限制：
+> - `roomName` 不能为空，否则返回 `400`；
+> - 只允许加入已存在房间，不会隐式创建房间；不存在返回 `404`；
+> - `roomName` 若命中业务会议命名（`m-#########`）会返回 `403`，需改用会议体系接口（登录用户用 `/api/meetings/{meeting_no}/join`，游客用 `/api/meetings/{meeting_no}/guest-join`）。
 
 ### 响应
 
@@ -41,11 +48,21 @@ curl -X POST http://localhost:8081/api/token \
 }
 ```
 
-#### 请求参数无效 (400 Bad Request)
+#### 请求参数无效（4xx Client Error）
 
 ```json
 {
   "error": "Failed to deserialize the JSON body into the target type"
+}
+```
+
+> 说明：具体状态码由 Axum 的 JSON 解析失败类型决定，常见为 `400` 或 `422`。
+
+#### 服务器错误 (500 Internal Server Error)
+
+```json
+{
+  "error": "Failed to generate token: ..."
 }
 ```
 
@@ -56,7 +73,7 @@ curl -X POST http://localhost:8081/api/token \
 | `token` | string | LiveKit JWT 访问令牌 |
 | `url` | string | LiveKit WebSocket 服务地址 |
 | `roomName` | string | 实际使用的房间名称 |
-| `isHost` | boolean | 是否为主持人（首个加入者会自动成为主持人） |
+| `isHost` | boolean | 是否为主持人（`/api/token` 游客模式下固定为 `false`） |
 
 ---
 
@@ -71,14 +88,9 @@ curl -X POST http://localhost:8081/api/token \
 | `canPublish` | `true` | 允许发布音视频 |
 | `canSubscribe` | `true` | 允许订阅其他参与者 |
 
-### 主持人额外权限
+### `isHost` 字段说明
 
-当 `isHost: true` 时，Token 还包含：
-
-| 权限 | 值 | 描述 |
-|------|-----|------|
-| `roomAdmin` | `true` | 房间管理权限 |
-| `roomRecord` | `true` | 录制权限 |
+`/api/token` 面向游客加入场景，服务端不会授予主持人标记，`isHost` 固定为 `false`（并写入 token metadata）。
 
 ---
 
@@ -95,25 +107,43 @@ curl -X POST http://localhost:8081/api/token \
   }'
 ```
 
-### 主持人加入房间
+### 游客加入已存在房间
 
 ```bash
 curl -X POST http://localhost:8081/api/token \
   -H "Content-Type: application/json" \
   -d '{
     "roomName": "team-meeting",
-    "participantName": "主持人",
-    "isHost": true
+    "participantName": "访客"
   }'
 ```
 
-### 使用默认值
+### 房间不存在（返回 404）
 
 ```bash
-# 不传任何参数，使用默认房间名和自动生成的用户名
 curl -X POST http://localhost:8081/api/token \
   -H "Content-Type: application/json" \
-  -d '{}'
+  -d '{"roomName":"nonexistent-room","participantName":"访客"}'
+```
+
+```json
+{
+  "error": "Room not found"
+}
+```
+
+### 业务会议房间名（返回 403）
+
+```bash
+curl -X POST http://localhost:8081/api/token \
+  -H "Content-Type: application/json" \
+  -d '{"roomName":"m-123456789","participantName":"访客"}'
+```
+
+```json
+{
+  "error": "Business meetings must be joined via /api/meetings/{meeting_no}/join"
+}
 ```
 
 ---

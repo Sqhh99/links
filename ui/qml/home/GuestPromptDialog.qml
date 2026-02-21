@@ -23,6 +23,7 @@ Popup {
     modal: true
     focus: true
     width: 360
+    padding: 0
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     anchors.centerIn: parent
 
@@ -35,15 +36,22 @@ Popup {
     }
 
     contentItem: Rectangle {
+        id: dialogCard
+        implicitHeight: dialogLayout.implicitHeight + 52
         radius: 16
         color: "#FFFFFF"
         border.color: "#E5E7EB"
         border.width: 1
 
         ColumnLayout {
-            anchors.fill: parent
-            anchors.margins: 20
-            spacing: 12
+            id: dialogLayout
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.leftMargin: 20
+            anchors.rightMargin: 20
+            anchors.topMargin: 20
+            spacing: 14
 
             Text {
                 text: root.titleText
@@ -69,10 +77,13 @@ Popup {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 10
+                Layout.topMargin: 8
 
                 Loader {
+                    visible: root.showCancel
                     active: root.showCancel
-                    Layout.preferredWidth: 48
+                    Layout.preferredWidth: root.showCancel ? 48 : 0
+                    Layout.preferredHeight: root.showCancel ? 26 : 0
                     sourceComponent: LinkButton {
                         text: root.cancelText
                         onClicked: {
@@ -99,6 +110,11 @@ Popup {
                         root.close()
                     }
                 }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 10
             }
         }
     }
