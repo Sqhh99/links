@@ -18,6 +18,17 @@ struct TokenResponse {
     bool success{false};
     bool isHost{false};
     QString error;
+    QString errorCode;
+    int httpStatus{0};
+};
+
+struct CreateMeetingRequest {
+    QString topic;
+    QString scheduledStartAt;
+    bool allowGuestJoin{false};
+    QString password;
+    int noJoinAutoEndMinutes{15};
+    int emptyAutoEndMinutes{10};
 };
 
 class NetworkClient : public QObject
@@ -29,11 +40,24 @@ public:
     ~NetworkClient() override;
 
     void requestToken(const QString& roomName, const QString& participantName);
-    void createMeeting(const QString& authToken, bool allowGuestJoin = false);
-    void joinMeeting(const QString& meetingNo, const QString& participantName, const QString& authToken);
-    void guestJoinMeeting(const QString& meetingNo, const QString& participantName);
+    void createMeeting(const QString& authToken, const CreateMeetingRequest& request = CreateMeetingRequest{});
+    void joinMeeting(const QString& meetingNo,
+                     const QString& participantName,
+                     const QString& authToken,
+                     const QString& meetingPassword = QString());
+    void guestJoinMeeting(const QString& meetingNo,
+                          const QString& participantName,
+                          const QString& meetingPassword = QString());
     void leaveMeeting(const QString& meetingNo, const QString& authToken);
     void fetchMeetingRecords(const QString& authToken, int page = 1, int pageSize = 20);
+    void fetchHostMeetings(const QString& authToken,
+                           int page = 1,
+                           int pageSize = 20,
+                           const QString& status = QString(),
+                           const QString& timeFrom = QString(),
+                           const QString& timeTo = QString(),
+                           bool includeEnded = false);
+    void cancelMeeting(const QString& meetingNo, const QString& authToken);
     void refreshAuthToken(const QString& authToken);
 
     void createRoom(const QString& roomName);
@@ -55,6 +79,8 @@ signals:
     void meetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl);
     void meetingLeft(const QString& meetingNo, bool left, const QString& roomName, const QString& identity);
     void meetingRecordsReceived(const QJsonArray& records);
+    void hostMeetingsReceived(const QJsonArray& meetings);
+    void meetingCancelled(const QString& meetingNo);
     void roomCreated(const QString& roomName);
     void roomsListed(const QJsonArray& rooms);
     void error(const QString& message);

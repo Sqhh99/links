@@ -3,13 +3,52 @@
 #include "../utils/logger.h"
 #include "../utils/settings.h"
 
+#include <QDate>
 #include <QDateTime>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QTime>
 #include <QUrl>
 #include <QUrlQuery>
+#include <algorithm>
+
+namespace {
+
+QString statusTagText(const QString& status)
+{
+    const QString normalized = status.trimmed().toLower();
+    if (normalized == "active" || normalized == "open") {
+        return QStringLiteral("进行中");
+    }
+    if (normalized == "scheduled") {
+        return QStringLiteral("待开始");
+    }
+    if (normalized == "ended") {
+        return QStringLiteral("已结束");
+    }
+    if (normalized == "cancelled") {
+        return QStringLiteral("已取消");
+    }
+    return status;
+}
+
+QString toLocalDateTimeText(const QString& isoString)
+{
+    if (isoString.trimmed().isEmpty()) {
+        return QString{};
+    }
+
+    const QDateTime utcTime = QDateTime::fromString(isoString, Qt::ISODate);
+    if (!utcTime.isValid()) {
+        return isoString;
+    }
+
+    return utcTime.toLocalTime().toString("yyyy-MM-dd HH:mm");
+}
+
+} // namespace
 
 LoginBackend::LoginBackend(QObject* parent)
     : QObject(parent),
@@ -21,6 +60,10 @@ LoginBackend::LoginBackend(QObject* parent)
             this, &LoginBackend::onMeetingCreated);
     connect(networkClient_, &NetworkClient::meetingRecordsReceived,
             this, &LoginBackend::onMeetingRecordsReceived);
+    connect(networkClient_, &NetworkClient::hostMeetingsReceived,
+            this, &LoginBackend::onHostMeetingsReceived);
+    connect(networkClient_, &NetworkClient::meetingCancelled,
+            this, &LoginBackend::onMeetingCancelled);
     connect(networkClient_, &NetworkClient::authExpired,
             this, &LoginBackend::onAuthExpired);
     connect(networkClient_, &NetworkClient::error,
@@ -170,7 +213,7 @@ void LoginBackend::join()
     if (input.isEmpty()) {
         setErrorMessage(!authed
                             ? "请输入会议号、分享链接或普通房间名称"
-                            : "Please enter a meeting number, share link, or room name");
+                            : "Please enter a meeting number or share link");
         return;
     }
 
@@ -190,18 +233,18 @@ void LoginBackend::join()
 
     if (authed) {
         Logger::instance().info(QString("Joining via meetingNo: %1").arg(resolvedMeetingNo));
-        pendingParticipantName_ = name;
-        networkClient_->joinMeeting(resolvedMeetingNo, name, authToken().trimmed());
+        beginBusinessJoin(resolvedMeetingNo, name, false);
         return;
     }
 
     if (!resolvedMeetingNo.isEmpty()) {
         Logger::instance().info(QString("Guest joining via meetingNo: %1").arg(resolvedMeetingNo));
-        pendingParticipantName_ = name;
-        networkClient_->guestJoinMeeting(resolvedMeetingNo, name);
+        beginBusinessJoin(resolvedMeetingNo, name, true);
         return;
     }
 
+    clearPendingPasswordContext();
+    setErrorMessage("");
     Logger::instance().info(QString("Requesting token for room '%1', user '%2'")
                                .arg(input, name));
     pendingParticipantName_ = name;
@@ -215,49 +258,93 @@ void LoginBackend::quickJoin()
         return;
     }
 
-    const QString name = effectiveParticipantName(true);
-
     setLoading(true);
     setErrorMessage("");
 
-    if (hasAuthToken()) {
-        Logger::instance().info("Creating meeting for quick join");
-        networkClient_->createMeeting(authToken(), allowGuestJoin_);
+    if (!hasAuthToken()) {
+        setLoading(false);
+        setErrorMessage("登录状态无效，请重新登录");
         return;
     }
 
-    const QString randomRoom = QString("room-%1").arg(QDateTime::currentMSecsSinceEpoch());
-    setRoomName(randomRoom);
-    pendingParticipantName_ = name;
-    join();
+    pendingCreateFlow_ = MeetingCreateFlow::QuickJoin;
+    pendingCreateRequest_ = CreateMeetingRequest{};
+    pendingCreateRequest_.allowGuestJoin = allowGuestJoin_;
+
+    Logger::instance().info("Creating meeting for quick join");
+    networkClient_->createMeeting(authToken(), pendingCreateRequest_);
 }
 
 void LoginBackend::createScheduledRoom()
+{
+    const QDateTime defaultTime = QDateTime::currentDateTime().addSecs(30 * 60);
+    createScheduledMeeting(QString{},
+                           defaultTime.date().toString("yyyy-MM-dd"),
+                           defaultTime.time().hour(),
+                           defaultTime.time().minute(),
+                           false,
+                           QString{},
+                           15,
+                           10);
+}
+
+void LoginBackend::createScheduledMeeting(const QString& topic,
+                                          const QString& localDate,
+                                          int hour,
+                                          int minute,
+                                          bool allowGuestJoin,
+                                          const QString& meetingPassword,
+                                          int noJoinAutoEndMinutes,
+                                          int emptyAutoEndMinutes)
 {
     if (isGuestMode()) {
         setErrorMessage("游客无法预定会议，请登录后使用");
         return;
     }
 
-    const QString name = effectiveParticipantName(true);
+    if (!hasAuthToken()) {
+        setErrorMessage("登录状态无效，请重新登录");
+        return;
+    }
+
+    const QDate date = QDate::fromString(localDate.trimmed(), "yyyy-MM-dd");
+    const QTime time(hour, minute);
+    if (!date.isValid() || !time.isValid()) {
+        setErrorMessage("请选择有效的预定日期和时间");
+        return;
+    }
+
+    const QDateTime localDateTime(date, time);
+    if (!localDateTime.isValid()) {
+        setErrorMessage("预定时间无效，请重新选择");
+        return;
+    }
+
+    if (localDateTime < QDateTime::currentDateTime().addSecs(-60)) {
+        setErrorMessage("预定时间不能早于当前时间");
+        return;
+    }
+
+    const QString trimmedPassword = meetingPassword.trimmed();
+    if (!trimmedPassword.isEmpty() && (trimmedPassword.size() < 6 || trimmedPassword.size() > 32)) {
+        setErrorMessage("会议密码长度需为 6-32 位");
+        return;
+    }
+
+    pendingCreateFlow_ = MeetingCreateFlow::ScheduledOnly;
+    pendingCreateRequest_ = CreateMeetingRequest{};
+    pendingCreateRequest_.topic = topic.trimmed();
+    pendingCreateRequest_.scheduledStartAt = localDateTime.toUTC().toString(Qt::ISODate);
+    pendingCreateRequest_.allowGuestJoin = allowGuestJoin;
+    pendingCreateRequest_.password = trimmedPassword;
+    pendingCreateRequest_.noJoinAutoEndMinutes = std::clamp(noJoinAutoEndMinutes, 1, 180);
+    pendingCreateRequest_.emptyAutoEndMinutes = std::clamp(emptyAutoEndMinutes, 1, 180);
 
     setLoading(true);
     setErrorMessage("");
 
-    if (hasAuthToken()) {
-        Logger::instance().info("Creating scheduled meeting via /api/meetings");
-        networkClient_->createMeeting(authToken(), false);
-        return;
-    }
-
-    const QString note = scheduledTime_.trimmed();
-    const QString suffix = note.isEmpty() ? QString::number(QDateTime::currentMSecsSinceEpoch())
-                                          : note.simplified().replace(" ", "-");
-    const QString privateRoom = QString("scheduled-%1").arg(suffix);
-    setRoomName(privateRoom);
-
-    pendingParticipantName_ = name;
-    join();
+    Logger::instance().info("Creating scheduled meeting via /api/meetings");
+    networkClient_->createMeeting(authToken(), pendingCreateRequest_);
 }
 
 void LoginBackend::loadMeetingRecords()
@@ -268,6 +355,85 @@ void LoginBackend::loadMeetingRecords()
     }
 
     networkClient_->fetchMeetingRecords(authToken(), 1, 20);
+}
+
+void LoginBackend::loadHostMeetings()
+{
+    if (!hasAuthToken()) {
+        emit hostMeetingsLoaded(QVariantList{});
+        return;
+    }
+
+    networkClient_->fetchHostMeetings(authToken(), 1, 20, QString{}, QString{}, QString{}, false);
+}
+
+void LoginBackend::cancelHostedMeeting(const QString& meetingNo)
+{
+    const QString normalizedMeetingNo = meetingNo.trimmed();
+    if (!isMeetingNo(normalizedMeetingNo)) {
+        setErrorMessage("会议号无效，无法取消");
+        return;
+    }
+
+    if (!hasAuthToken()) {
+        setErrorMessage("登录状态无效，请重新登录");
+        return;
+    }
+
+    setLoading(true);
+    setErrorMessage("");
+    networkClient_->cancelMeeting(normalizedMeetingNo, authToken());
+}
+
+void LoginBackend::joinHostedMeeting(const QString& meetingNo)
+{
+    const QString normalizedMeetingNo = meetingNo.trimmed();
+    if (!isMeetingNo(normalizedMeetingNo)) {
+        setErrorMessage("会议号无效，无法加入");
+        return;
+    }
+
+    if (!hasAuthToken()) {
+        setErrorMessage("登录状态无效，请重新登录");
+        return;
+    }
+
+    setRoomName(normalizedMeetingNo);
+    saveSettings();
+    setLoading(true);
+    setErrorMessage("");
+
+    beginBusinessJoin(normalizedMeetingNo, effectiveParticipantName(true), false);
+}
+
+void LoginBackend::submitMeetingPassword(const QString& meetingPassword)
+{
+    const QString password = meetingPassword.trimmed();
+    if (pendingPasswordMeetingNo_.isEmpty()) {
+        setErrorMessage("当前没有需要密码重试的会议");
+        return;
+    }
+
+    if (password.isEmpty()) {
+        setErrorMessage("请输入会议密码");
+        return;
+    }
+
+    setLoading(true);
+    setErrorMessage("");
+
+    QString participantName = pendingPasswordParticipantName_.trimmed();
+    if (participantName.isEmpty()) {
+        participantName = effectiveParticipantName(true);
+    }
+
+    beginBusinessJoin(pendingPasswordMeetingNo_, participantName, pendingPasswordGuestMode_, password);
+}
+
+void LoginBackend::cancelPasswordRetry()
+{
+    clearPendingPasswordContext();
+    setErrorMessage("");
 }
 
 void LoginBackend::syncParticipantNameFromSession()
@@ -296,26 +462,29 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
 
     if (!response.success) {
         pendingParticipantName_.clear();
-        QString mappedMessage;
-        const QString lowerError = response.error.toLower();
-        if (isGuestMode()) {
-            if (lowerError.contains("403") || lowerError.contains("forbidden")) {
-                mappedMessage = "该会议未开放游客加入";
-            } else if (lowerError.contains("404") || lowerError.contains("not found")) {
-                mappedMessage = "会议或房间不存在，请确认输入";
-            } else if (lowerError.contains("409") || lowerError.contains("conflict")) {
-                mappedMessage = "会议已结束";
-            } else if (lowerError.contains("400") || lowerError.contains("bad request")) {
-                mappedMessage = "请输入有效的会议号、分享链接或普通房间名称";
-            }
+
+        const bool passwordPrompt = shouldPromptMeetingPassword(response);
+        QString mappedMessage = mapJoinFailureMessage(response);
+        if (mappedMessage.isEmpty()) {
+            mappedMessage = !response.error.trimmed().isEmpty()
+                ? response.error
+                : QStringLiteral("获取入会令牌失败");
         }
 
-        setErrorMessage(mappedMessage.isEmpty()
-                            ? ("Failed to get token: " + response.error)
-                            : mappedMessage);
+        setErrorMessage(mappedMessage);
+        if (passwordPrompt) {
+            const bool invalidAttempt = response.errorCode.trimmed().compare(
+                QStringLiteral("PASSWORD_INVALID"), Qt::CaseInsensitive) == 0;
+            emit meetingPasswordRequired(response.meetingNo.trimmed(), mappedMessage, invalidAttempt);
+        } else {
+            clearPendingPasswordContext();
+        }
+
         Logger::instance().error("Token request failed: " + response.error);
         return;
     }
+
+    clearPendingPasswordContext();
 
     const QString participantName = pendingParticipantName_.trimmed().isEmpty()
         ? effectiveParticipantName(true)
@@ -333,13 +502,17 @@ void LoginBackend::onTokenReceived(const TokenResponse& response)
                         isGuestMode());
 
     loadMeetingRecords();
+    if (hasAuthToken()) {
+        loadHostMeetings();
+    }
 }
 
 void LoginBackend::onMeetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl)
 {
-    const QString name = effectiveParticipantName(true);
+    const MeetingCreateFlow flow = pendingCreateFlow_;
+    pendingCreateFlow_ = MeetingCreateFlow::None;
 
-    const QString resolvedMeetingNo = !meetingNo.isEmpty() ? meetingNo : extractMeetingNo(shareUrl);
+    const QString resolvedMeetingNo = !meetingNo.trimmed().isEmpty() ? meetingNo.trimmed() : extractMeetingNo(shareUrl);
     if (!resolvedMeetingNo.isEmpty()) {
         setRoomName(resolvedMeetingNo);
     } else {
@@ -347,20 +520,28 @@ void LoginBackend::onMeetingCreated(const QString& meetingNo, const QString& roo
     }
     saveSettings();
 
-    if (!resolvedMeetingNo.isEmpty() && hasAuthToken()) {
-        pendingParticipantName_ = name;
-        networkClient_->joinMeeting(resolvedMeetingNo, name, authToken());
-        return;
-    }
+    if (flow == MeetingCreateFlow::QuickJoin) {
+        const QString participantName = effectiveParticipantName(true);
 
-    if (!roomName.isEmpty() && !hasAuthToken()) {
-        pendingParticipantName_ = name;
-        networkClient_->requestToken(roomName, name);
+        if (!resolvedMeetingNo.isEmpty() && hasAuthToken()) {
+            beginBusinessJoin(resolvedMeetingNo, participantName, false);
+            return;
+        }
+
+        setLoading(false);
+        setErrorMessage("Meeting created but no meeting number returned");
         return;
     }
 
     setLoading(false);
-    setErrorMessage("Meeting created but no room information returned");
+    if (flow == MeetingCreateFlow::ScheduledOnly) {
+        setErrorMessage("");
+        emit scheduledMeetingCreated(resolvedMeetingNo, roomName, shareUrl);
+        loadHostMeetings();
+        return;
+    }
+
+    setErrorMessage("");
 }
 
 void LoginBackend::onMeetingRecordsReceived(const QJsonArray& records)
@@ -376,18 +557,29 @@ void LoginBackend::onMeetingRecordsReceived(const QJsonArray& records)
         const QJsonObject obj = item.toObject();
         const QString meetingNo = obj.value("meetingNo").toString();
         const QString roomName = obj.value("roomName").toString();
-        const QString meetingStatus = obj.value("meetingStatus").toString();
-        const QString lastJoinedAt = obj.value("lastJoinedAt").toString();
-        const int joinCount = obj.value("joinCount").toInt(0);
-
-        QString timeText = lastJoinedAt;
-        const QDateTime joinedTime = QDateTime::fromString(lastJoinedAt, Qt::ISODate);
-        if (joinedTime.isValid()) {
-            timeText = joinedTime.toLocalTime().toString("yyyy-MM-dd HH:mm");
+        QString meetingStatus = obj.value("meetingStatus").toString();
+        if (meetingStatus.isEmpty()) {
+            meetingStatus = obj.value("status").toString();
         }
 
+        QString timeText = obj.value("lastJoinedAt").toString();
+        if (timeText.isEmpty()) {
+            timeText = obj.value("scheduledStartAt").toString();
+        }
+        const QString normalizedTimeText = toLocalDateTimeText(timeText);
+        if (!normalizedTimeText.isEmpty()) {
+            timeText = normalizedTimeText;
+        }
+
+        const int joinCount = obj.value("joinCount").toInt(0);
         QString title;
-        if (!meetingNo.isEmpty()) {
+        const QString topic = obj.value("topic").toString().trimmed();
+        if (!topic.isEmpty()) {
+            title = topic;
+            if (!meetingNo.isEmpty()) {
+                title += QString(" · %1").arg(meetingNo);
+            }
+        } else if (!meetingNo.isEmpty()) {
             title = QString("会议号 %1").arg(meetingNo);
         } else if (!roomName.isEmpty()) {
             title = roomName;
@@ -399,19 +591,10 @@ void LoginBackend::onMeetingRecordsReceived(const QJsonArray& records)
             title += QString(" · %1次").arg(joinCount);
         }
 
-        QString tag;
-        if (meetingStatus == "active") {
-            tag = QStringLiteral("进行中");
-        } else if (meetingStatus == "ended") {
-            tag = QStringLiteral("已结束");
-        } else {
-            tag = meetingStatus;
-        }
-
         QVariantMap row;
         row.insert("title", title);
         row.insert("time", timeText);
-        row.insert("tag", tag);
+        row.insert("tag", statusTagText(meetingStatus));
         row.insert("meetingNo", meetingNo);
         row.insert("roomName", roomName);
         formatted.append(row);
@@ -420,18 +603,95 @@ void LoginBackend::onMeetingRecordsReceived(const QJsonArray& records)
     emit meetingRecordsLoaded(formatted);
 }
 
+void LoginBackend::onHostMeetingsReceived(const QJsonArray& records)
+{
+    QVariantList formatted;
+    formatted.reserve(records.size());
+
+    for (const QJsonValue& item : records) {
+        if (!item.isObject()) {
+            continue;
+        }
+
+        const QJsonObject obj = item.toObject();
+        const QString meetingNo = obj.value("meetingNo").toString().trimmed();
+        const QString roomName = obj.value("roomName").toString().trimmed();
+        const QString topic = obj.value("topic").toString().trimmed();
+        const QString status = obj.value("status").toString().trimmed().toLower();
+        const QString scheduledStartAt = obj.value("scheduledStartAt").toString();
+        const bool requiresPassword = obj.value("requiresPassword").toBool(false);
+        const bool allowGuestJoin = obj.value("allowGuestJoin").toBool(false);
+
+        QString title;
+        if (!topic.isEmpty()) {
+            title = topic;
+        } else if (!meetingNo.isEmpty()) {
+            title = QString("会议号 %1").arg(meetingNo);
+        } else {
+            title = QStringLiteral("我的预定会议");
+        }
+
+        QString timeText = toLocalDateTimeText(scheduledStartAt);
+        if (timeText.isEmpty()) {
+            timeText = scheduledStartAt;
+        }
+        if (timeText.isEmpty()) {
+            timeText = QStringLiteral("未设置预定时间");
+        }
+
+        QVariantMap row;
+        row.insert("title", title);
+        row.insert("time", timeText);
+        row.insert("tag", statusTagText(status));
+        row.insert("meetingNo", meetingNo);
+        row.insert("roomName", roomName);
+        row.insert("status", status);
+        row.insert("requiresPassword", requiresPassword);
+        row.insert("allowGuestJoin", allowGuestJoin);
+        row.insert("canCancel", status == "scheduled");
+        row.insert("canJoin", status == "scheduled" || status == "open");
+        formatted.append(row);
+    }
+
+    emit hostMeetingsLoaded(formatted);
+}
+
+void LoginBackend::onMeetingCancelled(const QString& meetingNo)
+{
+    setLoading(false);
+    Q_UNUSED(meetingNo);
+    setErrorMessage("");
+    loadHostMeetings();
+}
+
 void LoginBackend::onNetworkError(const QString& error)
 {
     setLoading(false);
     if (error.contains(QStringLiteral("HTTP 401"))) {
         return;
     }
-    setErrorMessage("Network error: " + error);
+
+    QString mapped = error;
+    if (error.contains("MEETING_NOT_CANCELLABLE", Qt::CaseInsensitive)) {
+        mapped = QStringLiteral("该会议当前状态不可取消");
+    } else if (error.contains("MEETING_NOT_STARTED", Qt::CaseInsensitive)) {
+        mapped = QStringLiteral("会议未到预定开始时间");
+    } else if (error.contains("HOST_NOT_JOINED", Qt::CaseInsensitive)) {
+        mapped = QStringLiteral("主持者尚未开启会议");
+    } else if (error.contains("PASSWORD_REQUIRED", Qt::CaseInsensitive)) {
+        mapped = QStringLiteral("该会议需要密码");
+    } else if (error.contains("PASSWORD_INVALID", Qt::CaseInsensitive)) {
+        mapped = QStringLiteral("会议密码错误");
+    }
+
+    setErrorMessage(mapped);
 }
 
 void LoginBackend::onAuthExpired(const QString& message)
 {
     setLoading(false);
+    clearPendingPasswordContext();
+    pendingCreateFlow_ = MeetingCreateFlow::None;
     setErrorMessage("登录已过期，请重新登录");
     if (sessionLoggedIn_ || !sessionAuthToken_.isEmpty()) {
         emit sessionExpired(message);
@@ -527,4 +787,74 @@ bool LoginBackend::isBusinessMeetingInput(const QString& value)
         path.remove(0, 1);
     }
     return isBusinessRoomName(path);
+}
+
+void LoginBackend::clearPendingPasswordContext()
+{
+    pendingPasswordMeetingNo_.clear();
+    pendingPasswordParticipantName_.clear();
+    pendingPasswordGuestMode_ = false;
+}
+
+QString LoginBackend::mapJoinFailureMessage(const TokenResponse& response) const
+{
+    const QString code = response.errorCode.trimmed().toUpper();
+    if (code == QStringLiteral("MEETING_NOT_STARTED")) {
+        return QStringLiteral("会议未到预定开始时间");
+    }
+    if (code == QStringLiteral("HOST_NOT_JOINED")) {
+        return QStringLiteral("主持者尚未开启会议，请稍后再试");
+    }
+    if (code == QStringLiteral("PASSWORD_REQUIRED")) {
+        return QStringLiteral("该会议需要密码，请输入会议密码");
+    }
+    if (code == QStringLiteral("PASSWORD_INVALID")) {
+        return QStringLiteral("会议密码错误，请重试");
+    }
+
+    if (response.httpStatus == 404) {
+        return QStringLiteral("会议或房间不存在，请确认输入");
+    }
+    if (response.httpStatus == 409) {
+        return QStringLiteral("会议当前不可加入");
+    }
+    if (response.httpStatus == 400) {
+        return QStringLiteral("请输入有效的会议号、分享链接或房间名称");
+    }
+    if (isGuestMode() && response.httpStatus == 403) {
+        return QStringLiteral("该会议未开放游客加入");
+    }
+
+    return QString{};
+}
+
+bool LoginBackend::shouldPromptMeetingPassword(const TokenResponse& response) const
+{
+    const QString code = response.errorCode.trimmed().toUpper();
+    return (code == QStringLiteral("PASSWORD_REQUIRED") || code == QStringLiteral("PASSWORD_INVALID"))
+        && isMeetingNo(response.meetingNo);
+}
+
+void LoginBackend::beginBusinessJoin(const QString& meetingNo,
+                                     const QString& participantName,
+                                     bool guestMode,
+                                     const QString& meetingPassword)
+{
+    const QString normalizedMeetingNo = meetingNo.trimmed();
+    const QString normalizedParticipant = participantName.trimmed();
+
+    pendingParticipantName_ = normalizedParticipant;
+    pendingPasswordMeetingNo_ = normalizedMeetingNo;
+    pendingPasswordParticipantName_ = normalizedParticipant;
+    pendingPasswordGuestMode_ = guestMode;
+
+    if (guestMode) {
+        networkClient_->guestJoinMeeting(normalizedMeetingNo, normalizedParticipant, meetingPassword.trimmed());
+        return;
+    }
+
+    networkClient_->joinMeeting(normalizedMeetingNo,
+                                normalizedParticipant,
+                                authToken().trimmed(),
+                                meetingPassword.trimmed());
 }

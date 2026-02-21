@@ -182,8 +182,11 @@ qt_add_qml_module(links
         ui/qml/home/HomeRecordingPage.qml
         ui/qml/home/QuickActionCard.qml
         ui/qml/home/MeetingListPanel.qml
+        ui/qml/home/HostMeetingListPanel.qml
         ui/qml/home/MeetingListItem.qml
         ui/qml/home/GuestPromptDialog.qml
+        ui/qml/home/MeetingPasswordDialog.qml
+        ui/qml/home/CancelMeetingDialog.qml
         ui/qml/home/AuthModal.qml
         ui/qml/home/ShareScreenForm.qml
         ui/qml/home/LoginPromptCard.qml

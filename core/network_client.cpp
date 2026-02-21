@@ -7,6 +7,27 @@
 #include <QNetworkRequest>
 #include <QUrlQuery>
 
+namespace {
+
+QString extractErrorCode(const QJsonObject& obj)
+{
+    const QJsonValue value = obj.value("code");
+    if (value.isString()) {
+        return value.toString().trimmed();
+    }
+    return QString{};
+}
+
+int extractHttpStatus(QNetworkReply* reply)
+{
+    if (!reply) {
+        return 0;
+    }
+    return reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+}
+
+} // namespace
+
 NetworkClient::NetworkClient(QObject* parent)
     : QObject(parent),
       networkManager_(new QNetworkAccessManager(this)),
@@ -79,13 +100,32 @@ void NetworkClient::requestToken(const QString& roomName, const QString& partici
     connect(reply, &QNetworkReply::finished, this, &NetworkClient::onTokenReplyFinished);
 }
 
-void NetworkClient::createMeeting(const QString& authToken, bool allowGuestJoin)
+void NetworkClient::createMeeting(const QString& authToken, const CreateMeetingRequest& request)
 {
-    Logger::instance().info(QString("Creating meeting via /api/meetings (allowGuestJoin=%1)")
-                               .arg(allowGuestJoin ? "true" : "false"));
+    Logger::instance().info(
+        QString("Creating meeting via /api/meetings (allowGuestJoin=%1, hasSchedule=%2, hasPassword=%3)")
+            .arg(request.allowGuestJoin ? "true" : "false")
+            .arg(request.scheduledStartAt.trimmed().isEmpty() ? "false" : "true")
+            .arg(request.password.trimmed().isEmpty() ? "false" : "true"));
 
     QJsonObject payload;
-    payload["allowGuestJoin"] = allowGuestJoin;
+    if (!request.topic.trimmed().isEmpty()) {
+        payload["topic"] = request.topic.trimmed();
+    }
+    if (!request.scheduledStartAt.trimmed().isEmpty()) {
+        payload["scheduledStartAt"] = request.scheduledStartAt.trimmed();
+    }
+    payload["allowGuestJoin"] = request.allowGuestJoin;
+    if (!request.password.trimmed().isEmpty()) {
+        payload["password"] = request.password.trimmed();
+    }
+    if (request.noJoinAutoEndMinutes > 0) {
+        payload["noJoinAutoEndMinutes"] = request.noJoinAutoEndMinutes;
+    }
+    if (request.emptyAutoEndMinutes > 0) {
+        payload["emptyAutoEndMinutes"] = request.emptyAutoEndMinutes;
+    }
+
     const QJsonDocument doc(payload);
 
     QNetworkReply* reply = networkManager_->post(
@@ -118,7 +158,8 @@ void NetworkClient::createMeeting(const QString& authToken, bool allowGuestJoin)
 
 void NetworkClient::joinMeeting(const QString& meetingNo,
                                 const QString& participantName,
-                                const QString& authToken)
+                                const QString& authToken,
+                                const QString& meetingPassword)
 {
     Logger::instance().info(QString("Joining meeting '%1' via /api/meetings/{meetingNo}/join").arg(meetingNo));
 
@@ -126,28 +167,34 @@ void NetworkClient::joinMeeting(const QString& meetingNo,
     if (!participantName.trimmed().isEmpty()) {
         payload["participantName"] = participantName.trimmed();
     }
+    if (!meetingPassword.trimmed().isEmpty()) {
+        payload["meetingPassword"] = meetingPassword.trimmed();
+    }
 
     const QJsonDocument doc(payload);
-    const QString path = QString("/api/meetings/%1/join").arg(meetingNo);
+    const QString normalizedMeetingNo = meetingNo.trimmed();
+    const QString path = QString("/api/meetings/%1/join").arg(normalizedMeetingNo);
 
     QNetworkReply* reply = networkManager_->post(
         createAuthorizedJsonRequest(QUrl(apiUrl_ + path), authToken),
         doc.toJson());
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, meetingNo]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, normalizedMeetingNo]() {
         reply->deleteLater();
 
         TokenResponse response;
+        response.meetingNo = normalizedMeetingNo;
+        response.httpStatus = extractHttpStatus(reply);
         const QByteArray responseData = reply->readAll();
         const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
         const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+        response.errorCode = extractErrorCode(obj);
 
         if (reply->error() != QNetworkReply::NoError) {
             response.success = false;
             response.error = buildAuthErrorMessage(reply, responseData, obj);
             emitAuthExpiredIfNeeded(reply, responseData, obj);
             Logger::instance().error("Join meeting failed: " + response.error);
-            emit error(response.error);
             emit tokenReceived(response);
             return;
         }
@@ -157,7 +204,7 @@ void NetworkClient::joinMeeting(const QString& meetingNo,
         response.roomName = obj.value("roomName").toString();
         response.meetingNo = obj.value("meetingNo").toString();
         if (response.meetingNo.isEmpty()) {
-            response.meetingNo = meetingNo;
+            response.meetingNo = normalizedMeetingNo;
         }
         response.isHost = obj.value("isHost").toBool(false);
         response.success = true;
@@ -168,7 +215,9 @@ void NetworkClient::joinMeeting(const QString& meetingNo,
     });
 }
 
-void NetworkClient::guestJoinMeeting(const QString& meetingNo, const QString& participantName)
+void NetworkClient::guestJoinMeeting(const QString& meetingNo,
+                                     const QString& participantName,
+                                     const QString& meetingPassword)
 {
     Logger::instance().info(
         QString("Guest joining meeting '%1' via /api/meetings/{meetingNo}/guest-join").arg(meetingNo));
@@ -177,24 +226,30 @@ void NetworkClient::guestJoinMeeting(const QString& meetingNo, const QString& pa
     if (!participantName.trimmed().isEmpty()) {
         payload["participantName"] = participantName.trimmed();
     }
+    if (!meetingPassword.trimmed().isEmpty()) {
+        payload["meetingPassword"] = meetingPassword.trimmed();
+    }
 
     const QJsonDocument doc(payload);
-    const QString path = QString("/api/meetings/%1/guest-join").arg(meetingNo.trimmed());
+    const QString normalizedMeetingNo = meetingNo.trimmed();
+    const QString path = QString("/api/meetings/%1/guest-join").arg(normalizedMeetingNo);
     QNetworkReply* reply = networkManager_->post(createJsonRequest(QUrl(apiUrl_ + path)), doc.toJson());
 
-    connect(reply, &QNetworkReply::finished, this, [this, reply, meetingNo]() {
+    connect(reply, &QNetworkReply::finished, this, [this, reply, normalizedMeetingNo]() {
         reply->deleteLater();
 
         TokenResponse response;
+        response.meetingNo = normalizedMeetingNo;
+        response.httpStatus = extractHttpStatus(reply);
         const QByteArray responseData = reply->readAll();
         const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
         const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+        response.errorCode = extractErrorCode(obj);
 
         if (reply->error() != QNetworkReply::NoError) {
             response.success = false;
             response.error = buildAuthErrorMessage(reply, responseData, obj);
             Logger::instance().error("Guest join meeting failed: " + response.error);
-            emit error(response.error);
             emit tokenReceived(response);
             return;
         }
@@ -204,7 +259,7 @@ void NetworkClient::guestJoinMeeting(const QString& meetingNo, const QString& pa
         response.roomName = obj.value("roomName").toString();
         response.meetingNo = obj.value("meetingNo").toString();
         if (response.meetingNo.isEmpty()) {
-            response.meetingNo = meetingNo;
+            response.meetingNo = normalizedMeetingNo;
         }
         response.isHost = obj.value("isHost").toBool(false);
         response.success = true;
@@ -277,9 +332,93 @@ void NetworkClient::fetchMeetingRecords(const QString& authToken, int page, int 
             return;
         }
 
-        const QJsonArray records = obj.value("records").toArray();
+        QJsonArray records = obj.value("records").toArray();
+        if (records.isEmpty()) {
+            records = obj.value("meetings").toArray();
+        }
         Logger::instance().info(QString("Fetched %1 meeting records").arg(records.size()));
         emit meetingRecordsReceived(records);
+    });
+}
+
+void NetworkClient::fetchHostMeetings(const QString& authToken,
+                                      int page,
+                                      int pageSize,
+                                      const QString& status,
+                                      const QString& timeFrom,
+                                      const QString& timeTo,
+                                      bool includeEnded)
+{
+    QUrl url(apiUrl_ + "/api/me/host-meetings");
+    QUrlQuery query;
+    query.addQueryItem("page", QString::number(page));
+    query.addQueryItem("pageSize", QString::number(pageSize));
+    if (!status.trimmed().isEmpty()) {
+        query.addQueryItem("status", status.trimmed());
+    }
+    if (!timeFrom.trimmed().isEmpty()) {
+        query.addQueryItem("timeFrom", timeFrom.trimmed());
+    }
+    if (!timeTo.trimmed().isEmpty()) {
+        query.addQueryItem("timeTo", timeTo.trimmed());
+    }
+    query.addQueryItem("includeEnded", includeEnded ? "true" : "false");
+    url.setQuery(query);
+
+    QNetworkReply* reply = networkManager_->get(createAuthorizedJsonRequest(url, authToken));
+    connect(reply, &QNetworkReply::finished, this, [this, reply]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
+            const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Fetch host meetings failed: " + errorMsg);
+            emit error(errorMsg);
+            emit hostMeetingsReceived(QJsonArray{});
+            return;
+        }
+
+        const QJsonArray meetings = obj.value("meetings").toArray();
+        Logger::instance().info(QString("Fetched %1 host meetings").arg(meetings.size()));
+        emit hostMeetingsReceived(meetings);
+    });
+}
+
+void NetworkClient::cancelMeeting(const QString& meetingNo, const QString& authToken)
+{
+    const QString normalizedMeetingNo = meetingNo.trimmed();
+    Logger::instance().info(
+        QString("Cancelling meeting '%1' via /api/meetings/{meeting_no}/cancel").arg(normalizedMeetingNo));
+
+    const QString path = QString("/api/meetings/%1/cancel").arg(normalizedMeetingNo);
+    QNetworkReply* reply = networkManager_->post(
+        createAuthorizedJsonRequest(QUrl(apiUrl_ + path), authToken),
+        QByteArray());
+    connect(reply, &QNetworkReply::finished, this, [this, reply, normalizedMeetingNo]() {
+        reply->deleteLater();
+
+        const QByteArray responseData = reply->readAll();
+        const QJsonDocument responseDoc = QJsonDocument::fromJson(responseData);
+        const QJsonObject obj = responseDoc.isObject() ? responseDoc.object() : QJsonObject{};
+
+        if (reply->error() != QNetworkReply::NoError) {
+            emitAuthExpiredIfNeeded(reply, responseData, obj);
+            const QString errorMsg = buildAuthErrorMessage(reply, responseData, obj);
+            Logger::instance().error("Cancel meeting failed: " + errorMsg);
+            emit error(errorMsg);
+            return;
+        }
+
+        QString responseMeetingNo = obj.value("meetingNo").toString().trimmed();
+        if (responseMeetingNo.isEmpty()) {
+            responseMeetingNo = normalizedMeetingNo;
+        }
+        Logger::instance().info(QString("Meeting cancelled successfully: %1").arg(responseMeetingNo));
+        emit meetingCancelled(responseMeetingNo);
     });
 }
 
@@ -364,12 +503,13 @@ void NetworkClient::onTokenReplyFinished()
     const QByteArray data = reply->readAll();
     const QJsonDocument doc = QJsonDocument::fromJson(data);
     const QJsonObject obj = doc.isObject() ? doc.object() : QJsonObject{};
+    response.httpStatus = extractHttpStatus(reply);
+    response.errorCode = extractErrorCode(obj);
 
     if (reply->error() != QNetworkReply::NoError) {
         response.success = false;
         response.error = buildAuthErrorMessage(reply, data, obj);
         Logger::instance().error("Token request failed: " + response.error);
-        emit error(response.error);
         emit tokenReceived(response);
         return;
     }
@@ -525,6 +665,11 @@ QString NetworkClient::buildAuthErrorMessage(QNetworkReply* reply,
     const QString allowHeader = QString::fromUtf8(reply->rawHeader("Allow")).trimmed();
     if (!allowHeader.isEmpty()) {
         message = QString("%1 [Allow: %2]").arg(message, allowHeader);
+    }
+
+    const QString code = extractErrorCode(obj);
+    if (!code.isEmpty()) {
+        message = QString("%1 [code=%2]").arg(message, code);
     }
 
     return message;
