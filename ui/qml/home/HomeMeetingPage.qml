@@ -131,8 +131,8 @@ Item {
 
         modal: true
         focus: true
-        width: 420
-        height: root.currentAction === "schedule" ? 700 : 520
+        width: root.currentAction === "schedule" ? 520 : 420
+        height: root.currentAction === "schedule" ? 600 : 520
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         anchors.centerIn: parent
 
@@ -152,7 +152,7 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 20
+                anchors.margins: root.currentAction === "schedule" ? 24 : 20
                 spacing: 12
 
                 RowLayout {

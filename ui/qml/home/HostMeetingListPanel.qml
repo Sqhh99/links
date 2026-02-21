@@ -90,6 +90,11 @@ Rectangle {
                     anchors.margins: 10
                     spacing: 8
 
+                TextEdit {
+                    id: copyHelper
+                    visible: false
+                }
+
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
@@ -118,6 +123,65 @@ Rectangle {
                                 color: root.tagColor(status)
                                 font.pixelSize: 10
                                 font.weight: Font.DemiBold
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 4
+
+                        Text {
+                            text: "会议号: " + meetingNo
+                            color: "#6B7280"
+                            font.pixelSize: 11
+                        }
+
+                        Image {
+                            source: "qrc:/res/icon/copy.png"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            opacity: copyMa.containsMouse ? 1.0 : 0.6
+
+                            MouseArea {
+                                id: copyMa
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    copyHelper.text = meetingNo
+                                    copyHelper.selectAll()
+                                    copyHelper.copy()
+                                    copyTooltip.show()
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            id: copyTooltip
+                            visible: false
+                            radius: 4
+                            color: "#111827"
+                            implicitWidth: tooltipText.implicitWidth + 12
+                            implicitHeight: 20
+
+                            function show() {
+                                visible = true
+                                hideTimer.restart()
+                            }
+
+                            Text {
+                                id: tooltipText
+                                anchors.centerIn: parent
+                                text: "已复制"
+                                color: "#FFFFFF"
+                                font.pixelSize: 10
+                            }
+
+                            Timer {
+                                id: hideTimer
+                                interval: 1500
+                                onTriggered: copyTooltip.visible = false
                             }
                         }
                     }

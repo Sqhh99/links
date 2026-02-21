@@ -193,6 +193,9 @@ qt_add_qml_module(links
         ui/qml/home/JoinForm.qml
         ui/qml/home/QuickStartForm.qml
         ui/qml/home/ScheduleForm.qml
+        ui/qml/home/ScheduleCalendar.qml
+        ui/qml/home/ScheduleTimeSelect.qml
+        ui/qml/home/ScheduleDurationSelect.qml
         # Settings
         ui/qml/settings/SettingsWindow.qml
         ui/qml/settings/AudioSettings.qml
@@ -249,6 +252,7 @@ qt_add_qml_module(links
         res/icon/screen_sharing_sidebar.png
         res/icon/screen-share-off.png
         res/icon/camera_staring_sidebar.png
+        res/icon/copy.png
 )
 
 # Link libraries

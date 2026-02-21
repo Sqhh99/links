@@ -7,6 +7,11 @@ ColumnLayout {
     id: root
 
     property bool loading: false
+    property date minimumDate: new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate())
+    property date selectedDate: root.defaultSelectedDate()
+    property string selectedTime: root.defaultSelectedTime()
+    property int noJoinMinutes: 15
+    property int emptyRoomMinutes: 10
 
     signal createRoomClicked(string topic,
                              string localDate,
@@ -21,172 +26,256 @@ ColumnLayout {
         return value < 10 ? "0" + value : "" + value
     }
 
-    function selectedDateString() {
-        return yearBox.value + "-" + pad2(monthBox.value) + "-" + pad2(dayBox.value)
+    function defaultSelectedDate() {
+        var d = new Date(Date.now() + 30 * 60 * 1000)
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate())
     }
 
-    Component.onCompleted: {
-        var dt = new Date(Date.now() + 30 * 60 * 1000)
-        yearBox.value = dt.getFullYear()
-        monthBox.value = dt.getMonth() + 1
-        dayBox.value = dt.getDate()
-        hourBox.value = dt.getHours()
-        minuteBox.value = Math.floor(dt.getMinutes() / 5) * 5
+    function defaultSelectedTime() {
+        var d = new Date(Date.now() + 30 * 60 * 1000)
+        var rounded = Math.ceil(d.getMinutes() / 15) * 15
+        if (rounded >= 60) {
+            d.setHours(d.getHours() + 1)
+            rounded = 0
+        }
+        return pad2(d.getHours()) + ":" + pad2(rounded)
+    }
+
+    function selectedDateString() {
+        return selectedDate.getFullYear() + "-"
+                + pad2(selectedDate.getMonth() + 1) + "-"
+                + pad2(selectedDate.getDate())
+    }
+
+    function selectedHour() {
+        if (selectedTime.indexOf(":") < 0) {
+            return 0
+        }
+        var value = parseInt(selectedTime.split(":")[0], 10)
+        return isNaN(value) ? 0 : value
+    }
+
+    function selectedMinute() {
+        if (selectedTime.indexOf(":") < 0) {
+            return 0
+        }
+        var value = parseInt(selectedTime.split(":")[1], 10)
+        return isNaN(value) ? 0 : value
     }
 
     spacing: 10
 
-    Text {
-        text: "预定会议"
-        color: "#374151"
-        font.pixelSize: 13
-        font.weight: Font.DemiBold
-    }
-
-    TextField {
-        id: topicInput
+    Flickable {
+        id: formScroll
         Layout.fillWidth: true
-        placeholderText: "会议主题（可选）"
-        enabled: !root.loading
-    }
+        Layout.fillHeight: true
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        contentWidth: width
+        contentHeight: formColumn.implicitHeight
 
-    Text {
-        text: "预定日期"
-        color: "#374151"
-        font.pixelSize: 12
-        font.weight: Font.DemiBold
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 6
-
-        SpinBox {
-            id: yearBox
-            from: 2024
-            to: 2099
-            value: 2026
-            editable: true
-            enabled: !root.loading
-            Layout.fillWidth: true
+        ScrollBar.vertical: ScrollBar {
+            policy: ScrollBar.AsNeeded
         }
 
-        SpinBox {
-            id: monthBox
-            from: 1
-            to: 12
-            value: 1
-            editable: true
-            enabled: !root.loading
-            Layout.fillWidth: true
+        ColumnLayout {
+            id: formColumn
+            width: formScroll.width
+            spacing: 0
+
+            // ── 基本信息 ──
+            TextField {
+                id: topicInput
+                Layout.fillWidth: true
+                placeholderText: "会议主题（可选）"
+                enabled: !root.loading
+            }
+
+            // ── 分割线 ──
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                Layout.topMargin: 16
+                Layout.bottomMargin: 16
+                color: "#E5E7EB"
+            }
+
+            // ── 日期与时间 ──
+            Text {
+                text: "预定日期"
+                color: "#374151"
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+
+            Rectangle {
+                id: datePickerField
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                implicitHeight: 40
+                radius: 10
+                color: datePickerMa.containsMouse ? "#F3F4F6" : "#FFFFFF"
+                border.color: calendarPopup.visible ? "#2563EB" : "#D1D5DB"
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 12
+                    spacing: 8
+
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.selectedDateString()
+                        color: "#111827"
+                        font.pixelSize: 13
+                    }
+
+                    Text {
+                        text: calendarPopup.visible ? "▲" : "▼"
+                        color: "#9CA3AF"
+                        font.pixelSize: 10
+                    }
+                }
+
+                MouseArea {
+                    id: datePickerMa
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (calendarPopup.visible)
+                            calendarPopup.close()
+                        else
+                            calendarPopup.open()
+                    }
+                }
+
+                Popup {
+                    id: calendarPopup
+                    y: datePickerField.height + 4
+                    width: datePickerField.width
+                    height: 300
+                    padding: 0
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+                    background: Rectangle {
+                        color: "transparent"
+                    }
+
+                    contentItem: ScheduleCalendar {
+                        selectedDate: root.selectedDate
+                        minDate: root.minimumDate
+                        onDateSelected: function(value) {
+                            root.selectedDate = value
+                            calendarPopup.close()
+                        }
+                    }
+                }
+            }
+
+            ScheduleTimeSelect {
+                Layout.fillWidth: true
+                Layout.topMargin: 12
+                selectedTime: root.selectedTime
+                enabled: !root.loading
+                onTimeSelected: function(value) {
+                    root.selectedTime = value
+                }
+            }
+
+            // ── 分割线 ──
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                Layout.topMargin: 16
+                Layout.bottomMargin: 16
+                color: "#E5E7EB"
+            }
+
+            // ── 安全与策略 ──
+            Text {
+                text: "安全与策略"
+                color: "#374151"
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+                Layout.bottomMargin: 6
+            }
+
+            TextField {
+                id: passwordInput
+                Layout.fillWidth: true
+                placeholderText: "会议密码（可选，6-32位）"
+                enabled: !root.loading
+                echoMode: TextInput.Password
+            }
+
+            CheckBox {
+                id: allowGuestJoinCheck
+                Layout.topMargin: 4
+                text: "允许游客通过会议号加入"
+                enabled: !root.loading
+            }
+
+            // ── 两个时长选择器横排 ──
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                spacing: 12
+
+                ScheduleDurationSelect {
+                    Layout.fillWidth: true
+                    enabled: !root.loading
+                    title: "无人加入自动结束"
+                    hintText: "开始后无人加入，自动结束"
+                    selectedMinutes: root.noJoinMinutes
+                    onMinutesSelected: function(value) {
+                        root.noJoinMinutes = value
+                    }
+                }
+
+                ScheduleDurationSelect {
+                    Layout.fillWidth: true
+                    enabled: !root.loading
+                    title: "空房自动结束"
+                    hintText: "房间持续为空，自动结束"
+                    selectedMinutes: root.emptyRoomMinutes
+                    onMinutesSelected: function(value) {
+                        root.emptyRoomMinutes = value
+                    }
+                }
+            }
+
+            // ── 分割线 ──
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 1
+                Layout.topMargin: 18
+                Layout.bottomMargin: 14
+                color: "#E5E7EB"
+            }
+
+            PrimaryButton {
+                Layout.fillWidth: true
+                text: "创建预定会议"
+                loading: root.loading
+                enabled: !root.loading
+                onClicked: {
+                    root.createRoomClicked(topicInput.text,
+                                           root.selectedDateString(),
+                                           root.selectedHour(),
+                                           root.selectedMinute(),
+                                           allowGuestJoinCheck.checked,
+                                           passwordInput.text,
+                                           root.noJoinMinutes,
+                                           root.emptyRoomMinutes)
+                }
+            }
+
+            Item {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 12
+            }
         }
-
-        SpinBox {
-            id: dayBox
-            from: 1
-            to: 31
-            value: 1
-            editable: true
-            enabled: !root.loading
-            Layout.fillWidth: true
-        }
     }
-
-    Text {
-        text: "预定时间"
-        color: "#374151"
-        font.pixelSize: 12
-        font.weight: Font.DemiBold
-    }
-
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 6
-
-        SpinBox {
-            id: hourBox
-            from: 0
-            to: 23
-            value: 9
-            editable: true
-            enabled: !root.loading
-            Layout.fillWidth: true
-        }
-
-        SpinBox {
-            id: minuteBox
-            from: 0
-            to: 55
-            stepSize: 5
-            value: 0
-            editable: true
-            enabled: !root.loading
-            Layout.fillWidth: true
-        }
-    }
-
-    CheckBox {
-        id: allowGuestJoinCheck
-        text: "允许游客通过会议号加入"
-        enabled: !root.loading
-    }
-
-    TextField {
-        id: passwordInput
-        Layout.fillWidth: true
-        placeholderText: "会议密码（可选，6-32位）"
-        enabled: !root.loading
-        echoMode: TextInput.Password
-    }
-
-    Text {
-        text: "开始后无人入会自动结束（分钟）"
-        color: "#374151"
-        font.pixelSize: 12
-    }
-
-    SpinBox {
-        id: noJoinBox
-        Layout.fillWidth: true
-        from: 1
-        to: 180
-        value: 15
-        editable: true
-        enabled: !root.loading
-    }
-
-    Text {
-        text: "开启后空房自动结束（分钟）"
-        color: "#374151"
-        font.pixelSize: 12
-    }
-
-    SpinBox {
-        id: emptyRoomBox
-        Layout.fillWidth: true
-        from: 1
-        to: 180
-        value: 10
-        editable: true
-        enabled: !root.loading
-    }
-
-    PrimaryButton {
-        Layout.fillWidth: true
-        text: "创建预定会议"
-        loading: root.loading
-        enabled: !root.loading
-        onClicked: {
-            root.createRoomClicked(topicInput.text,
-                                   root.selectedDateString(),
-                                   hourBox.value,
-                                   minuteBox.value,
-                                   allowGuestJoinCheck.checked,
-                                   passwordInput.text,
-                                   noJoinBox.value,
-                                   emptyRoomBox.value)
-        }
-    }
-
-    Item { Layout.fillHeight: true }
 }
