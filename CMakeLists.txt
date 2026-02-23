@@ -182,14 +182,20 @@ qt_add_qml_module(links
         ui/qml/home/HomeRecordingPage.qml
         ui/qml/home/QuickActionCard.qml
         ui/qml/home/MeetingListPanel.qml
+        ui/qml/home/HostMeetingListPanel.qml
         ui/qml/home/MeetingListItem.qml
         ui/qml/home/GuestPromptDialog.qml
+        ui/qml/home/MeetingPasswordDialog.qml
+        ui/qml/home/CancelMeetingDialog.qml
         ui/qml/home/AuthModal.qml
         ui/qml/home/ShareScreenForm.qml
         ui/qml/home/LoginPromptCard.qml
         ui/qml/home/JoinForm.qml
         ui/qml/home/QuickStartForm.qml
         ui/qml/home/ScheduleForm.qml
+        ui/qml/home/ScheduleCalendar.qml
+        ui/qml/home/ScheduleTimeSelect.qml
+        ui/qml/home/ScheduleDurationSelect.qml
         # Settings
         ui/qml/settings/SettingsWindow.qml
         ui/qml/settings/AudioSettings.qml
@@ -219,6 +225,7 @@ qt_add_qml_module(links
         ui/qml/screenpicker/GhostButton.qml
         ui/qml/screenpicker/ShareButton.qml
     RESOURCES
+        ui/qml/utils/DateUtils.js
         res/icon/close.png
         res/icon/minimize.png
         res/icon/maximize.png
@@ -246,6 +253,7 @@ qt_add_qml_module(links
         res/icon/screen_sharing_sidebar.png
         res/icon/screen-share-off.png
         res/icon/camera_staring_sidebar.png
+        res/icon/copy.png
 )
 
 # Link libraries

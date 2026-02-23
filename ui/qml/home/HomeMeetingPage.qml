@@ -105,7 +105,7 @@ Item {
             QuickActionCard {
                 Layout.fillWidth: true
                 title: "预定会议"
-                subtitle: root.isGuest ? "登录后可预定会议" : "设置时间并本地提醒"
+                subtitle: root.isGuest ? "登录后可预定会议" : "设置时间、密码与准入策略"
                 iconSource: "qrc:/res/icon/pin.png"
                 accentColor: "#F59E0B"
                 accentOpacity: 0.18
@@ -131,8 +131,8 @@ Item {
 
         modal: true
         focus: true
-        width: 420
-        height: 520
+        width: root.currentAction === "schedule" ? 520 : 420
+        height: root.currentAction === "schedule" ? 600 : 520
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         anchors.centerIn: parent
 
@@ -152,7 +152,7 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 20
+                anchors.margins: root.currentAction === "schedule" ? 24 : 20
                 spacing: 12
 
                 RowLayout {
@@ -191,6 +191,7 @@ Item {
                         id: joinForm
                         userName: root.loginBackend ? root.loginBackend.userName : ""
                         roomName: root.loginBackend ? root.loginBackend.roomName : ""
+                        loading: root.loginBackend ? root.loginBackend.loading : false
                         guestMode: root.isGuest
                         onUserNameChanged: {
                             if (root.loginBackend) root.loginBackend.userName = userName
@@ -206,6 +207,7 @@ Item {
                     }
 
                     QuickStartForm {
+                        loading: root.loginBackend ? root.loginBackend.loading : false
                         allowGuestJoin: root.loginBackend ? root.loginBackend.allowGuestJoin : false
                         onAllowGuestJoinToggled: function(checked) {
                             if (root.loginBackend) {
@@ -220,14 +222,28 @@ Item {
                     }
 
                     ScheduleForm {
-                        onCreateRoomClicked: {
+                        loading: root.loginBackend ? root.loginBackend.loading : false
+                        onCreateRoomClicked: function(topic,
+                                                      localDate,
+                                                      hour,
+                                                      minute,
+                                                      allowGuestJoin,
+                                                      meetingPassword,
+                                                      noJoinAutoEndMinutes,
+                                                      emptyAutoEndMinutes) {
                             if (root.isGuest) {
                                 root.showGuestRestrictedPrompt()
                                 return
                             }
-                            actionDialog.close()
                             if (root.loginBackend) {
-                                root.loginBackend.createScheduledRoom()
+                                root.loginBackend.createScheduledMeeting(topic,
+                                                                         localDate,
+                                                                         hour,
+                                                                         minute,
+                                                                         allowGuestJoin,
+                                                                         meetingPassword,
+                                                                         noJoinAutoEndMinutes,
+                                                                         emptyAutoEndMinutes)
                             }
                         }
                     }

@@ -6,12 +6,10 @@ Button {
     
     property bool active: false
     
-    checkable: true
+    checkable: false
     checked: active
     
     implicitHeight: 36
-    
-    onCheckedChanged: active = checked
     
     background: Rectangle {
         color: root.checked ? "#2563EB" : "#F3F4F6"

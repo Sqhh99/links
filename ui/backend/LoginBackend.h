@@ -52,7 +52,20 @@ public:
     Q_INVOKABLE void join();
     Q_INVOKABLE void quickJoin();
     Q_INVOKABLE void createScheduledRoom();
+    Q_INVOKABLE void createScheduledMeeting(const QString& topic,
+                                            const QString& localDate,
+                                            int hour,
+                                            int minute,
+                                            bool allowGuestJoin,
+                                            const QString& meetingPassword,
+                                            int noJoinAutoEndMinutes,
+                                            int emptyAutoEndMinutes);
     Q_INVOKABLE void loadMeetingRecords();
+    Q_INVOKABLE void loadHostMeetings();
+    Q_INVOKABLE void cancelHostedMeeting(const QString& meetingNo);
+    Q_INVOKABLE void joinHostedMeeting(const QString& meetingNo);
+    Q_INVOKABLE void submitMeetingPassword(const QString& meetingPassword);
+    Q_INVOKABLE void cancelPasswordRetry();
     Q_INVOKABLE void syncParticipantNameFromSession();
     Q_INVOKABLE void showSettings();
     Q_INVOKABLE QString currentTime() const;
@@ -78,6 +91,9 @@ signals:
                         const QString& userAuthToken,
                         bool isGuest);
     void meetingRecordsLoaded(const QVariantList& records);
+    void hostMeetingsLoaded(const QVariantList& records);
+    void scheduledMeetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl);
+    void meetingPasswordRequired(const QString& meetingNo, const QString& message, bool invalidAttempt);
     void sessionExpired(const QString& message);
     void settingsRequested();
 
@@ -85,6 +101,8 @@ private slots:
     void onTokenReceived(const TokenResponse& response);
     void onMeetingCreated(const QString& meetingNo, const QString& roomName, const QString& shareUrl);
     void onMeetingRecordsReceived(const QJsonArray& records);
+    void onHostMeetingsReceived(const QJsonArray& records);
+    void onMeetingCancelled(const QString& meetingNo);
     void onAuthExpired(const QString& message);
     void onNetworkError(const QString& error);
 
@@ -103,6 +121,13 @@ private:
     QString authToken() const;
     static bool isMeetingNo(const QString& value);
     static QString extractMeetingNo(const QString& value);
+    void clearPendingPasswordContext();
+    QString mapJoinFailureMessage(const TokenResponse& response) const;
+    bool shouldPromptMeetingPassword(const TokenResponse& response) const;
+    void beginBusinessJoin(const QString& meetingNo,
+                           const QString& participantName,
+                           bool guestMode,
+                           const QString& meetingPassword = QString());
 
     NetworkClient* networkClient_;
     QString userName_;
@@ -117,6 +142,18 @@ private:
     QString errorMessage_;
     QString guestDisplayName_;
     QString pendingParticipantName_;
+
+    enum class MeetingCreateFlow {
+        None,
+        QuickJoin,
+        ScheduledOnly
+    };
+    MeetingCreateFlow pendingCreateFlow_{MeetingCreateFlow::None};
+    CreateMeetingRequest pendingCreateRequest_;
+
+    QString pendingPasswordMeetingNo_;
+    QString pendingPasswordParticipantName_;
+    bool pendingPasswordGuestMode_{false};
 };
 
 #endif // LOGINBACKEND_H
