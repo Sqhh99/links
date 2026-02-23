@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import "../utils/DateUtils.js" as DateUtils
 
 ColumnLayout {
     id: root
@@ -10,9 +11,7 @@ ColumnLayout {
 
     signal timeSelected(string value)
 
-    function pad2(value) {
-        return value < 10 ? "0" + value : "" + value
-    }
+
 
     function parseHour() {
         if (selectedTime.indexOf(":") < 0) return 0
@@ -29,7 +28,7 @@ ColumnLayout {
     function emitTime() {
         var h = hourTumbler.currentIndex
         var m = minuteTumbler.currentIndex
-        var value = pad2(h) + ":" + pad2(m)
+        var value = DateUtils.pad2(h) + ":" + DateUtils.pad2(m)
         if (root.selectedTime !== value) {
             root.selectedTime = value
             root.timeSelected(value)
@@ -97,7 +96,7 @@ ColumnLayout {
                 onCurrentIndexChanged: root.emitTime()
 
                 delegate: Text {
-                    text: root.pad2(modelData)
+                    text: DateUtils.pad2(modelData)
                     color: Tumbler.displacement === 0 ? "#111827" : "#9CA3AF"
                     font.pixelSize: Tumbler.displacement === 0 ? 22 : 14
                     font.weight: Tumbler.displacement === 0 ? Font.Bold : Font.Normal
@@ -127,7 +126,7 @@ ColumnLayout {
                 onCurrentIndexChanged: root.emitTime()
 
                 delegate: Text {
-                    text: root.pad2(modelData)
+                    text: DateUtils.pad2(modelData)
                     color: Tumbler.displacement === 0 ? "#111827" : "#9CA3AF"
                     font.pixelSize: Tumbler.displacement === 0 ? 22 : 14
                     font.weight: Tumbler.displacement === 0 ? Font.Bold : Font.Normal

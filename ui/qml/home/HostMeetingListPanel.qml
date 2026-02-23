@@ -18,6 +18,11 @@ Rectangle {
     border.color: "#E5E7EB"
     border.width: 1
 
+    TextEdit {
+        id: copyHelper
+        visible: false
+    }
+
     function tagBackground(status) {
         if (status === "scheduled") return "#FFF7ED"
         if (status === "open") return "#EFF6FF"
@@ -90,10 +95,7 @@ Rectangle {
                     anchors.margins: 10
                     spacing: 8
 
-                TextEdit {
-                    id: copyHelper
-                    visible: false
-                }
+
 
                     RowLayout {
                         Layout.fillWidth: true

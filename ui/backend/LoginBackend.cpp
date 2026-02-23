@@ -40,11 +40,12 @@ QString toLocalDateTimeText(const QString& isoString)
         return QString{};
     }
 
-    const QDateTime utcTime = QDateTime::fromString(isoString, Qt::ISODate);
+    QDateTime utcTime = QDateTime::fromString(isoString, Qt::ISODate);
     if (!utcTime.isValid()) {
         return isoString;
     }
 
+    utcTime.setTimeSpec(Qt::UTC);
     return utcTime.toLocalTime().toString("yyyy-MM-dd HH:mm");
 }
 

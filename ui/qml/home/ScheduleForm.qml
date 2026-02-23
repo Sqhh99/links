@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import "../utils/DateUtils.js" as DateUtils
 
 ColumnLayout {
     id: root
@@ -22,9 +23,7 @@ ColumnLayout {
                              int noJoinAutoEndMinutes,
                              int emptyAutoEndMinutes)
 
-    function pad2(value) {
-        return value < 10 ? "0" + value : "" + value
-    }
+
 
     function defaultSelectedDate() {
         var d = new Date(Date.now() + 30 * 60 * 1000)
@@ -38,13 +37,13 @@ ColumnLayout {
             d.setHours(d.getHours() + 1)
             rounded = 0
         }
-        return pad2(d.getHours()) + ":" + pad2(rounded)
+        return DateUtils.pad2(d.getHours()) + ":" + DateUtils.pad2(rounded)
     }
 
     function selectedDateString() {
         return selectedDate.getFullYear() + "-"
-                + pad2(selectedDate.getMonth() + 1) + "-"
-                + pad2(selectedDate.getDate())
+                + DateUtils.pad2(selectedDate.getMonth() + 1) + "-"
+                + DateUtils.pad2(selectedDate.getDate())
     }
 
     function selectedHour() {

@@ -225,6 +225,7 @@ qt_add_qml_module(links
         ui/qml/screenpicker/GhostButton.qml
         ui/qml/screenpicker/ShareButton.qml
     RESOURCES
+        ui/qml/utils/DateUtils.js
         res/icon/close.png
         res/icon/minimize.png
         res/icon/maximize.png

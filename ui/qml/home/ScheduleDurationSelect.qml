@@ -22,11 +22,10 @@ ColumnLayout {
             list.push({ "label": v + " 分钟", "value": v })
         }
         displayOptions = list
+        syncIndex()
     }
 
-    function syncCombo() {
-        buildOptions()
-
+    function syncIndex() {
         var idx = 0
         for (var i = 0; i < displayOptions.length; ++i) {
             if (displayOptions[i].value === selectedMinutes) {
@@ -40,10 +39,10 @@ ColumnLayout {
         }
     }
 
-    onSelectedMinutesChanged: syncCombo()
-    onOptionsModelChanged: syncCombo()
+    onSelectedMinutesChanged: syncIndex()
+    onOptionsModelChanged: buildOptions()
 
-    Component.onCompleted: syncCombo()
+    Component.onCompleted: buildOptions()
 
     spacing: 4
 
