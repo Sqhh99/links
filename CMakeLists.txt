@@ -254,6 +254,7 @@ qt_add_qml_module(links
         res/icon/screen-share-off.png
         res/icon/camera_staring_sidebar.png
         res/icon/copy.png
+        res/icon/square-arrow-out-up-right.png
 )
 
 # Link libraries

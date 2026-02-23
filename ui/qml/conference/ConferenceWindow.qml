@@ -263,6 +263,9 @@ Window {
                 Layout.fillWidth: true
                 targetWindow: root
                 backend: backend
+                shareUrl: backend.meetingNo.length > 0
+                    ? settingsBackendInstance.apiUrl + "/join?meetingNo=" + backend.meetingNo
+                    : ""
             }
 
             // Main content area
