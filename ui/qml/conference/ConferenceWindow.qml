@@ -263,6 +263,12 @@ Window {
                 Layout.fillWidth: true
                 targetWindow: root
                 backend: backend
+                shareUrl: {
+                    if (!backend.meetingNo || backend.meetingNo.length === 0)
+                        return ""
+                    var base = settingsBackendInstance.apiUrl.replace(/\/+$/, "")
+                    return base + "/join?meetingNo=" + encodeURIComponent(backend.meetingNo)
+                }
             }
 
             // Main content area

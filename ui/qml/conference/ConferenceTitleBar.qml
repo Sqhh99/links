@@ -13,6 +13,7 @@ Rectangle {
 
     property var targetWindow
     property ConferenceBackend backend
+    property string shareUrl: ""
 
     // Drag support
     property point dragStartPos
@@ -48,9 +49,9 @@ Rectangle {
         anchors.rightMargin: 16
         spacing: 0
 
-        // --- Left Section: Room Name, ID (no icon) ---
+        // --- Left Section: Room Name, ID, Share Button ---
         RowLayout {
-            spacing: 12
+            spacing: 8
             Layout.alignment: Qt.AlignVCenter
 
             // Room info
@@ -59,15 +60,312 @@ Rectangle {
 
                 Text {
                     text: backend ? backend.roomName : "产品设计评审会"
-                    color: "#111827" // Gray-900
+                    color: "#111827"
                     font.pixelSize: 14
                     font.weight: Font.DemiBold
                 }
 
                 Text {
                     text: backend ? (backend.meetingNo && backend.meetingNo.length > 0 ? "会议号: " + backend.meetingNo : "房间: " + backend.roomName) : "会议"
-                    color: "#9CA3AF" // Gray-400
+                    color: "#9CA3AF"
                     font.pixelSize: 10
+                }
+            }
+
+            // Share button
+            Rectangle {
+                id: shareBtn
+                implicitWidth: 32
+                implicitHeight: 32
+                radius: 6
+                color: shareBtnArea.containsMouse ? "#F3F4F6" : "transparent"
+                visible: backend && backend.meetingNo && backend.meetingNo.length > 0
+
+                Image {
+                    anchors.centerIn: parent
+                    source: "qrc:/res/icon/square-arrow-out-up-right.png"
+                    sourceSize.width: 16
+                    sourceSize.height: 16
+                    opacity: 0.7
+                }
+
+                MouseArea {
+                    id: shareBtnArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (sharePopup.visible)
+                            sharePopup.close()
+                        else
+                            sharePopup.open()
+                    }
+                }
+
+                ToolTip.visible: shareBtnArea.containsMouse && !sharePopup.visible
+                ToolTip.text: "分享会议"
+                ToolTip.delay: 500
+
+                Popup {
+                    id: sharePopup
+                    y: shareBtn.height + 8
+                    x: 0
+                    width: 340
+                    padding: 0
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+                    background: Rectangle {
+                        color: "#FFFFFF"
+                        radius: 12
+                        border.color: "#E5E7EB"
+                        border.width: 1
+
+                        layer.enabled: true
+                        layer.effect: null
+                    }
+
+                    contentItem: ColumnLayout {
+                        spacing: 0
+
+                        // Header
+                        Text {
+                            text: "分享会议"
+                            color: "#111827"
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                            Layout.topMargin: 16
+                            Layout.leftMargin: 16
+                            Layout.bottomMargin: 12
+                        }
+
+                        // Divider
+                        Rectangle { Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+
+                        // Meeting number row
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.margins: 12
+                            Layout.bottomMargin: 6
+                            implicitHeight: 44
+                            radius: 8
+                            color: "#F9FAFB"
+                            border.color: "#E5E7EB"
+                            border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 8
+                                spacing: 8
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+
+                                    Text {
+                                        text: "会议号"
+                                        color: "#9CA3AF"
+                                        font.pixelSize: 10
+                                    }
+                                    Text {
+                                        text: backend ? backend.meetingNo : ""
+                                        color: "#111827"
+                                        font.pixelSize: 13
+                                        font.weight: Font.Medium
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: copyNoBtn
+                                    implicitWidth: 30
+                                    implicitHeight: 30
+                                    radius: 6
+                                    color: copyNoArea.containsMouse ? "#E5E7EB" : "transparent"
+                                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                                    Image {
+                                        anchors.centerIn: parent
+                                        source: "qrc:/res/icon/copy.png"
+                                        sourceSize.width: 14
+                                        sourceSize.height: 14
+                                        opacity: copyNoArea.containsMouse ? 1.0 : 0.5
+                                    }
+
+                                    MouseArea {
+                                        id: copyNoArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            shareCopyHelper.text = backend.meetingNo
+                                            shareCopyHelper.selectAll()
+                                            shareCopyHelper.copy()
+                                            copyNoBubble.show()
+                                        }
+                                    }
+
+                                    // Bubble feedback
+                                    Rectangle {
+                                        id: copyNoBubble
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.top
+                                        anchors.bottomMargin: 4
+                                        width: 52
+                                        height: 24
+                                        radius: 6
+                                        color: "#111827"
+                                        visible: false
+                                        opacity: 0
+
+                                        function show() {
+                                            visible = true
+                                            opacity = 1
+                                            copyNoBubbleTimer.restart()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "\u5df2\u590d\u5236"
+                                            color: "#FFFFFF"
+                                            font.pixelSize: 10
+                                        }
+
+                                        Timer {
+                                            id: copyNoBubbleTimer
+                                            interval: 1200
+                                            onTriggered: copyNoBubbleAnim.start()
+                                        }
+
+                                        NumberAnimation on opacity {
+                                            id: copyNoBubbleAnim
+                                            running: false
+                                            to: 0
+                                            duration: 300
+                                            onFinished: copyNoBubble.visible = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Meeting link row
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 12
+                            Layout.rightMargin: 12
+                            Layout.bottomMargin: 12
+                            implicitHeight: 44
+                            radius: 8
+                            color: "#F9FAFB"
+                            border.color: "#E5E7EB"
+                            border.width: 1
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 12
+                                anchors.rightMargin: 8
+                                spacing: 8
+
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+
+                                    Text {
+                                        text: "会议链接"
+                                        color: "#9CA3AF"
+                                        font.pixelSize: 10
+                                    }
+                                    Text {
+                                        text: root.shareUrl
+                                        color: "#2563EB"
+                                        font.pixelSize: 11
+                                        font.weight: Font.Medium
+                                        elide: Text.ElideMiddle
+                                        Layout.fillWidth: true
+                                    }
+                                }
+
+                                Rectangle {
+                                    id: copyLinkBtn
+                                    implicitWidth: 30
+                                    implicitHeight: 30
+                                    radius: 6
+                                    color: copyLinkArea.containsMouse ? "#E5E7EB" : "transparent"
+                                    Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                                    Image {
+                                        anchors.centerIn: parent
+                                        source: "qrc:/res/icon/copy.png"
+                                        sourceSize.width: 14
+                                        sourceSize.height: 14
+                                        opacity: copyLinkArea.containsMouse ? 1.0 : 0.5
+                                    }
+
+                                    MouseArea {
+                                        id: copyLinkArea
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            shareCopyHelper.text = root.shareUrl
+                                            shareCopyHelper.selectAll()
+                                            shareCopyHelper.copy()
+                                            copyLinkBubble.show()
+                                        }
+                                    }
+
+                                    // Bubble feedback
+                                    Rectangle {
+                                        id: copyLinkBubble
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.top
+                                        anchors.bottomMargin: 4
+                                        width: 52
+                                        height: 24
+                                        radius: 6
+                                        color: "#111827"
+                                        visible: false
+                                        opacity: 0
+
+                                        function show() {
+                                            visible = true
+                                            opacity = 1
+                                            copyLinkBubbleTimer.restart()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "\u5df2\u590d\u5236"
+                                            color: "#FFFFFF"
+                                            font.pixelSize: 10
+                                        }
+
+                                        Timer {
+                                            id: copyLinkBubbleTimer
+                                            interval: 1200
+                                            onTriggered: copyLinkBubbleAnim.start()
+                                        }
+
+                                        NumberAnimation on opacity {
+                                            id: copyLinkBubbleAnim
+                                            running: false
+                                            to: 0
+                                            duration: 300
+                                            onFinished: copyLinkBubble.visible = false
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+
+                    }
+
+                    // Hidden TextEdit for clipboard
+                    TextEdit {
+                        id: shareCopyHelper
+                        visible: false
+                    }
                 }
             }
         }
