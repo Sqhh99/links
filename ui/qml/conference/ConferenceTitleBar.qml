@@ -176,6 +176,7 @@ Rectangle {
                                 }
 
                                 Rectangle {
+                                    id: copyNoBtn
                                     implicitWidth: 30
                                     implicitHeight: 30
                                     radius: 6
@@ -199,6 +200,48 @@ Rectangle {
                                             shareCopyHelper.text = backend.meetingNo
                                             shareCopyHelper.selectAll()
                                             shareCopyHelper.copy()
+                                            copyNoBubble.show()
+                                        }
+                                    }
+
+                                    // Bubble feedback
+                                    Rectangle {
+                                        id: copyNoBubble
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.top
+                                        anchors.bottomMargin: 4
+                                        width: 52
+                                        height: 24
+                                        radius: 6
+                                        color: "#111827"
+                                        visible: false
+                                        opacity: 0
+
+                                        function show() {
+                                            visible = true
+                                            opacity = 1
+                                            copyNoBubbleTimer.restart()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "\u5df2\u590d\u5236"
+                                            color: "#FFFFFF"
+                                            font.pixelSize: 10
+                                        }
+
+                                        Timer {
+                                            id: copyNoBubbleTimer
+                                            interval: 1200
+                                            onTriggered: copyNoBubbleAnim.start()
+                                        }
+
+                                        NumberAnimation on opacity {
+                                            id: copyNoBubbleAnim
+                                            running: false
+                                            to: 0
+                                            duration: 300
+                                            onFinished: copyNoBubble.visible = false
                                         }
                                     }
                                 }
@@ -243,6 +286,7 @@ Rectangle {
                                 }
 
                                 Rectangle {
+                                    id: copyLinkBtn
                                     implicitWidth: 30
                                     implicitHeight: 30
                                     radius: 6
@@ -266,6 +310,48 @@ Rectangle {
                                             shareCopyHelper.text = root.shareUrl
                                             shareCopyHelper.selectAll()
                                             shareCopyHelper.copy()
+                                            copyLinkBubble.show()
+                                        }
+                                    }
+
+                                    // Bubble feedback
+                                    Rectangle {
+                                        id: copyLinkBubble
+                                        anchors.right: parent.right
+                                        anchors.bottom: parent.top
+                                        anchors.bottomMargin: 4
+                                        width: 52
+                                        height: 24
+                                        radius: 6
+                                        color: "#111827"
+                                        visible: false
+                                        opacity: 0
+
+                                        function show() {
+                                            visible = true
+                                            opacity = 1
+                                            copyLinkBubbleTimer.restart()
+                                        }
+
+                                        Text {
+                                            anchors.centerIn: parent
+                                            text: "\u5df2\u590d\u5236"
+                                            color: "#FFFFFF"
+                                            font.pixelSize: 10
+                                        }
+
+                                        Timer {
+                                            id: copyLinkBubbleTimer
+                                            interval: 1200
+                                            onTriggered: copyLinkBubbleAnim.start()
+                                        }
+
+                                        NumberAnimation on opacity {
+                                            id: copyLinkBubbleAnim
+                                            running: false
+                                            to: 0
+                                            duration: 300
+                                            onFinished: copyLinkBubble.visible = false
                                         }
                                     }
                                 }
