@@ -61,6 +61,13 @@ ConferenceManager::ConferenceManager(QObject* parent)
                      this, &ConferenceManager::videoFrameReceived);
     QObject::connect(mediaPipeline_.get(), &MediaPipeline::audioActivity,
                      this, &ConferenceManager::audioActivity);
+
+    // Feed far-end (remote speaker) audio into the local APM for echo cancellation.
+    // Without this, the AEC has no reference signal and cannot cancel echoes.
+    mediaPipeline_->setReverseAudioCallback(
+        [this](const int16_t* data, int samples, int sampleRate, int channels) {
+            feedReverseAudio(data, samples, sampleRate, channels);
+        });
 }
 
 ConferenceManager::~ConferenceManager()
@@ -172,6 +179,76 @@ bool ConferenceManager::isCameraEnabled() const
 bool ConferenceManager::isScreenSharing() const
 {
     return deviceController_ && deviceController_->isScreenSharing();
+}
+
+// =============================================================================
+// Audio processing settings (runtime-applicable during conference)
+// =============================================================================
+
+void ConferenceManager::applyAudioSettings()
+{
+    if (deviceController_) {
+        deviceController_->applyAudioSettings();
+    }
+}
+
+void ConferenceManager::setEchoCancellationEnabled(bool enabled)
+{
+    if (deviceController_) deviceController_->setEchoCancellationEnabled(enabled);
+}
+
+void ConferenceManager::setNoiseSuppressionEnabled(bool enabled)
+{
+    if (deviceController_) deviceController_->setNoiseSuppressionEnabled(enabled);
+}
+
+void ConferenceManager::setAutoGainControlEnabled(bool enabled)
+{
+    if (deviceController_) deviceController_->setAutoGainControlEnabled(enabled);
+}
+
+void ConferenceManager::setHighPassFilterEnabled(bool enabled)
+{
+    if (deviceController_) deviceController_->setHighPassFilterEnabled(enabled);
+}
+
+void ConferenceManager::setNoiseSuppressionLevel(int level)
+{
+    if (deviceController_) {
+        auto nsLevel = static_cast<AudioProcessingModule::NoiseSuppressionLevel>(
+            std::max(0, std::min(level, 3)));
+        deviceController_->setNoiseSuppressionLevel(nsLevel);
+    }
+}
+
+void ConferenceManager::setGainControlMode(int mode)
+{
+    if (deviceController_) {
+        auto agcMode = static_cast<AudioProcessingModule::GainControlMode>(
+            std::max(0, std::min(mode, 1)));
+        deviceController_->setGainControlMode(agcMode);
+    }
+}
+
+void ConferenceManager::setFixedDigitalGainDb(float gainDb)
+{
+    if (deviceController_) deviceController_->setFixedDigitalGainDb(gainDb);
+}
+
+void ConferenceManager::setAdaptiveDigitalMaxGainDb(float maxGainDb)
+{
+    if (deviceController_) deviceController_->setAdaptiveDigitalMaxGainDb(maxGainDb);
+}
+
+void ConferenceManager::setEchoEnhancedFilterEnabled(bool enabled)
+{
+    if (deviceController_) deviceController_->setEchoEnhancedFilterEnabled(enabled);
+}
+
+void ConferenceManager::feedReverseAudio(const int16_t* data, int samples,
+                                          int sampleRate, int channels)
+{
+    if (deviceController_) deviceController_->feedReverseAudio(data, samples, sampleRate, channels);
 }
 
 void ConferenceManager::sendChatMessage(const QString& message)

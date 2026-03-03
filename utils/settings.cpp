@@ -122,6 +122,67 @@ void Settings::setAutoGainControlEnabled(bool enabled)
     settings_.setValue("audio/auto_gain_control", enabled);
 }
 
+// Advanced audio processing options
+bool Settings::isHighPassFilterEnabled() const
+{
+    return settings_.value("audio/high_pass_filter", true).toBool();
+}
+
+void Settings::setHighPassFilterEnabled(bool enabled)
+{
+    settings_.setValue("audio/high_pass_filter", enabled);
+}
+
+int Settings::noiseSuppressionLevel() const
+{
+    return settings_.value("audio/ns_level", 1).toInt(); // 1 = Moderate
+}
+
+void Settings::setNoiseSuppressionLevel(int level)
+{
+    settings_.setValue("audio/ns_level", qBound(0, level, 3));
+}
+
+int Settings::gainControlMode() const
+{
+    return settings_.value("audio/agc_mode", 0).toInt(); // 0 = AdaptiveDigital
+}
+
+void Settings::setGainControlMode(int mode)
+{
+    settings_.setValue("audio/agc_mode", qBound(0, mode, 1));
+}
+
+float Settings::fixedDigitalGainDb() const
+{
+    return settings_.value("audio/fixed_digital_gain_db", 0.0).toFloat();
+}
+
+void Settings::setFixedDigitalGainDb(float gainDb)
+{
+    settings_.setValue("audio/fixed_digital_gain_db", qBound(0.0f, gainDb, 50.0f));
+}
+
+float Settings::adaptiveDigitalMaxGainDb() const
+{
+    return settings_.value("audio/adaptive_digital_max_gain_db", 50.0).toFloat();
+}
+
+void Settings::setAdaptiveDigitalMaxGainDb(float maxGainDb)
+{
+    settings_.setValue("audio/adaptive_digital_max_gain_db", qBound(0.0f, maxGainDb, 50.0f));
+}
+
+bool Settings::isEchoEnhancedFilterEnabled() const
+{
+    return settings_.value("audio/echo_enhanced_filter", true).toBool();
+}
+
+void Settings::setEchoEnhancedFilterEnabled(bool enabled)
+{
+    settings_.setValue("audio/echo_enhanced_filter", enabled);
+}
+
 QString Settings::getSelectedCameraId() const
 {
     return settings_.value("device/camera_id", "").toString();

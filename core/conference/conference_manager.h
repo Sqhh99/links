@@ -13,6 +13,7 @@
 #include "media_pipeline.h"
 #include "device_controller.h"
 #include "../screen_capturer.h"
+#include "../audio_processing_module.h"
 #include "livekit/livekit.h"
 
 class RoomEventDelegate;
@@ -42,6 +43,23 @@ public:
     bool isMicrophoneEnabled() const;
     bool isCameraEnabled() const;
     bool isScreenSharing() const;
+    
+    // Audio processing settings (runtime-applicable during conference)
+    void applyAudioSettings();  // Re-read from persistent Settings
+    void setEchoCancellationEnabled(bool enabled);
+    void setNoiseSuppressionEnabled(bool enabled);
+    void setAutoGainControlEnabled(bool enabled);
+    void setHighPassFilterEnabled(bool enabled);
+    void setNoiseSuppressionLevel(int level);  // 0=Low,1=Moderate,2=High,3=VeryHigh
+    void setGainControlMode(int mode);         // 0=AdaptiveDigital,1=FixedDigital
+    void setFixedDigitalGainDb(float gainDb);
+    void setAdaptiveDigitalMaxGainDb(float maxGainDb);
+    void setEchoEnhancedFilterEnabled(bool enabled);
+
+    /**
+     * Feed far-end audio to the AEC. Called by MediaPipeline.
+     */
+    void feedReverseAudio(const int16_t* data, int samples, int sampleRate, int channels);
     
     // Chat
     void sendChatMessage(const QString& message);

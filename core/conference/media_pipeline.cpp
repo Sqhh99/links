@@ -52,6 +52,11 @@ void MediaPipeline::removeAudioStream(const QString& trackSid)
     audioStreams_.remove(trackSid);
 }
 
+void MediaPipeline::setReverseAudioCallback(ReverseAudioCallback callback)
+{
+    reverseAudioCallback_ = std::move(callback);
+}
+
 void MediaPipeline::startVideoStreamReader(const QString& trackSid,
                                            const QString& participantIdentity,
                                            std::shared_ptr<livekit::VideoStream> stream)
@@ -229,6 +234,15 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     const auto& samples = frame.data();
     QByteArray data(reinterpret_cast<const char*>(samples.data()),
                     static_cast<int>(samples.size() * sizeof(int16_t)));
+    
+    // Feed far-end audio to the AEC so it can learn the echo path.
+    // This is essential for echo cancellation to work correctly.
+    if (reverseAudioCallback_ && !samples.empty()) {
+        int numSamples = static_cast<int>(samples.size()) / frame.num_channels();
+        reverseAudioCallback_(samples.data(), numSamples,
+                              frame.sample_rate(), frame.num_channels());
+    }
+    
     playback.device->write(data);
 }
 

@@ -40,6 +40,25 @@ public:
     bool isAutoGainControlEnabled() const;
     void setAutoGainControlEnabled(bool enabled);
     
+    // Advanced audio processing options
+    bool isHighPassFilterEnabled() const;
+    void setHighPassFilterEnabled(bool enabled);
+    
+    int noiseSuppressionLevel() const;          // 0=Low,1=Moderate,2=High,3=VeryHigh
+    void setNoiseSuppressionLevel(int level);
+    
+    int gainControlMode() const;                // 0=AdaptiveDigital,1=FixedDigital
+    void setGainControlMode(int mode);
+    
+    float fixedDigitalGainDb() const;
+    void setFixedDigitalGainDb(float gainDb);
+    
+    float adaptiveDigitalMaxGainDb() const;
+    void setAdaptiveDigitalMaxGainDb(float maxGainDb);
+    
+    bool isEchoEnhancedFilterEnabled() const;
+    void setEchoEnhancedFilterEnabled(bool enabled);
+    
     // Device selection
     QString getSelectedCameraId() const;
     void setSelectedCameraId(const QString& deviceId);

@@ -35,6 +35,9 @@ Window {
         visible = false
     }
     
+    // Signal emitted when settings are saved, so active components can re-apply
+    signal settingsSaved()
+    
     // Backend integration
     SettingsBackend {
         id: backend
@@ -43,7 +46,10 @@ Window {
             refreshDevices()
         }
         
-        onAccepted: root.close()
+        onAccepted: {
+            root.settingsSaved()
+            root.close()
+        }
         onRejected: root.close()
     }
     

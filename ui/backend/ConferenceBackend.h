@@ -98,6 +98,8 @@ public:
     Q_INVOKABLE void switchMicrophone(const QString& deviceId);
     Q_INVOKABLE void switchCamera(const QString& deviceId);
 
+    Q_INVOKABLE void applyAudioSettings();
+
     Q_INVOKABLE void toggleChat();
     Q_INVOKABLE void toggleParticipants();
     Q_INVOKABLE void toggleMainViewSource();

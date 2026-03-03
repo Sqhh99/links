@@ -37,6 +37,21 @@ public:
     void setEchoCancellationEnabled(bool enabled);
     void setNoiseSuppressionEnabled(bool enabled);
     void setAutoGainControlEnabled(bool enabled);
+    void setHighPassFilterEnabled(bool enabled);
+
+    // Advanced audio processing parameters
+    void setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel level);
+    void setGainControlMode(AudioProcessingModule::GainControlMode mode);
+    void setFixedDigitalGainDb(float gainDb);
+    void setAdaptiveDigitalMaxGainDb(float maxGainDb);
+    void setEchoEnhancedFilterEnabled(bool enabled);
+    void setStreamDelayMs(int delayMs);
+
+    /**
+     * Feed far-end (speaker) audio into the APM for echo cancellation.
+     * Must be called with playback audio data for AEC to work.
+     */
+    void feedReverseStream(const int16_t* data, int samples, int sampleRate, int channels);
     
     // Get the audio processing module for advanced configuration
     AudioProcessingModule* audioProcessingModule() { return &apm_; }

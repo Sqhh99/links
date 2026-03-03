@@ -11,6 +11,7 @@
 #include "../camera_capturer.h"
 #include "../microphone_capturer.h"
 #include "../screen_capturer.h"
+#include "../audio_processing_module.h"
 
 class DeviceController : public QObject {
     Q_OBJECT
@@ -33,6 +34,30 @@ public:
     bool isMicrophoneEnabled() const { return microphoneEnabled_; }
     bool isCameraEnabled() const { return cameraEnabled_; }
     bool isScreenSharing() const { return screenShareEnabled_; }
+
+    // =========================================================================
+    // Audio processing settings (runtime-applicable)
+    // =========================================================================
+    void applyAudioSettings();  // Re-read from Settings and apply
+
+    // Basic toggles
+    void setEchoCancellationEnabled(bool enabled);
+    void setNoiseSuppressionEnabled(bool enabled);
+    void setAutoGainControlEnabled(bool enabled);
+    void setHighPassFilterEnabled(bool enabled);
+
+    // Advanced parameters
+    void setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel level);
+    void setGainControlMode(AudioProcessingModule::GainControlMode mode);
+    void setFixedDigitalGainDb(float gainDb);
+    void setAdaptiveDigitalMaxGainDb(float maxGainDb);
+    void setEchoEnhancedFilterEnabled(bool enabled);
+
+    /**
+     * Feed far-end (speaker) audio into the APM for AEC reference.
+     * Called by MediaPipeline whenever remote audio is received.
+     */
+    void feedReverseAudio(const int16_t* data, int samples, int sampleRate, int channels);
 
 signals:
     void localMicrophoneChanged(bool enabled);

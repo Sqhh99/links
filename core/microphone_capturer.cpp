@@ -314,3 +314,46 @@ void MicrophoneCapturer::setAutoGainControlEnabled(bool enabled)
 {
     apm_.setAutoGainControlEnabled(enabled);
 }
+
+void MicrophoneCapturer::setHighPassFilterEnabled(bool enabled)
+{
+    apm_.setHighPassFilterEnabled(enabled);
+}
+
+void MicrophoneCapturer::setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel level)
+{
+    apm_.setNoiseSuppressionLevel(level);
+}
+
+void MicrophoneCapturer::setGainControlMode(AudioProcessingModule::GainControlMode mode)
+{
+    apm_.setGainControlMode(mode);
+}
+
+void MicrophoneCapturer::setFixedDigitalGainDb(float gainDb)
+{
+    apm_.setFixedDigitalGainDb(gainDb);
+}
+
+void MicrophoneCapturer::setAdaptiveDigitalMaxGainDb(float maxGainDb)
+{
+    apm_.setAdaptiveDigitalMaxGainDb(maxGainDb);
+}
+
+void MicrophoneCapturer::setEchoEnhancedFilterEnabled(bool enabled)
+{
+    apm_.setEchoEnhancedFilterEnabled(enabled);
+}
+
+void MicrophoneCapturer::setStreamDelayMs(int delayMs)
+{
+    apm_.setStreamDelayMs(delayMs);
+}
+
+void MicrophoneCapturer::feedReverseStream(const int16_t* data, int samples,
+                                            int sampleRate, int channels)
+{
+    if (apm_.isInitialized()) {
+        apm_.processReverseStream(data, samples, sampleRate, channels);
+    }
+}
