@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 
 RowLayout {
     id: root
@@ -43,13 +44,13 @@ RowLayout {
                 width: parent.width
                 height: 2
                 anchors.bottom: parent.bottom
-                color: tabButton.active ? "#2563EB" : "transparent"
+                color: tabButton.active ? Theme.accentColor : "transparent"
             }
         }
         
         contentItem: Text {
             text: tabButton.text
-            color: tabButton.active ? "#2563EB" : "#6B7280"
+            color: tabButton.active ? Theme.accentColor : Theme.textSecondary
             font.pixelSize: 14
             horizontalAlignment: Text.AlignHCenter
             verticalAlignment: Text.AlignVCenter

@@ -190,7 +190,7 @@ ColumnLayout {
                 Layout.preferredHeight: 1
                 Layout.topMargin: 16
                 Layout.bottomMargin: 16
-                color: "#E5E7EB"
+                color: Theme.separatorColor
             }
 
             // ── 安全与策略 ──
@@ -252,7 +252,7 @@ ColumnLayout {
                 Layout.preferredHeight: 1
                 Layout.topMargin: 18
                 Layout.bottomMargin: 14
-                color: "#E5E7EB"
+                color: Theme.separatorColor
             }
 
             PrimaryButton {

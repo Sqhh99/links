@@ -323,9 +323,9 @@ Window {
         id: windowFrame
         anchors.fill: parent
         anchors.margins: 1
-        color: "#F5F7FA"
+        color: Theme.windowBackground
         radius: 16
-        border.color: "#E5E7EB"
+        border.color: Theme.borderColor
         border.width: 1
         clip: true
         antialiasing: true
@@ -402,9 +402,9 @@ Window {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: "#F9FAFB"
+                        color: Theme.cardBackground
                         radius: 16
-                        border.color: "#E5E7EB"
+                        border.color: Theme.borderColor
                         clip: true
 
                         MainVideoPanel {
@@ -456,9 +456,9 @@ Window {
                 Rectangle {
                     id: galleryView
                     anchors.fill: parent
-                    color: "#FFFFFF"
+                    color: Theme.windowBackground
                     radius: 16
-                    border.color: "#E5E7EB"
+                    border.color: Theme.borderColor
                     visible: backend.viewMode === "gallery"
                     clip: true
 
@@ -479,9 +479,9 @@ Window {
                                 id: localGalleryCard
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: width * 9 / 16 // 16:9 aspect ratio
-                                color: "#FFFFFF"
+                                color: Theme.cardBackground
                                 radius: 12
-                                border.color: "#E5E7EB"
+                                border.color: Theme.borderColor
                                 border.width: 1
                                 clip: true
 
@@ -570,7 +570,7 @@ Window {
                                     anchors.margins: 8
                                     height: 24
                                     width: localNameRow.width + 16
-                                    color: "#FFFFFFEE"
+                                    color: Theme.isDark ? Qt.rgba(30/255, 30/255, 40/255, 0.9) : "#FFFFFFEE"
                                     radius: 6
                                     z: 10
 
@@ -598,7 +598,7 @@ Window {
 
                                         Text {
                                             text: localGalleryCard.showingScreen ? "我 (屏幕)" : "我 (You)"
-                                            color: "#374151"
+                                            color: Theme.textPrimary
                                             font.pixelSize: 11
                                             font.weight: Font.Bold
                                         }
@@ -624,10 +624,10 @@ Window {
                                     id: remoteCard
                                     Layout.fillWidth: true
                                     Layout.preferredHeight: width * 9 / 16 // 16:9 aspect ratio
-                                    color: "#FFFFFF"
+                                    color: Theme.cardBackground
                                     radius: 12
-                                    // Speaker highlight with blue border
-                                    border.color: modelData.identity === backend.mainParticipantId ? "#3B82F6" : "#E5E7EB"
+                                    // Speaker highlight with accent border
+                                    border.color: modelData.identity === backend.mainParticipantId ? Theme.accentColor : Theme.borderColor
                                     border.width: modelData.identity === backend.mainParticipantId ? 2 : 1
                                     clip: true
 
@@ -712,7 +712,7 @@ Window {
                                         anchors.fill: parent
                                         radius: 12
                                         color: "transparent"
-                                        border.color: "#3B82F620"
+                                        border.color: Theme.isDark ? Qt.rgba(91/255, 141/255, 239/255, 0.2) : "#3B82F620"
                                         border.width: 4
                                         visible: modelData.identity === backend.mainParticipantId
                                         z: 5
@@ -725,7 +725,7 @@ Window {
                                         anchors.margins: 8
                                         height: 24
                                         width: remoteNameRow.width + 16
-                                        color: "#FFFFFFEE"
+                                        color: Theme.isDark ? Qt.rgba(30/255, 30/255, 40/255, 0.9) : "#FFFFFFEE"
                                         radius: 6
                                         z: 10
 
@@ -753,7 +753,7 @@ Window {
 
                                             Text {
                                                 text: remoteCard.showingScreen ? (modelData.name || modelData.identity) + " (屏幕)" : (modelData.name || modelData.identity)
-                                                color: "#374151"
+                                                color: Theme.textPrimary
                                                 font.pixelSize: 11
                                                 font.weight: Font.Bold
                                             }

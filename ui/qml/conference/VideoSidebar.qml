@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
     
-    color: "#F5F7FA" // Light theme background
+    color: Theme.sidebarBackground // Light theme background
     
     property ConferenceBackend backend
     property var remoteRenderers: ({})
@@ -103,7 +104,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: 1
-        color: "#E5E7EB" // Light gray border
+        color: Theme.sidebarBorder // Light gray border
     }
     
     ColumnLayout {
@@ -117,7 +118,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 135
             radius: 8
-            color: "#F3F4F6"
+            color: Theme.cardBackground
             clip: true
             
             // Helper properties
@@ -156,7 +157,7 @@ Rectangle {
             Rectangle {
                 anchors.fill: parent
                 visible: !localCard.hasDualStreams
-                color: "#F3F4F6"
+                color: Theme.hoverBackground
                 
                 Text {
                     anchors.centerIn: parent
@@ -171,7 +172,7 @@ Rectangle {
                         }
                         return initials || "?"
                     }
-                    color: "#6B7280"
+                    color: Theme.textMuted
                     font.pixelSize: 28
                     font.weight: Font.Bold
                 }
@@ -197,7 +198,7 @@ Rectangle {
                     
                     Text {
                         text: backend ? backend.userName + " (You)" : "You"
-                        color: "#ffffff"
+                        color: Theme.textOnAccent
                         font.pixelSize: 12
                         font.weight: Font.Medium
                         elide: Text.ElideRight
@@ -277,7 +278,7 @@ Rectangle {
         // "EVERYONE" header
         Text {
             text: "EVERYONE"
-            color: "#6B7280" // Dark gray for text
+            color: Theme.textMuted // Dark gray for text
             font.pixelSize: 11
             font.weight: Font.Bold
             font.letterSpacing: 0.5
@@ -302,7 +303,7 @@ Rectangle {
                     width: ListView.view.width
                     height: 135
                     radius: 8
-                    color: "#F3F4F6"
+                    color: Theme.cardBackground
                     clip: true
                     
                     // Helper properties - use backend getters
@@ -344,7 +345,7 @@ Rectangle {
                     Rectangle {
                         anchors.fill: parent
                         visible: !remoteCard.hasDualStreams
-                        color: "#F3F4F6"
+                        color: Theme.hoverBackground
                         
                         Text {
                             anchors.centerIn: parent
@@ -358,7 +359,7 @@ Rectangle {
                                 }
                                 return initials || "?"
                             }
-                            color: "#6B7280"
+                            color: Theme.textMuted
                             font.pixelSize: 28
                             font.weight: Font.Bold
                         }
@@ -384,7 +385,7 @@ Rectangle {
                             
                             Text {
                                 text: modelData.name || modelData.identity
-                                color: "#ffffff"
+                                color: Theme.textOnAccent
                                 font.pixelSize: 12
                                 font.weight: Font.Medium
                                 elide: Text.ElideRight

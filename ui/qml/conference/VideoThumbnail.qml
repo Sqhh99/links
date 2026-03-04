@@ -9,7 +9,9 @@ Rectangle {
     id: root
     
     radius: 8
-    color: Theme.windowBackground // Use theme background
+    color: Theme.cardBackground // Use theme background
+    border.color: Theme.borderColor
+    border.width: 1
     clip: true
     
     property string participantId: ""
@@ -88,7 +90,7 @@ Rectangle {
         height: 36
         gradient: Gradient {
             GradientStop { position: 0.0; color: "transparent" }
-            GradientStop { position: 1.0; color: "#80000000" }
+            GradientStop { position: 1.0; color: Theme.isDark ? Qt.rgba(0, 0, 0, 0.4) : Qt.rgba(0, 0, 0, 0.3) }
         }
     }
     

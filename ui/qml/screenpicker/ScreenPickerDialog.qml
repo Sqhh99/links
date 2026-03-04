@@ -63,9 +63,9 @@ Popup {
     
     contentItem: Rectangle {
         id: frame
-        color: "#FFFFFF"
+        color: Theme.windowBackground
         radius: 12
-        border.color: "#E5E7EB"
+        border.color: Theme.borderColor
         border.width: 1
         
         // Drag support
@@ -96,7 +96,7 @@ Popup {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                color: "#F9FAFB" // Gray-50
+                color: Theme.cardBackground
                 radius: 8
                 
                 StackLayout {
@@ -121,11 +121,22 @@ Popup {
                             Item { Layout.fillWidth: true }
                             
                             Button {
+                                id: refreshBtn
                                 text: "刷新"
                                 implicitWidth: 72
                                 implicitHeight: 32
-                                background: Rectangle { color: "white"; radius: 6; border.color: "#E5E7EB" }
-                                contentItem: Text { text: parent.text; color: "#4B5563"; font.pixelSize: 12; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                                background: Rectangle { 
+                                    color: refreshBtn.hovered ? Theme.hoverBackground : "transparent"
+                                    radius: 6 
+                                    border.color: Theme.borderColor 
+                                }
+                                contentItem: Text { 
+                                    text: parent.text 
+                                    color: Theme.textSecondary
+                                    font.pixelSize: 12 
+                                    horizontalAlignment: Text.AlignHCenter 
+                                    verticalAlignment: Text.AlignVCenter 
+                                }
                                 onClicked: backend.refreshWindows()
                             }
                         }
@@ -150,27 +161,39 @@ Popup {
                 Item { Layout.fillWidth: true }
                 
                 Button {
+                    id: cancelBtn
                     text: "取消"
                     implicitWidth: 80
                     implicitHeight: 36
-                    background: Rectangle { color: parent.hovered ? "#F3F4F6" : "white"; radius: 8; border.color: "#D1D5DB" }
-                    contentItem: Text { text: parent.text; color: "#374151"; font.pixelSize: 13; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { 
+                        color: cancelBtn.hovered ? Theme.hoverBackground : "transparent"
+                        radius: 8 
+                        border.color: Theme.borderColor 
+                    }
+                    contentItem: Text { 
+                        text: parent.text 
+                        color: Theme.textPrimary
+                        font.pixelSize: 13 
+                        horizontalAlignment: Text.AlignHCenter 
+                        verticalAlignment: Text.AlignVCenter 
+                    }
                     onClicked: backend.cancel()
                 }
                 
                 Button {
+                    id: shareBtn
                     text: backend.shareButtonText
                     enabled: backend.hasSelection
                     implicitHeight: 36
                     implicitWidth: 100
                     
                     background: Rectangle {
-                        color: enabled ? "#2563EB" : "#93C5FD"
+                        color: enabled ? (shareBtn.hovered ? Theme.accentHover : Theme.accentColor) : Theme.disabledBackground
                         radius: 8
                     }
                     contentItem: Text {
                         text: parent.text
-                        color: "white"
+                        color: Theme.textOnAccent
                         font.pixelSize: 13
                         font.weight: Font.DemiBold
                         horizontalAlignment: Text.AlignHCenter

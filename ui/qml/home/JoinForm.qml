@@ -57,7 +57,7 @@ ColumnLayout {
     
     Text {
         text: root.guestMode ? "会议号 / 分享链接 / 房间名称" : "会议号 / 分享链接"
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 13
         font.weight: Font.DemiBold
     }

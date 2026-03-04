@@ -273,8 +273,8 @@ Rectangle {
                             Layout.bottomMargin: 12
                             implicitHeight: 44
                             radius: 8
-                            color: "#F9FAFB"
-                            border.color: "#E5E7EB"
+                            color: Theme.cardBackground
+                            border.color: Theme.borderColor
                             border.width: 1
 
                             RowLayout {

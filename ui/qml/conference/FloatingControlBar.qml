@@ -92,9 +92,9 @@ Window {
         id: container
         anchors.fill: parent
         radius: 24
-        color: Qt.rgba(255, 255, 255, 0.95)
+        color: Theme.isDark ? Qt.rgba(40/255, 40/255, 45/255, 0.95) : Qt.rgba(255, 255, 255, 0.95)
         border.width: 1
-        border.color: "#E5E7EB"
+        border.color: Theme.borderColor
         
         // Shadow effect
         layer.enabled: true
@@ -133,14 +133,14 @@ Window {
                     
                     Text {
                         text: "正在共享"
-                        color: "#374151"
+                        color: Theme.textPrimary
                         font.pixelSize: 12
                         font.weight: Font.Medium
                     }
                     
                     Text {
                         text: backend && backend.shareMode ? backend.shareMode.formattedTime : "00:00"
-                        color: "#6B7280"
+                        color: Theme.textMuted
                         font.pixelSize: 12
                         font.family: "Consolas"
                     }
@@ -173,7 +173,7 @@ Window {
                 Layout.fillHeight: true
                 Layout.topMargin: 12
                 Layout.bottomMargin: 12
-                color: "#E5E7EB"
+                color: Theme.separatorColor
             }
             
             // --- Center: Media controls ---
@@ -227,7 +227,7 @@ Window {
                     visible: !root.isGuest
                     width: 1
                     height: 20
-                    color: "#E5E7EB"
+                    color: Theme.separatorColor
                 }
                 
                 IconButton {
@@ -242,7 +242,7 @@ Window {
                 Layout.fillHeight: true
                 Layout.topMargin: 12
                 Layout.bottomMargin: 12
-                color: "#E5E7EB"
+                color: Theme.separatorColor
             }
             
             // --- Right: End Share button ---
@@ -310,9 +310,9 @@ Window {
             id: splitContainer
             anchors.fill: parent
             radius: 10
-            color: splitBtn.isActive ? "#FFFFFF" : "#FEF2F2"
+            color: splitBtn.isActive ? "transparent" : Theme.accentLight
             border.width: 1
-            border.color: splitBtn.isActive ? "#E5E7EB" : "#FEE2E2"
+            border.color: splitBtn.isActive ? Theme.borderColor : Theme.borderAccent
             clip: true
             
             Row {
@@ -324,7 +324,7 @@ Window {
                     width: 40
                     height: parent.height
                     color: mainArea.containsMouse
-                        ? (splitBtn.isActive ? "#F3F4F6" : "#FEE2E2")
+                        ? Theme.hoverBackground
                         : "transparent"
                     
                     Image {
@@ -362,7 +362,7 @@ Window {
                     width: 1
                     height: parent.height - 10
                     anchors.verticalCenter: parent.verticalCenter
-                    color: splitBtn.isActive ? "#E5E7EB" : "#FECACA"
+                    color: splitBtn.isActive ? Theme.separatorColor : Theme.borderAccent
                 }
                 
                 Rectangle {
@@ -370,7 +370,7 @@ Window {
                     width: 23
                     height: parent.height
                     color: dropdownArea.containsMouse
-                        ? (splitBtn.isActive ? "#F3F4F6" : "#FEE2E2")
+                        ? Theme.hoverBackground
                         : "transparent"
                     
                     Image {
@@ -378,7 +378,7 @@ Window {
                         source: menuPopup.visible ? "qrc:/res/icon/chevron-down.png" : "qrc:/res/icon/chevron-up.png"
                         sourceSize.width: 9
                         sourceSize.height: 9
-                        opacity: splitBtn.isActive ? 0.6 : 0.8
+                        opacity: Theme.iconOpacity
                     }
                     
                     MouseArea {
@@ -437,10 +437,10 @@ Window {
             closePolicy: Popup.CloseOnEscape
             
             background: Rectangle {
-                color: "#FFFFFF"
+                color: Theme.popupBackground
                 radius: 12
                 border.width: 1
-                border.color: "#E5E7EB"
+                border.color: Theme.popupBorder
                 layer.enabled: true
                 layer.effect: null
             }
@@ -451,7 +451,7 @@ Window {
                 
                 Text {
                     text: "选择设备"
-                    color: "#9CA3AF"
+                    color: Theme.textMuted
                     font.pixelSize: 10
                     font.weight: Font.Bold
                     font.letterSpacing: 0.5
@@ -467,8 +467,8 @@ Window {
                         height: 34
                         radius: 8
                         color: modelData.id === splitBtn.selectedDeviceId
-                            ? "#EFF6FF"
-                            : (deviceItemArea.containsMouse ? "#F9FAFB" : "transparent")
+                            ? Theme.activeBackground
+                            : (deviceItemArea.containsMouse ? Theme.hoverBackground : "transparent")
                         
                         RowLayout {
                             anchors.fill: parent
@@ -478,7 +478,7 @@ Window {
                             
                             Text {
                                 text: modelData.name || modelData.label || modelData.id
-                                color: modelData.id === splitBtn.selectedDeviceId ? "#2563EB" : "#374151"
+                                color: modelData.id === splitBtn.selectedDeviceId ? Theme.accentColor : Theme.textSecondary
                                 font.pixelSize: 12
                                 font.weight: modelData.id === splitBtn.selectedDeviceId ? Font.Bold : Font.Normal
                                 elide: Text.ElideRight
@@ -488,7 +488,7 @@ Window {
                             Text {
                                 visible: modelData.id === splitBtn.selectedDeviceId
                                 text: "✓"
-                                color: "#2563EB"
+                                color: Theme.accentColor
                                 font.pixelSize: 12
                                 font.weight: Font.Bold
                             }
@@ -510,14 +510,14 @@ Window {
                 Rectangle {
                     width: 204
                     height: 1
-                    color: "#F3F4F6"
+                    color: Theme.separatorColor
                 }
 
                 Rectangle {
                     width: 204
                     height: 34
                     radius: 8
-                    color: settingsItemArea.containsMouse ? "#F9FAFB" : "transparent"
+                    color: settingsItemArea.containsMouse ? Theme.hoverBackground : "transparent"
 
                     RowLayout {
                         anchors.fill: parent
@@ -528,12 +528,12 @@ Window {
                             source: "qrc:/res/icon/set_up.png"
                             sourceSize.width: 12
                             sourceSize.height: 12
-                            opacity: 0.6
+                            opacity: Theme.iconOpacity
                         }
 
                         Text {
                             text: "音视频设置..."
-                            color: "#6B7280"
+                            color: Theme.textSecondary
                             font.pixelSize: 12
                         }
                     }

@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
     
-    color: "#FFFFFF"
+    color: Theme.sidebarBackground
     radius: 12
     clip: true
     
@@ -31,7 +32,7 @@ Rectangle {
         anchors.top: parent.top
         anchors.bottom: parent.bottom
         width: 1
-        color: "#E5E7EB"
+        color: Theme.sidebarBorder
     }
     
     ColumnLayout {
@@ -51,7 +52,7 @@ Rectangle {
                 
                 Text {
                     text: root.chatActive ? "消息讨论" : "参会成员"
-                    color: "#111827" // Gray-900
+                    color: Theme.textPrimary
                     font.pixelSize: 14
                     font.weight: Font.Bold
                 }
@@ -62,13 +63,13 @@ Rectangle {
                     width: countText.implicitWidth + 12
                     height: 20
                     radius: 4
-                    color: "#F3F4F6"
+                    color: Theme.hoverBackground
                     
                     Text {
                         id: countText
                         anchors.centerIn: parent
                         text: backend ? (root.chatActive ? backend.chatMessages.length : backend.participants.length) : "0"
-                        color: "#6B7280"
+                        color: Theme.textSecondary
                         font.pixelSize: 11
                     }
                 }
@@ -85,7 +86,7 @@ Rectangle {
                             if (backend.isParticipantsVisible) backend.isParticipantsVisible = false
                         }
                     }
-                    Text { anchors.centerIn: parent; text: "×"; color: "#9CA3AF"; font.pixelSize: 20 }
+                    Text { anchors.centerIn: parent; text: "×"; color: Theme.textHint; font.pixelSize: 20 }
                 }
             }
             
@@ -95,7 +96,7 @@ Rectangle {
                 anchors.right: parent.right
                 anchors.bottom: parent.bottom
                 height: 1
-                color: "#E5E7EB"
+                color: Theme.separatorColor
             }
         }
         
@@ -177,7 +178,7 @@ Rectangle {
             Rectangle {
                 id: chatPanel
                 anchors.fill: parent
-                color: "#F9FAFB" // Gray-50
+                color: Theme.sidebarBackground
                 x: 24
                 opacity: 0
                 
@@ -220,7 +221,7 @@ Rectangle {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.preferredHeight: 74
-                        color: "#FFFFFF"
+                        color: Theme.sidebarBackground
                         
                         // Top border
                         Rectangle {
@@ -228,7 +229,7 @@ Rectangle {
                             anchors.right: parent.right
                             anchors.top: parent.top
                             height: 1
-                            color: "#E5E7EB"
+                            color: Theme.sidebarBorder
                         }
                         
                         RowLayout {
@@ -241,16 +242,16 @@ Rectangle {
                                 Layout.fillWidth: true
                                 Layout.fillHeight: true
                                 placeholderText: "输入消息..."
-                                placeholderTextColor: "#9CA3AF"
+                                placeholderTextColor: Theme.inputPlaceholder
                                 
                                 background: Rectangle {
-                                    color: "#FFFFFF"
-                                    border.color: messageInput.activeFocus ? "#2563EB" : "#E5E7EB"
+                                    color: Theme.inputBackground
+                                    border.color: messageInput.activeFocus ? Theme.inputBorderFocus : Theme.inputBorder
                                     border.width: 1
                                     radius: 8
                                 }
                                 
-                                color: "#111827"
+                                color: Theme.inputText
                                 font.pixelSize: 14
                                 leftPadding: 12
                                 rightPadding: 12
@@ -272,13 +273,13 @@ Rectangle {
                                 implicitHeight: 40
                                 
                                 background: Rectangle {
-                                    color: sendButton.down ? "#1E40AF" : (sendButton.hovered ? "#1D4ED8" : "#2563EB")
+                                    color: sendButton.down ? Theme.accentPressed : (sendButton.hovered ? Theme.accentHover : Theme.accentColor)
                                     radius: 8
                                 }
                                 
                                 contentItem: Text {
                                     text: "→" // Should use send icon
-                                    color: "white"
+                                    color: Theme.textOnAccent
                                     font.pixelSize: 16
                                     font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter

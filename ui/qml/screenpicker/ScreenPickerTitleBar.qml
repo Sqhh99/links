@@ -13,7 +13,7 @@ RowLayout {
     
     Text {
         text: "选择共享内容"
-        color: "#111827"
+        color: Theme.textPrimary
         font.pixelSize: 16
         font.weight: Font.Bold
     }
@@ -22,7 +22,7 @@ RowLayout {
     
     IconButton {
         iconSource: "qrc:/res/icon/close.png"
-        hoverColor: "#F3F4F6"
+        hoverColor: Theme.hoverBackground
         onClicked: root.closeClicked()
     }
 }
