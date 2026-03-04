@@ -235,6 +235,17 @@ void Settings::setTheme(const QString& theme)
     settings_.sync();
 }
 
+bool Settings::isAutoHideConferenceChromeEnabled() const
+{
+    return settings_.value("appearance/auto_hide_chrome", true).toBool();
+}
+
+void Settings::setAutoHideConferenceChromeEnabled(bool enabled)
+{
+    settings_.setValue("appearance/auto_hide_chrome", enabled);
+    settings_.sync();
+}
+
 void Settings::sync()
 {
     settings_.sync();

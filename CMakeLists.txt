@@ -84,6 +84,7 @@ set(SOURCES
     ui/backend/ShareModeManager.cpp
     ui/backend/AuthBackend.cpp
     ui/backend/ThemeManager.cpp
+    ui/backend/AppearanceManager.cpp
 )
 
 # Windows-specific desktop capture sources
@@ -145,6 +146,7 @@ set(HEADERS
     ui/backend/ShareModeManager.h
     ui/backend/AuthBackend.h
     ui/backend/ThemeManager.h
+    ui/backend/AppearanceManager.h
 )
 
 # Create executable

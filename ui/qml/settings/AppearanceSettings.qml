@@ -1,5 +1,6 @@
 import QtQuick
 import Links
+import Links as Comp
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links.Backend 1.0
@@ -218,6 +219,36 @@ ScrollView {
             text: "选择主题后将立即应用到所有界面"
             color: Theme.textHint
             font.pixelSize: 11
+        }
+
+        Rectangle {
+            Layout.fillWidth: true
+            color: "transparent"
+            border.color: Theme.separatorColor
+            border.width: 1
+            radius: 8
+            implicitHeight: autoHideColumn.implicitHeight + 24
+
+            ColumnLayout {
+                id: autoHideColumn
+                anchors.fill: parent
+                anchors.margins: 12
+                spacing: 6
+
+                Comp.CheckBox {
+                    text: "自动隐藏顶部栏和底部栏"
+                    checked: AppearanceManager.autoHideConferenceChrome
+                    onToggled: AppearanceManager.setAutoHideConferenceChrome(checked)
+                }
+
+                Text {
+                    text: "开启后，会议中无操作时将自动隐藏顶部和底部面板，移动到边缘可再次显示。"
+                    color: Theme.textHint
+                    font.pixelSize: 11
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                }
+            }
         }
 
         Item { Layout.fillHeight: true }

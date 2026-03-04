@@ -88,6 +88,8 @@ public:
     // Appearance
     QString getTheme() const;
     void setTheme(const QString& theme);
+    bool isAutoHideConferenceChromeEnabled() const;
+    void setAutoHideConferenceChromeEnabled(bool enabled);
     
     // Force sync to disk
     void sync();

@@ -13,6 +13,7 @@
 #include "ui/backend/ShareModeManager.h"
 #include "ui/backend/AuthBackend.h"
 #include "ui/backend/ThemeManager.h"
+#include "ui/backend/AppearanceManager.h"
 #include "utils/logger.h"
 #include "livekit/livekit.h"
 
@@ -130,6 +131,10 @@ int main(int argc, char* argv[])
     // Theme manager singleton
     auto* themeManager = new ThemeManager(&app);
     qmlRegisterSingletonInstance("Links.Backend", 1, 0, "ThemeManager", themeManager);
+
+    // Appearance manager singleton
+    auto* appearanceManager = new AppearanceManager(&app);
+    qmlRegisterSingletonInstance("Links.Backend", 1, 0, "AppearanceManager", appearanceManager);
 
     QQmlApplicationEngine engine;
     g_engine = &engine;

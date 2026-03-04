@@ -25,7 +25,7 @@ Window {
     property string userAuthToken: ""
     property bool isHost: false
     property bool isGuest: false
-    property bool chromeAutoHideEnabled: true
+    property bool chromeAutoHideEnabled: AppearanceManager.autoHideConferenceChrome
     property bool topChromeVisible: true
     property bool bottomChromeVisible: true
     property int chromeAutoHideDelayMs: 3000
@@ -316,6 +316,16 @@ Window {
         } else {
             chromeAutoHideTimer.stop()
         }
+    }
+
+    onChromeAutoHideEnabledChanged: {
+        if (!chromeAutoHideEnabled) {
+            topChromeVisible = true
+            bottomChromeVisible = true
+            chromeAutoHideTimer.stop()
+            return
+        }
+        restartChromeAutoHideTimer()
     }
 
     // Main content
