@@ -25,6 +25,14 @@ Window {
     property string userAuthToken: ""
     property bool isHost: false
     property bool isGuest: false
+    property bool chromeAutoHideEnabled: true
+    property bool topChromeVisible: true
+    property bool bottomChromeVisible: true
+    property int chromeAutoHideDelayMs: 3000
+    property int topRevealZoneHeight: 48
+    property int bottomRevealZoneHeight: 72
+    property int topChromeHeight: 52
+    property int bottomChromeHeight: 68
 
     // Backend
     ConferenceBackend {
@@ -241,6 +249,75 @@ Window {
         }
     }
 
+    function restartChromeAutoHideTimer() {
+        if (!chromeAutoHideEnabled || !visible) {
+            return
+        }
+        chromeAutoHideTimer.restart()
+    }
+
+    function resetChromeVisibility() {
+        topChromeVisible = true
+        bottomChromeVisible = true
+        restartChromeAutoHideTimer()
+    }
+
+    function maybeRevealChromeByPointer(pointerY) {
+        if (!chromeAutoHideEnabled || !visible) {
+            return
+        }
+
+        var nearTop = pointerY <= topRevealZoneHeight
+        var nearBottom = pointerY >= (windowFrame.height - bottomRevealZoneHeight)
+        var didReveal = false
+
+        if (!topChromeVisible && nearTop) {
+            topChromeVisible = true
+            didReveal = true
+        }
+        if (!bottomChromeVisible && nearBottom) {
+            bottomChromeVisible = true
+            didReveal = true
+        }
+
+        if (didReveal || topChromeVisible || bottomChromeVisible) {
+            restartChromeAutoHideTimer()
+        }
+    }
+
+    Timer {
+        id: chromeAutoHideTimer
+        interval: root.chromeAutoHideDelayMs
+        repeat: false
+        running: false
+
+        onTriggered: {
+            if (!root.chromeAutoHideEnabled || !root.visible) {
+                return
+            }
+            root.topChromeVisible = false
+            root.bottomChromeVisible = false
+        }
+    }
+
+    Component.onCompleted: resetChromeVisibility()
+
+    onActiveChanged: {
+        if (active) {
+            resetChromeVisibility()
+        } else {
+            chromeAutoHideTimer.stop()
+        }
+    }
+
+    onVisibleChanged: {
+        if (visible) {
+            resetChromeVisibility()
+        } else {
+            chromeAutoHideTimer.stop()
+        }
+    }
+
     // Main content
     Rectangle {
         id: windowFrame
@@ -258,16 +335,32 @@ Window {
             spacing: 0
 
             // Title bar
-            ConferenceTitleBar {
-                id: titleBar
+            Item {
+                id: topBarHost
                 Layout.fillWidth: true
-                targetWindow: root
-                backend: backend
-                shareUrl: {
-                    if (!backend.meetingNo || backend.meetingNo.length === 0)
-                        return ""
-                    var base = settingsBackendInstance.apiUrl.replace(/\/+$/, "")
-                    return base + "/join?meetingNo=" + encodeURIComponent(backend.meetingNo)
+                Layout.preferredHeight: root.topChromeVisible ? root.topChromeHeight : 0
+                opacity: root.topChromeVisible ? 1 : 0
+                visible: Layout.preferredHeight > 0 || opacity > 0
+                clip: true
+
+                Behavior on Layout.preferredHeight {
+                    NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                }
+                Behavior on opacity {
+                    NumberAnimation { duration: 160; easing.type: Easing.OutQuad }
+                }
+
+                ConferenceTitleBar {
+                    id: titleBar
+                    anchors.fill: parent
+                    targetWindow: root
+                    backend: backend
+                    shareUrl: {
+                        if (!backend.meetingNo || backend.meetingNo.length === 0)
+                            return ""
+                        var base = settingsBackendInstance.apiUrl.replace(/\/+$/, "")
+                        return base + "/join?meetingNo=" + encodeURIComponent(backend.meetingNo)
+                    }
                 }
             }
 
@@ -683,17 +776,98 @@ Window {
             }
 
             // Fixed bottom control bar
-            ControlBar {
-                id: controlBar
+            Item {
+                id: bottomBarHost
                 Layout.fillWidth: true
-                backend: backend
-                settingsBackend: settingsBackendInstance
-                isGuest: root.isGuest
+                Layout.preferredHeight: root.bottomChromeVisible ? root.bottomChromeHeight : 0
+                opacity: root.bottomChromeVisible ? 1 : 0
+                visible: Layout.preferredHeight > 0 || opacity > 0
+                clip: true
 
-                onScreenShareClicked: {
-                    if (backend && backend.screenShareSupported) {
-                        screenPickerDialog.open()
+                Behavior on Layout.preferredHeight {
+                    NumberAnimation { duration: 220; easing.type: Easing.OutCubic }
+                }
+                Behavior on opacity {
+                    NumberAnimation { duration: 160; easing.type: Easing.OutQuad }
+                }
+
+                ControlBar {
+                    id: controlBar
+                    anchors.fill: parent
+                    backend: backend
+                    settingsBackend: settingsBackendInstance
+                    isGuest: root.isGuest
+
+                    onScreenShareClicked: {
+                        if (backend && backend.screenShareSupported) {
+                            screenPickerDialog.open()
+                        }
                     }
+                }
+            }
+        }
+
+        HoverHandler {
+            id: activityHoverHandler
+
+            onPointChanged: function(point) {
+                if (!point) {
+                    return
+                }
+                var yInWindowFrame = point.position.y
+                if (point.scenePosition) {
+                    yInWindowFrame = point.scenePosition.y - windowFrame.y
+                }
+                root.maybeRevealChromeByPointer(yInWindowFrame)
+            }
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: root.topRevealZoneHeight
+            visible: root.chromeAutoHideEnabled && !root.topChromeVisible
+            color: "transparent"
+            z: 40
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                hoverEnabled: true
+
+                onEntered: {
+                    root.topChromeVisible = true
+                    root.restartChromeAutoHideTimer()
+                }
+
+                onPositionChanged: function(mouse) {
+                    root.maybeRevealChromeByPointer(mouse.y)
+                }
+            }
+        }
+
+        Rectangle {
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: root.bottomRevealZoneHeight
+            visible: root.chromeAutoHideEnabled && !root.bottomChromeVisible
+            color: "transparent"
+            z: 40
+
+            MouseArea {
+                anchors.fill: parent
+                acceptedButtons: Qt.NoButton
+                hoverEnabled: true
+
+                onEntered: {
+                    root.bottomChromeVisible = true
+                    root.restartChromeAutoHideTimer()
+                }
+
+                onPositionChanged: function(mouse) {
+                    root.maybeRevealChromeByPointer(parent.y + mouse.y)
                 }
             }
         }
@@ -719,9 +893,9 @@ Window {
             id: rightSidebarHost
             anchors.right: parent.right
             anchors.top: parent.top
-            anchors.topMargin: 52
+            anchors.topMargin: topBarHost.height
             anchors.bottom: parent.bottom
-            anchors.bottomMargin: 68
+            anchors.bottomMargin: bottomBarHost.height
             width: (backend.isChatVisible || backend.isParticipantsVisible) ? 320 : 0
             opacity: (backend.isChatVisible || backend.isParticipantsVisible) ? 1 : 0
             visible: width > 0 || backend.isChatVisible || backend.isParticipantsVisible
