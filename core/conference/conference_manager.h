@@ -6,8 +6,11 @@
 #include <QByteArray>
 #include <QImage>
 #include <QList>
+#include <QSet>
 #include <memory>
+#include <vector>
 #include "conference_types.h"
+#include "network_stats_aggregator.h"
 #include "room_controller.h"
 #include "participant_store.h"
 #include "media_pipeline.h"
@@ -110,6 +113,8 @@ signals:
                             const QImage& frame,
                             livekit::TrackSource source);
     void audioActivity(const QString& participantIdentity, bool hasAudio);
+    void localConnectionQualityChanged(int quality);
+    void localNetworkStatsUpdated(const NetworkStatsSnapshot& stats);
     
 private:
     // Queued slots for RoomEventDelegate signals (thread-safe event handling)
@@ -123,11 +128,17 @@ private:
     void onTrackMutedQueued(QString trackSid, QString participantIdentity, int kind);
     void onTrackUnmutedQueued(QString trackSid, QString participantIdentity, int kind);
     void onTrackUnpublishedQueued(QString trackSid, QString participantIdentity, int kind, int source);
+    void onConnectionQualityChangedQueued(QString participantIdentity, int quality);
     void onConnectionStateChangedQueued(int state);
     void onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
     
     void updateParticipantInfo(const QString& identity);
     void reconcileParticipantsInternal(const char* source);
+    void pollLocalNetworkStats();
+    QString resolveLocalParticipantIdentity() const;
+    std::vector<std::shared_ptr<livekit::Track>> collectTrackStatsSources() const;
+    NetworkStatsSnapshot buildEstimatedNetworkSnapshot(NetworkQualityLevel quality, qint64 nowMs) const;
+    void resetNetworkMetrics();
 
     std::unique_ptr<RoomController> roomController_;
     std::unique_ptr<RoomEventDelegate> roomDelegate_;
@@ -139,6 +150,14 @@ private:
     QString participantName_;
     QString participantIdentity_;
     bool connected_{false};
+    QTimer networkStatsTimer_;
+    NetworkQualityLevel localNetworkQuality_{NetworkQualityLevel::Unknown};
+    NetworkStatsSnapshot localNetworkStats_;
+    NetworkByteCounters previousNetworkByteCounters_;
+    bool usingEstimatedNetworkStats_{false};
+    bool networkStatsPollInFlight_{false};
+    quint64 networkStatsPollSeq_{0};
+    QSet<QString> lastPolledTrackSids_;
 };
 
 #endif // CORE_CONFERENCE_CONFERENCE_MANAGER_H

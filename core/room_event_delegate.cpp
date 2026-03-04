@@ -1,5 +1,6 @@
 #include "room_event_delegate.h"
 #include "../utils/logger.h"
+#include "livekit/participant.h"
 #include "livekit/remote_participant.h"
 #include "livekit/remote_track_publication.h"
 #include "livekit/track.h"
@@ -121,6 +122,28 @@ void RoomEventDelegate::onTrackUnpublished(livekit::Room& room,
     
     emit trackUnpublishedQueued(trackSid, participantIdentity, kind, source);
 }
+
+void RoomEventDelegate::onConnectionQualityChanged(
+    livekit::Room& room,
+    const livekit::ConnectionQualityChangedEvent& event)
+{
+    Q_UNUSED(room);
+
+    if (!event.participant) {
+        return;
+    }
+
+    const QString participantIdentity =
+        QString::fromStdString(event.participant->identity());
+    const int quality = static_cast<int>(event.quality);
+
+    Logger::instance().info(QString("RoomEventDelegate: Connection quality changed for %1: %2")
+        .arg(participantIdentity)
+        .arg(quality));
+
+    emit connectionQualityChangedQueued(participantIdentity, quality);
+}
+
 void RoomEventDelegate::onConnectionStateChanged(livekit::Room& room, 
                                                   const livekit::ConnectionStateChangedEvent& event)
 {

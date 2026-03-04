@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QTimer>
+#include <QDateTime>
 #include <QVariant>
 #include <QVariantList>
 #include <QImage>
@@ -25,6 +26,21 @@ class ConferenceBackend : public QObject
     Q_PROPERTY(QString connectionStatus READ connectionStatus NOTIFY connectionStatusChanged)
     Q_PROPERTY(QString connectionColor READ connectionColor NOTIFY connectionStatusChanged)
     Q_PROPERTY(bool isConnected READ isConnected NOTIFY connectionStatusChanged)
+    Q_PROPERTY(QString networkQualityText READ networkQualityText NOTIFY networkMetricsChanged)
+    Q_PROPERTY(QString networkQualityColor READ networkQualityColor NOTIFY networkMetricsChanged)
+    Q_PROPERTY(int networkRttMs READ networkRttMs NOTIFY networkMetricsChanged)
+    Q_PROPERTY(int networkJitterMs READ networkJitterMs NOTIFY networkMetricsChanged)
+    Q_PROPERTY(double networkPacketLossPercent READ networkPacketLossPercent NOTIFY networkMetricsChanged)
+    Q_PROPERTY(int networkUplinkKbps READ networkUplinkKbps NOTIFY networkMetricsChanged)
+    Q_PROPERTY(int networkDownlinkKbps READ networkDownlinkKbps NOTIFY networkMetricsChanged)
+    Q_PROPERTY(bool networkStatsAvailable READ networkStatsAvailable NOTIFY networkMetricsChanged)
+    Q_PROPERTY(QString videoResolution READ videoResolution NOTIFY networkMetricsChanged)
+    Q_PROPERTY(double videoFps READ videoFps NOTIFY networkMetricsChanged)
+    Q_PROPERTY(QString audioCodec READ audioCodec NOTIFY networkMetricsChanged)
+    Q_PROPERTY(QString videoCodec READ videoCodec NOTIFY networkMetricsChanged)
+    Q_PROPERTY(int availableSendBandwidth READ availableSendBandwidth NOTIFY networkMetricsChanged)
+    Q_PROPERTY(QString transportProtocol READ transportProtocol NOTIFY networkMetricsChanged)
+    Q_PROPERTY(QString meetingDuration READ meetingDuration NOTIFY meetingDurationChanged)
 
     Q_PROPERTY(bool micEnabled READ micEnabled NOTIFY micEnabledChanged)
     Q_PROPERTY(bool camEnabled READ camEnabled NOTIFY camEnabledChanged)
@@ -65,6 +81,21 @@ public:
     QString connectionStatus() const { return connectionStatus_; }
     QString connectionColor() const { return connectionColor_; }
     bool isConnected() const;
+    QString networkQualityText() const;
+    QString networkQualityColor() const;
+    int networkRttMs() const { return networkStats_.rttMs; }
+    int networkJitterMs() const { return networkStats_.jitterMs; }
+    double networkPacketLossPercent() const { return networkStats_.packetLossPercent; }
+    int networkUplinkKbps() const { return networkStats_.uplinkKbps; }
+    int networkDownlinkKbps() const { return networkStats_.downlinkKbps; }
+    bool networkStatsAvailable() const;
+    QString videoResolution() const;
+    double videoFps() const { return networkStats_.videoFps; }
+    QString audioCodec() const { return networkStats_.audioCodec; }
+    QString videoCodec() const { return networkStats_.videoCodec; }
+    int availableSendBandwidth() const { return networkStats_.availableSendBandwidthKbps; }
+    QString transportProtocol() const { return networkStats_.transportProtocol; }
+    QString meetingDuration() const;
     bool micEnabled() const;
     bool camEnabled() const;
     bool screenSharing() const;
@@ -127,6 +158,8 @@ signals:
     void userNameChanged();
     void participantCountChanged();
     void connectionStatusChanged();
+    void networkMetricsChanged();
+    void meetingDurationChanged();
     void micEnabledChanged();
     void camEnabledChanged();
     void screenSharingChanged();
@@ -196,6 +229,8 @@ private:
 
     QString connectionStatus_{"Connecting..."};
     QString connectionColor_{"#a0a0b0"};
+    NetworkQualityLevel networkQuality_{NetworkQualityLevel::Unknown};
+    NetworkStatsSnapshot networkStats_;
 
     bool isChatVisible_{false};
     bool isParticipantsVisible_{false};
@@ -220,6 +255,8 @@ private:
 
     QMap<QString, QPair<QString, bool>> trackInfoMap_;
     QTimer participantReconcileTimer_;
+    QTimer meetingDurationTimer_;
+    QDateTime meetingStartTime_;
 };
 
 #endif // CONFERENCE_BACKEND_H

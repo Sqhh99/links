@@ -9,6 +9,60 @@
 #include <QTimer>
 #include <QGuiApplication>
 #include <QScreen>
+#include <cmath>
+
+namespace {
+
+QString toQualityText(NetworkQualityLevel quality)
+{
+    switch (quality) {
+        case NetworkQualityLevel::Excellent:
+            return "优秀";
+        case NetworkQualityLevel::Good:
+            return "良好";
+        case NetworkQualityLevel::Poor:
+            return "较差";
+        case NetworkQualityLevel::Lost:
+            return "丢失";
+        default:
+            return "检测中";
+    }
+}
+
+QString toQualityColor(NetworkQualityLevel quality)
+{
+    switch (quality) {
+        case NetworkQualityLevel::Excellent:
+            return "#16A34A";
+        case NetworkQualityLevel::Good:
+            return "#059669";
+        case NetworkQualityLevel::Poor:
+            return "#D97706";
+        case NetworkQualityLevel::Lost:
+            return "#DC2626";
+        default:
+            return "#6B7280";
+    }
+}
+
+bool networkStatsDifferent(const NetworkStatsSnapshot& lhs,
+                           const NetworkStatsSnapshot& rhs)
+{
+    return lhs.rttMs != rhs.rttMs
+        || lhs.jitterMs != rhs.jitterMs
+        || std::fabs(lhs.packetLossPercent - rhs.packetLossPercent) >= 0.001
+        || lhs.uplinkKbps != rhs.uplinkKbps
+        || lhs.downlinkKbps != rhs.downlinkKbps
+        || lhs.videoWidth != rhs.videoWidth
+        || lhs.videoHeight != rhs.videoHeight
+        || std::fabs(lhs.videoFps - rhs.videoFps) >= 0.1
+        || lhs.audioCodec != rhs.audioCodec
+        || lhs.videoCodec != rhs.videoCodec
+        || lhs.availableSendBandwidthKbps != rhs.availableSendBandwidthKbps
+        || lhs.transportProtocol != rhs.transportProtocol;
+}
+
+} // namespace
 
 ConferenceBackend::ConferenceBackend(QObject* parent)
     : QObject(parent)
@@ -17,6 +71,12 @@ ConferenceBackend::ConferenceBackend(QObject* parent)
     , isHost_(false)
 {
     setupParticipantReconcileTimer();
+
+    meetingDurationTimer_.setInterval(1000);
+    meetingDurationTimer_.setSingleShot(false);
+    connect(&meetingDurationTimer_, &QTimer::timeout, this, [this]() {
+        emit meetingDurationChanged();
+    });
 }
 
 ConferenceBackend::~ConferenceBackend()
@@ -77,6 +137,23 @@ void ConferenceBackend::setupConnections()
             this, &ConferenceBackend::onTrackSubscribed);
     connect(conferenceManager_, &ConferenceManager::trackUnpublished,
             this, &ConferenceBackend::onTrackUnpublished);
+    connect(conferenceManager_, &ConferenceManager::localConnectionQualityChanged,
+            this, [this](int quality) {
+                const auto nextQuality = static_cast<NetworkQualityLevel>(quality);
+                if (nextQuality == networkQuality_) {
+                    return;
+                }
+                networkQuality_ = nextQuality;
+                emit networkMetricsChanged();
+            });
+    connect(conferenceManager_, &ConferenceManager::localNetworkStatsUpdated,
+            this, [this](const NetworkStatsSnapshot& stats) {
+                if (!networkStatsDifferent(networkStats_, stats)) {
+                    return;
+                }
+                networkStats_ = stats;
+                emit networkMetricsChanged();
+            });
     connect(conferenceManager_, &ConferenceManager::localScreenShareChanged,
             this, [this](bool enabled) {
                 emit screenSharingChanged();
@@ -178,6 +255,45 @@ int ConferenceBackend::participantCount() const
 bool ConferenceBackend::isConnected() const
 {
     return conferenceManager_ && conferenceManager_->isConnected();
+}
+
+QString ConferenceBackend::networkQualityText() const
+{
+    return toQualityText(networkQuality_);
+}
+
+QString ConferenceBackend::networkQualityColor() const
+{
+    return toQualityColor(networkQuality_);
+}
+
+bool ConferenceBackend::networkStatsAvailable() const
+{
+    return hasNetworkStatsData(networkStats_);
+}
+
+QString ConferenceBackend::videoResolution() const
+{
+    if (networkStats_.videoWidth > 0 && networkStats_.videoHeight > 0) {
+        return QString("%1x%2").arg(networkStats_.videoWidth).arg(networkStats_.videoHeight);
+    }
+    return QString();
+}
+
+QString ConferenceBackend::meetingDuration() const
+{
+    if (!meetingStartTime_.isValid()) {
+        return QStringLiteral("00:00:00");
+    }
+    qint64 elapsed = meetingStartTime_.secsTo(QDateTime::currentDateTime());
+    if (elapsed < 0) elapsed = 0;
+    int h = static_cast<int>(elapsed / 3600);
+    int m = static_cast<int>((elapsed % 3600) / 60);
+    int s = static_cast<int>(elapsed % 60);
+    return QString("%1:%2:%3")
+        .arg(h, 2, 10, QChar('0'))
+        .arg(m, 2, 10, QChar('0'))
+        .arg(s, 2, 10, QChar('0'));
 }
 
 bool ConferenceBackend::micEnabled() const
@@ -585,6 +701,11 @@ void ConferenceBackend::onConnected()
         participantReconcileTimer_.start();
     }
     reconcileParticipantsNow("connected");
+
+    // Start meeting duration tracking
+    meetingStartTime_ = QDateTime::currentDateTime();
+    meetingDurationTimer_.start();
+    emit meetingDurationChanged();
 }
 
 void ConferenceBackend::onDisconnected()
@@ -594,7 +715,23 @@ void ConferenceBackend::onDisconnected()
     connectionColor_ = "#ff5252";
     emit connectionStatusChanged();
 
+    bool networkChanged = false;
+    if (networkQuality_ != NetworkQualityLevel::Unknown) {
+        networkQuality_ = NetworkQualityLevel::Unknown;
+        networkChanged = true;
+    }
+    if (networkStatsDifferent(networkStats_, NetworkStatsSnapshot{})) {
+        networkStats_ = NetworkStatsSnapshot{};
+        networkChanged = true;
+    }
+    if (networkChanged) {
+        emit networkMetricsChanged();
+    }
+
     participantReconcileTimer_.stop();
+    meetingDurationTimer_.stop();
+    meetingStartTime_ = QDateTime();  // invalidate
+    emit meetingDurationChanged();
     clearRemoteParticipantState();
     updateParticipantsList();
     emit participantCountChanged();
@@ -614,6 +751,12 @@ void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
         case livekit::ConnectionState::Reconnecting:
             connectionStatus_ = "Reconnecting...";
             connectionColor_ = "#ff9800";
+            if (networkQuality_ != NetworkQualityLevel::Unknown
+                || networkStatsDifferent(networkStats_, NetworkStatsSnapshot{})) {
+                networkQuality_ = NetworkQualityLevel::Unknown;
+                networkStats_ = NetworkStatsSnapshot{};
+                emit networkMetricsChanged();
+            }
             break;
         default:
             connectionStatus_ = "Unknown";
