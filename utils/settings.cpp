@@ -135,7 +135,7 @@ void Settings::setHighPassFilterEnabled(bool enabled)
 
 int Settings::noiseSuppressionLevel() const
 {
-    return settings_.value("audio/ns_level", 1).toInt(); // 1 = Moderate
+    return qBound(0, settings_.value("audio/ns_level", 1).toInt(), 3); // 1 = Moderate
 }
 
 void Settings::setNoiseSuppressionLevel(int level)
@@ -145,7 +145,7 @@ void Settings::setNoiseSuppressionLevel(int level)
 
 int Settings::gainControlMode() const
 {
-    return settings_.value("audio/agc_mode", 0).toInt(); // 0 = AdaptiveDigital
+    return qBound(0, settings_.value("audio/agc_mode", 0).toInt(), 1); // 0 = AdaptiveDigital
 }
 
 void Settings::setGainControlMode(int mode)

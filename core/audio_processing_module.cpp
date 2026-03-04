@@ -288,19 +288,21 @@ bool AudioProcessingModule::processReverseStream(const int16_t* data, int sample
     
     webrtc::StreamConfig streamConfig(sampleRate, channels);
     
+    // Allocate scratch buffer once, sized to the actual 10 ms frame dimensions.
+    // This avoids the previous fixed-size stack buffer that could overflow
+    // with sample rates above 48 kHz or channel counts above 2.
+    std::vector<int16_t> tempDest(frameSize * channels);
+    
     while (processedSamples + frameSize <= samples) {
         const int16_t* framePtr = data + processedSamples * channels;
         
         // Feed far-end audio so AEC can learn the echo path.
-        // ProcessReverseStream uses src/dest; we don't need the output so
-        // we allocate a small scratch buffer on the stack.
-        // The 16-bit int overload: src -> dest (we can use a temp dest).
-        int16_t tempDest[48000 / 100 * 2]; // max 10ms at 48kHz stereo = 960
+        // ProcessReverseStream uses src/dest; we don't need the output.
         int result = apm_->ProcessReverseStream(
             framePtr,
             streamConfig,
             streamConfig,
-            tempDest
+            tempDest.data()
         );
         
         if (result != webrtc::AudioProcessing::kNoError) {

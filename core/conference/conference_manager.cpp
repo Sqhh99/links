@@ -8,6 +8,7 @@
 #include <QSet>
 #include <QStringList>
 #include <QTimer>
+#include <algorithm>
 #include <vector>
 #include "livekit/audio_stream.h"
 #include "livekit/remote_participant.h"
