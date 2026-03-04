@@ -289,7 +289,7 @@ Window {
                         id: videoSidebar
                         Layout.fillHeight: true
                         Layout.preferredWidth: backend.sidebarVisible ? 224 : 0
-                        visible: backend.sidebarVisible
+                        visible: Layout.preferredWidth > 0 || backend.sidebarVisible
                         opacity: backend.sidebarVisible ? 1 : 0
                         backend: backend
 
@@ -332,8 +332,10 @@ Window {
                             radius: 8
                             color: sidebarToggleArea.containsMouse ? "#00000080" : "#00000040"
                             opacity: sidebarToggleArea.containsMouse || !backend.sidebarVisible ? 1 : 0
+                            scale: sidebarToggleArea.pressed ? 0.94 : 1.0
 
                             Behavior on opacity { NumberAnimation { duration: 150 } }
+                            Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
                             Image {
                                 anchors.centerIn: parent
@@ -712,19 +714,33 @@ Window {
             onWindowSelected: function(windowId) { backend.startWindowShare(windowId) }
         }
 
-        // Right sidebar
-        RightSidebar {
-            id: rightSidebar
+        // Right sidebar container with show/hide animation
+        Item {
+            id: rightSidebarHost
             anchors.right: parent.right
             anchors.top: parent.top
             anchors.topMargin: 52
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 68
-            width: 320
-            visible: backend.isChatVisible || backend.isParticipantsVisible
-            backend: backend
-            isGuest: root.isGuest
+            width: (backend.isChatVisible || backend.isParticipantsVisible) ? 320 : 0
+            opacity: (backend.isChatVisible || backend.isParticipantsVisible) ? 1 : 0
+            visible: width > 0 || backend.isChatVisible || backend.isParticipantsVisible
+            clip: true
             z: 10
+
+            Behavior on width {
+                NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+            }
+            Behavior on opacity {
+                NumberAnimation { duration: 180; easing.type: Easing.OutQuad }
+            }
+
+            RightSidebar {
+                id: rightSidebar
+                anchors.fill: parent
+                backend: backend
+                isGuest: root.isGuest
+            }
         }
 
         // Settings dialog
