@@ -3,6 +3,7 @@ import QtQuick.Controls
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Popup {
     id: root
@@ -37,8 +38,8 @@ Popup {
 
     contentItem: Rectangle {
         radius: 18
-        color: "#FFFFFF"
-        border.color: "#E5E7EB"
+        color: Theme.windowBackground
+        border.color: Theme.borderLight
         border.width: 1
         clip: true
         implicitHeight: innerLayout.implicitHeight + 48
@@ -53,14 +54,14 @@ Popup {
 
             Text {
                 text: root.invalidAttempt ? "密码错误，请重新输入" : "请输入会议密码"
-                color: root.invalidAttempt ? "#B91C1C" : "#111827"
+                color: root.invalidAttempt ? "#B91C1C" : Theme.textPrimary
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
             }
 
             Text {
                 text: root.messageText
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -70,8 +71,8 @@ Popup {
                 visible: root.meetingNo.length > 0
                 Layout.fillWidth: true
                 radius: 9
-                color: "#F8FAFC"
-                border.color: "#E5E7EB"
+                color: Theme.hoverBackground
+                border.color: Theme.borderLight
                 border.width: 1
                 implicitHeight: 32
 
@@ -80,7 +81,7 @@ Popup {
                     anchors.left: parent.left
                     anchors.leftMargin: 10
                     text: "会议号: " + root.meetingNo
-                    color: "#374151"
+                    color: Theme.textSecondary
                     font.pixelSize: 12
                     font.weight: Font.Medium
                 }
@@ -92,7 +93,7 @@ Popup {
 
                 Text {
                     text: "会议密码"
-                    color: "#374151"
+                    color: Theme.textSecondary
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
                 }
@@ -105,16 +106,16 @@ Popup {
                     echoMode: TextInput.Password
                     leftPadding: 12
                     rightPadding: 12
-                    color: "#111827"
-                    placeholderTextColor: "#9CA3AF"
+                    color: Theme.textPrimary
+                    placeholderTextColor: Theme.textTertiary
 
                     background: Rectangle {
                         radius: 10
-                        color: "#FFFFFF"
+                        color: Theme.cardBackground
                         border.width: 1
                         border.color: root.invalidAttempt
                             ? "#DC2626"
-                            : (passwordInput.activeFocus ? "#2563EB" : "#D1D5DB")
+                            : (passwordInput.activeFocus ? Theme.accentColor : Theme.borderColor)
                     }
 
                     Keys.onReturnPressed: {

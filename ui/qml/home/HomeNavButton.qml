@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links.Backend 1.0
 
 Button {
     id: root
@@ -14,8 +15,10 @@ Button {
     checked: active
 
     background: Rectangle {
-        color: root.checked ? "#EEF2FF" : "transparent"
+        color: root.checked ? Theme.activeBackground : "transparent"
         radius: 10
+
+        Behavior on color { ColorAnimation { duration: 150 } }
     }
 
     contentItem: RowLayout {
@@ -27,7 +30,7 @@ Button {
             width: 22
             height: 22
             radius: 6
-            color: root.active ? "#DBEAFE" : "#F3F4F6"
+            color: root.active ? Theme.accentLight : Theme.hoverBackground
 
             Image {
                 source: root.iconSource
@@ -36,14 +39,18 @@ Button {
                 anchors.centerIn: parent
                 opacity: root.active ? 0.9 : 0.6
             }
+
+            Behavior on color { ColorAnimation { duration: 150 } }
         }
 
         Text {
             text: root.text
-            color: root.active ? "#1D4ED8" : "#4B5563"
+            color: root.active ? Theme.accentHover : Theme.textTertiary
             font.pixelSize: 13
             font.weight: root.active ? Font.DemiBold : Font.Medium
             Layout.fillWidth: true
+
+            Behavior on color { ColorAnimation { duration: 150 } }
         }
     }
 

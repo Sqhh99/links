@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links.Backend 1.0
 import "../utils/DateUtils.js" as DateUtils
 
 ColumnLayout {
@@ -53,7 +54,7 @@ ColumnLayout {
 
     Text {
         text: "预定时间"
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 12
         font.weight: Font.DemiBold
     }
@@ -62,8 +63,8 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 100
         radius: 10
-        color: "#F9FAFB"
-        border.color: "#E5E7EB"
+        color: Theme.hoverBackground
+        border.color: Theme.borderLight
         border.width: 1
 
         // Intercept wheel events so they don't scroll the parent Flickable
@@ -97,7 +98,7 @@ ColumnLayout {
 
                 delegate: Text {
                     text: DateUtils.pad2(modelData)
-                    color: Tumbler.displacement === 0 ? "#111827" : "#9CA3AF"
+                    color: Tumbler.displacement === 0 ? Theme.textPrimary : Theme.textTertiary
                     font.pixelSize: Tumbler.displacement === 0 ? 22 : 14
                     font.weight: Tumbler.displacement === 0 ? Font.Bold : Font.Normal
                     horizontalAlignment: Text.AlignHCenter
@@ -108,7 +109,7 @@ ColumnLayout {
 
             Text {
                 text: ":"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 24
                 font.weight: Font.Bold
                 Layout.alignment: Qt.AlignVCenter

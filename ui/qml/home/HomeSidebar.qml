@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -16,11 +17,14 @@ Rectangle {
     signal accountSettingsRequested()
     signal settingsRequested()
 
-    color: "#FFFFFF"
-    border.color: "#E5E7EB"
+    color: Theme.cardBackground
+    border.color: Theme.borderLight
     border.width: 1
     radius: 16
     clip: true
+
+    Behavior on color { ColorAnimation { duration: 200 } }
+    Behavior on border.color { ColorAnimation { duration: 200 } }
 
     ColumnLayout {
         anchors.fill: parent

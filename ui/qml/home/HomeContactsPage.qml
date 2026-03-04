@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Item {
     id: root
@@ -18,14 +19,14 @@ Item {
 
             Text {
                 text: "通讯录"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 20
                 font.weight: Font.DemiBold
             }
 
             Text {
                 text: root.isGuest ? "游客模式下可使用基础邀请方式" : "同步团队通讯录与联系人"
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
         }
@@ -35,7 +36,7 @@ Item {
 
             Text {
                 text: "邀请方式"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
             }
@@ -73,7 +74,7 @@ Item {
         Rectangle {
             Layout.fillWidth: true
             height: 1
-            color: "#E5E7EB"
+            color: Theme.borderLight
         }
 
         ColumnLayout {
@@ -81,7 +82,7 @@ Item {
 
             Text {
                 text: "团队通讯录"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
             }

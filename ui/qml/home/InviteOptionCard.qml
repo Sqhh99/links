@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -13,8 +14,8 @@ Rectangle {
     signal clicked()
 
     radius: 12
-    color: "#FFFFFF"
-    border.color: "#E5E7EB"
+    color: Theme.cardBackground
+    border.color: Theme.borderLight
     border.width: 1
 
     implicitHeight: 120
@@ -33,14 +34,14 @@ Rectangle {
 
         Text {
             text: root.title
-            color: "#111827"
+            color: Theme.textPrimary
             font.pixelSize: 13
             font.weight: Font.DemiBold
         }
 
         Text {
             text: root.subtitle
-            color: "#6B7280"
+            color: Theme.textMuted
             font.pixelSize: 11
             wrapMode: Text.WordWrap
             Layout.fillWidth: true

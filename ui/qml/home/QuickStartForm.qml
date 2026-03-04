@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 ColumnLayout {
     id: root
@@ -16,14 +17,14 @@ ColumnLayout {
     
     Text {
         text: "一键创建临时会议"
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 13
         font.weight: Font.DemiBold
     }
     
     Text {
         text: "将自动生成房间名，分享给参会者即可入会。"
-        color: "#6B7280"
+        color: Theme.textMuted
         font.pixelSize: 12
         wrapMode: Text.WordWrap
         Layout.fillWidth: true

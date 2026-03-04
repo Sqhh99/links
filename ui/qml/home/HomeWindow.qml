@@ -140,10 +140,13 @@ Window {
     Rectangle {
         id: windowFrame
         anchors.fill: parent
-        color: "#F5F7FA"
+        color: Theme.pageBackground
         radius: 16
-        border.color: "#E5E7EB"
+        border.color: Theme.windowBorder
         border.width: 1
+
+        Behavior on color { ColorAnimation { duration: 200 } }
+        Behavior on border.color { ColorAnimation { duration: 200 } }
 
         ColumnLayout {
             anchors.fill: parent

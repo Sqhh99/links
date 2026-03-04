@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Links.Backend 1.0
 
 Button {
     id: root
@@ -14,7 +15,7 @@ Button {
 
     contentItem: Text {
         text: root.text
-        color: root.hovered ? "#1D4ED8" : "#2563EB"
+        color: root.hovered ? Theme.accentHover : Theme.accentColor
         font.pixelSize: 12
         font.weight: Font.DemiBold
         horizontalAlignment: Text.AlignHCenter

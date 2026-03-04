@@ -83,6 +83,7 @@ set(SOURCES
     ui/backend/ScreenPickerBackend.cpp
     ui/backend/ShareModeManager.cpp
     ui/backend/AuthBackend.cpp
+    ui/backend/ThemeManager.cpp
 )
 
 # Windows-specific desktop capture sources
@@ -143,10 +144,14 @@ set(HEADERS
     ui/adapters/qt/qt_capture_adapter.h
     ui/backend/ShareModeManager.h
     ui/backend/AuthBackend.h
+    ui/backend/ThemeManager.h
 )
 
 # Create executable
 qt_add_executable(links ${SOURCES} ${HEADERS})
+
+# Mark Theme.qml as a QML singleton (required for pragma Singleton in Qt 6)
+set_source_files_properties(ui/qml/theme/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # Add QML module with all QML files and resources
 qt_add_qml_module(links
@@ -203,6 +208,9 @@ qt_add_qml_module(links
         ui/qml/settings/AudioSettings.qml
         ui/qml/settings/VideoSettings.qml
         ui/qml/settings/NetworkSettings.qml
+        ui/qml/settings/AppearanceSettings.qml
+        # Theme
+        ui/qml/theme/Theme.qml
         # Conference
         ui/qml/conference/ConferenceWindow.qml
         ui/qml/conference/ConferenceTitleBar.qml
@@ -257,6 +265,7 @@ qt_add_qml_module(links
         res/icon/camera_staring_sidebar.png
         res/icon/copy.png
         res/icon/square-arrow-out-up-right.png
+        res/icon/monitor.png
 )
 
 # Link libraries

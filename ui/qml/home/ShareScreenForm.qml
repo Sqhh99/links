@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 ColumnLayout {
     id: root
@@ -13,14 +14,14 @@ ColumnLayout {
 
     Text {
         text: "共享屏幕"
-        color: "#111827"
+        color: Theme.textPrimary
         font.pixelSize: 14
         font.weight: Font.DemiBold
     }
 
     Text {
         text: "选择要共享的窗口或屏幕，其他人将看到你的实时画面。"
-        color: "#6B7280"
+        color: Theme.textMuted
         font.pixelSize: 12
         wrapMode: Text.WordWrap
         Layout.fillWidth: true

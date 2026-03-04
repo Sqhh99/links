@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -11,8 +12,8 @@ Rectangle {
     signal dateSelected(var value)
 
     radius: 12
-    color: "#F8FAFC"
-    border.color: "#E5E7EB"
+    color: Theme.hoverBackground
+    border.color: Theme.borderLight
     border.width: 1
 
     function normalizeDate(d) {
@@ -115,14 +116,14 @@ Rectangle {
                 Layout.preferredWidth: 24
                 Layout.preferredHeight: 24
                 radius: 8
-                color: canGoPrevious() ? "#FFFFFF" : "#F3F4F6"
-                border.color: canGoPrevious() ? "#D1D5DB" : "#E5E7EB"
+                color: canGoPrevious() ? Theme.cardBackground : Theme.hoverBackground
+                border.color: canGoPrevious() ? Theme.borderColor : Theme.borderLight
                 border.width: 1
 
                 Text {
                     anchors.centerIn: parent
                     text: "<"
-                    color: canGoPrevious() ? "#374151" : "#9CA3AF"
+                    color: canGoPrevious() ? Theme.textSecondary : Theme.textTertiary
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -143,7 +144,7 @@ Rectangle {
 
             Text {
                 text: root.monthTitle()
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
             }
@@ -154,14 +155,14 @@ Rectangle {
                 Layout.preferredWidth: 24
                 Layout.preferredHeight: 24
                 radius: 8
-                color: "#FFFFFF"
-                border.color: "#D1D5DB"
+                color: Theme.cardBackground
+                border.color: Theme.borderColor
                 border.width: 1
 
                 Text {
                     anchors.centerIn: parent
                     text: ">"
-                    color: "#374151"
+                    color: Theme.textSecondary
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                 }
@@ -190,7 +191,7 @@ Rectangle {
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
                     text: modelData
-                    color: "#6B7280"
+                    color: Theme.textMuted
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
                 }
@@ -209,9 +210,9 @@ Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
                     radius: 8
-                    color: isSelected ? "#2563EB" : "#FFFFFF"
+                    color: isSelected ? Theme.accentColor : Theme.cardBackground
                     border.width: isSelected ? 0 : 1
-                    border.color: isToday ? "#2563EB" : "#E5E7EB"
+                    border.color: isToday ? Theme.accentColor : Theme.borderLight
                     opacity: selectable ? 1.0 : 0.45
 
                     Text {
@@ -219,7 +220,7 @@ Rectangle {
                         text: label
                         color: isSelected
                             ? "#FFFFFF"
-                            : (inCurrentMonth ? "#111827" : "#9CA3AF")
+                            : (inCurrentMonth ? Theme.textPrimary : Theme.textTertiary)
                         font.pixelSize: 12
                         font.weight: isSelected ? Font.DemiBold : Font.Normal
                     }

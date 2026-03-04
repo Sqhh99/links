@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -59,11 +60,12 @@ Rectangle {
             Layout.preferredHeight: 18
             fillMode: Image.PreserveAspectFit
             smooth: true
+            opacity: Theme.iconOpacity
         }
         
         Text {
             text: root.title
-            color: "#111827"
+            color: Theme.textPrimary
             font.pixelSize: 14
             font.weight: Font.DemiBold
         }
@@ -87,7 +89,7 @@ Rectangle {
         IconButton {
             id: closeBtn
             iconSource: "qrc:/res/icon/close.png"
-            hoverColor: "#26ff5252"  // 15% red
+            hoverColor: Theme.closeHoverColor
             onClicked: root.closeClicked()
         }
     }

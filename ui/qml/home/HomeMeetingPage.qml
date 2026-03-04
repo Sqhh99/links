@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Item {
     id: root
@@ -59,7 +60,7 @@ Item {
 
             Text {
                 text: "开始新的会议"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 21
                 font.weight: Font.DemiBold
             }
@@ -68,7 +69,7 @@ Item {
                 text: root.isGuest
                     ? "游客仅可加入已存在普通房间，创建会议需登录"
                     : "可加入、创建与预定会议"
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
         }
@@ -146,8 +147,8 @@ Item {
 
         contentItem: Rectangle {
             radius: 16
-            color: "#FFFFFF"
-            border.color: "#E5E7EB"
+            color: Theme.cardBackground
+            border.color: Theme.borderLight
             border.width: 1
 
             ColumnLayout {
@@ -160,7 +161,7 @@ Item {
 
                     Text {
                         text: root.actionTitle()
-                        color: "#111827"
+                        color: Theme.textPrimary
                         font.pixelSize: 16
                         font.weight: Font.DemiBold
                     }

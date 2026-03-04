@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Item {
     id: root
@@ -16,14 +17,14 @@ Item {
 
             Text {
                 text: "录制"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 20
                 font.weight: Font.DemiBold
             }
 
             Text {
                 text: "管理本地录制"
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
         }
@@ -33,7 +34,7 @@ Item {
 
             Text {
                 text: "本地录制"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }
@@ -42,8 +43,8 @@ Item {
                 Layout.fillWidth: true
                 Layout.preferredHeight: 120
                 radius: 12
-                color: "#FFFFFF"
-                border.color: "#E5E7EB"
+                color: Theme.cardBackground
+                border.color: Theme.borderLight
                 border.width: 1
 
                 ColumnLayout {
@@ -52,7 +53,7 @@ Item {
 
                     Text {
                         text: "暂无本地录制"
-                        color: "#6B7280"
+                        color: Theme.textMuted
                         font.pixelSize: 12
                     }
 

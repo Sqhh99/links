@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 import "../utils/DateUtils.js" as DateUtils
 
 ColumnLayout {
@@ -96,13 +97,13 @@ ColumnLayout {
                 Layout.preferredHeight: 1
                 Layout.topMargin: 16
                 Layout.bottomMargin: 16
-                color: "#E5E7EB"
+                color: Theme.borderLight
             }
 
             // ── 日期与时间 ──
             Text {
                 text: "预定日期"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 12
                 font.weight: Font.DemiBold
             }
@@ -113,8 +114,8 @@ ColumnLayout {
                 Layout.topMargin: 6
                 implicitHeight: 40
                 radius: 10
-                color: datePickerMa.containsMouse ? "#F3F4F6" : "#FFFFFF"
-                border.color: calendarPopup.visible ? "#2563EB" : "#D1D5DB"
+                color: datePickerMa.containsMouse ? Theme.hoverBackground : Theme.cardBackground
+                border.color: calendarPopup.visible ? Theme.accentColor : Theme.borderColor
                 border.width: 1
 
                 RowLayout {
@@ -126,13 +127,13 @@ ColumnLayout {
                     Text {
                         Layout.fillWidth: true
                         text: root.selectedDateString()
-                        color: "#111827"
+                        color: Theme.textPrimary
                         font.pixelSize: 13
                     }
 
                     Text {
                         text: calendarPopup.visible ? "▲" : "▼"
-                        color: "#9CA3AF"
+                        color: Theme.textTertiary
                         font.pixelSize: 10
                     }
                 }
@@ -195,7 +196,7 @@ ColumnLayout {
             // ── 安全与策略 ──
             Text {
                 text: "安全与策略"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
                 Layout.bottomMargin: 6

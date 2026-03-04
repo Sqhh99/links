@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Links.Backend 1.0
 
 Button {
     id: root
@@ -17,8 +18,8 @@ Button {
     onCheckedChanged: active = checked
     
     background: Rectangle {
-        color: root.checked ? "#10B981" : "#F3F4F6"
-        border.color: root.checked ? "#10B981" : "#D1D5DB"
+        color: root.checked ? Theme.pillActiveBg : Theme.pillInactiveBg
+        border.color: root.checked ? Theme.pillActiveBg : Theme.pillInactiveBorder
         border.width: 1
         radius: 999  // Pill shape
         
@@ -32,7 +33,7 @@ Button {
     
     contentItem: Text {
         text: root.text
-        color: root.checked ? "white" : "#6B7280"
+        color: root.checked ? "white" : Theme.pillInactiveText
         font.pixelSize: 13
         font.weight: Font.DemiBold
         horizontalAlignment: Text.AlignHCenter

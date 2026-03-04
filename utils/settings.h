@@ -85,6 +85,10 @@ public:
     bool hasAuthData() const;
     void clearAuthData();
     
+    // Appearance
+    QString getTheme() const;
+    void setTheme(const QString& theme);
+    
     // Force sync to disk
     void sync();
     

@@ -224,6 +224,17 @@ void Settings::setSignalingServerUrl(const QString& url)
     settings_.sync(); // Immediately write to disk
 }
 
+QString Settings::getTheme() const
+{
+    return settings_.value("appearance/theme", "light").toString();
+}
+
+void Settings::setTheme(const QString& theme)
+{
+    settings_.setValue("appearance/theme", theme);
+    settings_.sync();
+}
+
 void Settings::sync()
 {
     settings_.sync();

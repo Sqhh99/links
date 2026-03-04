@@ -23,7 +23,7 @@ ScrollView {
             
             Text {
                 text: "麦克风"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }
@@ -56,7 +56,7 @@ ScrollView {
             
             Text {
                 text: "扬声器"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }
@@ -90,7 +90,7 @@ ScrollView {
             
             Text {
                 text: "音频处理"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }
@@ -145,13 +145,13 @@ ScrollView {
                 
                 Text {
                     text: advancedPanel.visible ? "▼" : "▶"
-                    color: "#6B7280"
+                    color: Theme.textMuted
                     font.pixelSize: 11
                 }
                 
                 Text {
                     text: "高级音频设置"
-                    color: "#6B7280"
+                    color: Theme.textMuted
                     font.pixelSize: 12
                     font.weight: Font.Medium
                     
@@ -179,7 +179,7 @@ ScrollView {
                     
                     Text {
                         text: "回声消除增强"
-                        color: "#4B5563"
+                        color: Theme.textTertiary
                         font.pixelSize: 12
                     }
                     
@@ -196,7 +196,7 @@ ScrollView {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
-                    color: "#E5E7EB"
+                    color: Theme.separatorColor
                 }
                 
                 // -- Noise Suppression Level --
@@ -207,7 +207,7 @@ ScrollView {
                     
                     Text {
                         text: "噪声抑制强度"
-                        color: "#4B5563"
+                        color: Theme.textTertiary
                         font.pixelSize: 12
                     }
                     
@@ -221,13 +221,16 @@ ScrollView {
                                 width: 56
                                 height: 28
                                 radius: 6
-                                color: (backend && backend.nsLevel === index) ? "#3B82F6" : "#F3F4F6"
-                                border.color: (backend && backend.nsLevel === index) ? "#3B82F6" : "#D1D5DB"
+                                color: (backend && backend.nsLevel === index) ? Theme.accentColor : Theme.hoverBackground
+                                border.color: (backend && backend.nsLevel === index) ? Theme.accentColor : Theme.borderColor
+
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                Behavior on border.color { ColorAnimation { duration: 150 } }
                                 
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData
-                                    color: (backend && backend.nsLevel === index) ? "#FFFFFF" : "#374151"
+                                    color: (backend && backend.nsLevel === index) ? Theme.textOnAccent : Theme.textSecondary
                                     font.pixelSize: 12
                                 }
                                 
@@ -244,7 +247,7 @@ ScrollView {
                     
                     Text {
                         text: "强度越高，噪音压得越狠，但语音可能更失真"
-                        color: "#9CA3AF"
+                        color: Theme.textHint
                         font.pixelSize: 10
                     }
                 }
@@ -253,7 +256,7 @@ ScrollView {
                 Rectangle {
                     Layout.fillWidth: true
                     height: 1
-                    color: "#E5E7EB"
+                    color: Theme.separatorColor
                 }
                 
                 // -- AGC Mode & Parameters --
@@ -264,7 +267,7 @@ ScrollView {
                     
                     Text {
                         text: "增益控制模式"
-                        color: "#4B5563"
+                        color: Theme.textTertiary
                         font.pixelSize: 12
                     }
                     
@@ -278,13 +281,16 @@ ScrollView {
                                 width: 80
                                 height: 28
                                 radius: 6
-                                color: (backend && backend.agcMode === index) ? "#3B82F6" : "#F3F4F6"
-                                border.color: (backend && backend.agcMode === index) ? "#3B82F6" : "#D1D5DB"
+                                color: (backend && backend.agcMode === index) ? Theme.accentColor : Theme.hoverBackground
+                                border.color: (backend && backend.agcMode === index) ? Theme.accentColor : Theme.borderColor
+
+                                Behavior on color { ColorAnimation { duration: 150 } }
+                                Behavior on border.color { ColorAnimation { duration: 150 } }
                                 
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData
-                                    color: (backend && backend.agcMode === index) ? "#FFFFFF" : "#374151"
+                                    color: (backend && backend.agcMode === index) ? Theme.textOnAccent : Theme.textSecondary
                                     font.pixelSize: 12
                                 }
                                 
@@ -307,7 +313,7 @@ ScrollView {
                         
                         Text {
                             text: "最大自适应增益: " + (backend ? backend.adaptiveDigitalMaxGainDb.toFixed(0) : "50") + " dB"
-                            color: "#6B7280"
+                            color: Theme.textMuted
                             font.pixelSize: 11
                         }
                         
@@ -324,7 +330,7 @@ ScrollView {
                         
                         Text {
                             text: "值越大，安静环境下放大越多（可能放大环境噪音）"
-                            color: "#9CA3AF"
+                            color: Theme.textHint
                             font.pixelSize: 10
                         }
                     }
@@ -337,7 +343,7 @@ ScrollView {
                         
                         Text {
                             text: "固定数字增益: " + (backend ? backend.fixedDigitalGainDb.toFixed(0) : "0") + " dB"
-                            color: "#6B7280"
+                            color: Theme.textMuted
                             font.pixelSize: 11
                         }
                         

@@ -23,7 +23,7 @@ ScrollView {
             
             Text {
                 text: "摄像头"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }
@@ -56,7 +56,7 @@ ScrollView {
             
             Text {
                 text: "分辨率"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }

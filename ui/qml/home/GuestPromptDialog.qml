@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Popup {
     id: root
@@ -39,8 +40,8 @@ Popup {
         id: dialogCard
         implicitHeight: dialogLayout.implicitHeight + 52
         radius: 16
-        color: "#FFFFFF"
-        border.color: "#E5E7EB"
+        color: Theme.windowBackground
+        border.color: Theme.borderLight
         border.width: 1
 
         ColumnLayout {
@@ -55,14 +56,14 @@ Popup {
 
             Text {
                 text: root.titleText
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
             }
 
             Text {
                 text: root.messageText
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true

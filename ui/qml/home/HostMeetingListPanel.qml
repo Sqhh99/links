@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import Links
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -14,8 +15,8 @@ Rectangle {
     signal cancelMeeting(string meetingNo)
 
     radius: 14
-    color: "#FFFFFF"
-    border.color: "#E5E7EB"
+    color: Theme.cardBackground
+    border.color: Theme.borderLight
     border.width: 1
 
     TextEdit {
@@ -57,7 +58,7 @@ Rectangle {
 
             Text {
                 text: "我的预定"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 15
                 font.weight: Font.DemiBold
             }
@@ -84,8 +85,8 @@ Rectangle {
             delegate: Rectangle {
                 width: meetingList.width
                 radius: 10
-                color: "#FFFFFF"
-                border.color: "#E5E7EB"
+                color: Theme.cardBackground
+                border.color: Theme.borderLight
                 border.width: 1
                 implicitHeight: contentLayout.implicitHeight + 20
 
@@ -104,7 +105,7 @@ Rectangle {
                         Text {
                             Layout.fillWidth: true
                             text: title
-                            color: "#111827"
+                            color: Theme.textPrimary
                             font.pixelSize: 13
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
@@ -135,7 +136,7 @@ Rectangle {
 
                         Text {
                             text: "会议号: " + meetingNo
-                            color: "#6B7280"
+                            color: Theme.textMuted
                             font.pixelSize: 11
                         }
 
@@ -231,7 +232,7 @@ Rectangle {
 
                 Text {
                     text: "暂无可管理的预定会议"
-                    color: "#374151"
+                    color: Theme.textSecondary
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                     horizontalAlignment: Text.AlignHCenter
@@ -239,7 +240,7 @@ Rectangle {
 
                 Text {
                     text: "创建预定会议后会显示在这里"
-                    color: "#9CA3AF"
+                    color: Theme.textTertiary
                     font.pixelSize: 11
                     horizontalAlignment: Text.AlignHCenter
                 }
