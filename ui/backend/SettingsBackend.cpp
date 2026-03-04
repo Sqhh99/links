@@ -86,6 +86,58 @@ void SettingsBackend::setApiUrl(const QString& url)
     }
 }
 
+void SettingsBackend::setHighPassFilter(bool enabled)
+{
+    if (highPassFilter_ != enabled) {
+        highPassFilter_ = enabled;
+        emit highPassFilterChanged();
+    }
+}
+
+void SettingsBackend::setNsLevel(int level)
+{
+    level = qBound(0, level, 3);
+    if (nsLevel_ != level) {
+        nsLevel_ = level;
+        emit nsLevelChanged();
+    }
+}
+
+void SettingsBackend::setAgcMode(int mode)
+{
+    mode = qBound(0, mode, 1);
+    if (agcMode_ != mode) {
+        agcMode_ = mode;
+        emit agcModeChanged();
+    }
+}
+
+void SettingsBackend::setFixedDigitalGainDb(double gainDb)
+{
+    gainDb = qBound(0.0, gainDb, 50.0);
+    if (!qFuzzyCompare(fixedDigitalGainDb_, gainDb)) {
+        fixedDigitalGainDb_ = gainDb;
+        emit fixedDigitalGainDbChanged();
+    }
+}
+
+void SettingsBackend::setAdaptiveDigitalMaxGainDb(double maxGainDb)
+{
+    maxGainDb = qBound(0.0, maxGainDb, 50.0);
+    if (!qFuzzyCompare(adaptiveDigitalMaxGainDb_, maxGainDb)) {
+        adaptiveDigitalMaxGainDb_ = maxGainDb;
+        emit adaptiveDigitalMaxGainDbChanged();
+    }
+}
+
+void SettingsBackend::setEchoEnhancedFilter(bool enabled)
+{
+    if (echoEnhancedFilter_ != enabled) {
+        echoEnhancedFilter_ = enabled;
+        emit echoEnhancedFilterChanged();
+    }
+}
+
 void SettingsBackend::refreshDevices()
 {
     populateDevices();
@@ -189,6 +241,14 @@ void SettingsBackend::saveToSettings()
     settings.setNoiseSuppressionEnabled(noiseSuppression_);
     settings.setAutoGainControlEnabled(autoGainControl_);
     
+    // Advanced audio processing options
+    settings.setHighPassFilterEnabled(highPassFilter_);
+    settings.setNoiseSuppressionLevel(nsLevel_);
+    settings.setGainControlMode(agcMode_);
+    settings.setFixedDigitalGainDb(static_cast<float>(fixedDigitalGainDb_));
+    settings.setAdaptiveDigitalMaxGainDb(static_cast<float>(adaptiveDigitalMaxGainDb_));
+    settings.setEchoEnhancedFilterEnabled(echoEnhancedFilter_);
+    
     settings.sync();
     
     Logger::instance().info("Settings saved successfully");
@@ -207,5 +267,13 @@ void SettingsBackend::loadFromSettings()
     setEchoCancel(settings.isEchoCancellationEnabled());
     setNoiseSuppression(settings.isNoiseSuppressionEnabled());
     setAutoGainControl(settings.isAutoGainControlEnabled());
+    
+    // Advanced audio processing options
+    setHighPassFilter(settings.isHighPassFilterEnabled());
+    setNsLevel(settings.noiseSuppressionLevel());
+    setAgcMode(settings.gainControlMode());
+    setFixedDigitalGainDb(settings.fixedDigitalGainDb());
+    setAdaptiveDigitalMaxGainDb(settings.adaptiveDigitalMaxGainDb());
+    setEchoEnhancedFilter(settings.isEchoEnhancedFilterEnabled());
 }
 

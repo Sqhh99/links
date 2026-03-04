@@ -43,6 +43,15 @@ TEST_F(AudioProcessingModuleTest, DefaultConstruction) {
     EXPECT_TRUE(apm.isEchoCancellationEnabled());
     EXPECT_TRUE(apm.isNoiseSuppressionEnabled());
     EXPECT_TRUE(apm.isAutoGainControlEnabled());
+    EXPECT_TRUE(apm.isHighPassFilterEnabled());
+    
+    // Advanced defaults
+    EXPECT_EQ(apm.noiseSuppressionLevel(), AudioProcessingModule::NoiseSuppressionLevel::kModerate);
+    EXPECT_EQ(apm.gainControlMode(), AudioProcessingModule::GainControlMode::kAdaptiveDigital);
+    EXPECT_FLOAT_EQ(apm.fixedDigitalGainDb(), 0.0f);
+    EXPECT_FLOAT_EQ(apm.adaptiveDigitalMaxGainDb(), 50.0f);
+    EXPECT_TRUE(apm.isEchoEnhancedFilterEnabled());
+    EXPECT_EQ(apm.streamDelayMs(), 0);
 }
 
 // Test: Initialization
@@ -67,14 +76,89 @@ TEST_F(AudioProcessingModuleTest, ConfigurationSetters) {
     apm.setAutoGainControlEnabled(false);
     EXPECT_FALSE(apm.isAutoGainControlEnabled());
     
+    apm.setHighPassFilterEnabled(false);
+    EXPECT_FALSE(apm.isHighPassFilterEnabled());
+    
     // Re-enable
     apm.setEchoCancellationEnabled(true);
     apm.setNoiseSuppressionEnabled(true);
     apm.setAutoGainControlEnabled(true);
+    apm.setHighPassFilterEnabled(true);
     
     EXPECT_TRUE(apm.isEchoCancellationEnabled());
     EXPECT_TRUE(apm.isNoiseSuppressionEnabled());
     EXPECT_TRUE(apm.isAutoGainControlEnabled());
+    EXPECT_TRUE(apm.isHighPassFilterEnabled());
+}
+
+// Test: Advanced NS level configuration
+TEST_F(AudioProcessingModuleTest, NoiseSuppressionLevel) {
+    apm.initialize();
+    
+    apm.setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel::kLow);
+    EXPECT_EQ(apm.noiseSuppressionLevel(), AudioProcessingModule::NoiseSuppressionLevel::kLow);
+    
+    apm.setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel::kHigh);
+    EXPECT_EQ(apm.noiseSuppressionLevel(), AudioProcessingModule::NoiseSuppressionLevel::kHigh);
+    
+    apm.setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel::kVeryHigh);
+    EXPECT_EQ(apm.noiseSuppressionLevel(), AudioProcessingModule::NoiseSuppressionLevel::kVeryHigh);
+    
+    apm.setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel::kModerate);
+    EXPECT_EQ(apm.noiseSuppressionLevel(), AudioProcessingModule::NoiseSuppressionLevel::kModerate);
+}
+
+// Test: Advanced AGC mode configuration
+TEST_F(AudioProcessingModuleTest, GainControlMode) {
+    apm.initialize();
+    
+    apm.setGainControlMode(AudioProcessingModule::GainControlMode::kFixedDigital);
+    EXPECT_EQ(apm.gainControlMode(), AudioProcessingModule::GainControlMode::kFixedDigital);
+    
+    apm.setGainControlMode(AudioProcessingModule::GainControlMode::kAdaptiveDigital);
+    EXPECT_EQ(apm.gainControlMode(), AudioProcessingModule::GainControlMode::kAdaptiveDigital);
+}
+
+// Test: AGC gain parameters
+TEST_F(AudioProcessingModuleTest, GainParameters) {
+    apm.initialize();
+    
+    apm.setFixedDigitalGainDb(10.0f);
+    EXPECT_FLOAT_EQ(apm.fixedDigitalGainDb(), 10.0f);
+    
+    // Clamping: should not exceed 50
+    apm.setFixedDigitalGainDb(100.0f);
+    EXPECT_FLOAT_EQ(apm.fixedDigitalGainDb(), 50.0f);
+    
+    // Clamping: should not go below 0
+    apm.setFixedDigitalGainDb(-5.0f);
+    EXPECT_FLOAT_EQ(apm.fixedDigitalGainDb(), 0.0f);
+    
+    apm.setAdaptiveDigitalMaxGainDb(30.0f);
+    EXPECT_FLOAT_EQ(apm.adaptiveDigitalMaxGainDb(), 30.0f);
+}
+
+// Test: AEC enhanced filter
+TEST_F(AudioProcessingModuleTest, EchoEnhancedFilter) {
+    apm.initialize();
+    
+    apm.setEchoEnhancedFilterEnabled(false);
+    EXPECT_FALSE(apm.isEchoEnhancedFilterEnabled());
+    
+    apm.setEchoEnhancedFilterEnabled(true);
+    EXPECT_TRUE(apm.isEchoEnhancedFilterEnabled());
+}
+
+// Test: Stream delay setting
+TEST_F(AudioProcessingModuleTest, StreamDelay) {
+    apm.initialize();
+    
+    apm.setStreamDelayMs(80);
+    EXPECT_EQ(apm.streamDelayMs(), 80);
+    
+    // Negative should be clamped to 0
+    apm.setStreamDelayMs(-10);
+    EXPECT_EQ(apm.streamDelayMs(), 0);
 }
 
 // Test: Process frame with valid data
@@ -134,6 +218,51 @@ TEST_F(AudioProcessingModuleTest, ProcessMultipleFrames) {
     }
 }
 
+// Test: ProcessReverseStream basic functionality
+TEST_F(AudioProcessingModuleTest, ProcessReverseStream_ValidData) {
+    ASSERT_TRUE(apm.initialize());
+    
+    auto audio = generateSineWave(480, 48000, 440);
+    EXPECT_TRUE(apm.processReverseStream(audio.data(), 480, 48000, 1));
+}
+
+// Test: ProcessReverseStream with null data
+TEST_F(AudioProcessingModuleTest, ProcessReverseStream_NullData) {
+    ASSERT_TRUE(apm.initialize());
+    EXPECT_FALSE(apm.processReverseStream(nullptr, 480, 48000, 1));
+}
+
+// Test: ProcessReverseStream not initialized
+TEST_F(AudioProcessingModuleTest, ProcessReverseStream_NotInitialized) {
+    auto audio = generateSineWave(480, 48000, 440);
+    EXPECT_FALSE(apm.processReverseStream(audio.data(), 480, 48000, 1));
+}
+
+// Test: ProcessReverseStream with zero samples
+TEST_F(AudioProcessingModuleTest, ProcessReverseStream_ZeroSamples) {
+    ASSERT_TRUE(apm.initialize());
+    auto audio = generateSineWave(480, 48000, 440);
+    EXPECT_FALSE(apm.processReverseStream(audio.data(), 0, 48000, 1));
+}
+
+// Test: Full AEC pipeline (reverse + capture)
+TEST_F(AudioProcessingModuleTest, AecPipeline_ReverseAndCapture) {
+    ASSERT_TRUE(apm.initialize());
+    apm.setEchoCancellationEnabled(true);
+    apm.setStreamDelayMs(80);
+    
+    // Simulate 100 frames of reverse (far-end) then capture (near-end)
+    for (int i = 0; i < 100; ++i) {
+        // Feed far-end (speaker) audio
+        auto farEnd = generateSineWave(480, 48000, 440);
+        EXPECT_TRUE(apm.processReverseStream(farEnd.data(), 480, 48000, 1));
+        
+        // Process near-end (microphone) audio
+        auto nearEnd = generateSineWave(480, 48000, 440);
+        EXPECT_TRUE(apm.processFrame(nearEnd.data(), 480, 48000, 1));
+    }
+}
+
 // Test: Audio energy is preserved (approximately)
 TEST_F(AudioProcessingModuleTest, AudioEnergyPreservation) {
     ASSERT_TRUE(apm.initialize());
@@ -184,4 +313,46 @@ TEST_F(AudioProcessingModuleTest, MoveSemantics) {
     AudioProcessingModule apm3;
     apm3 = std::move(apm2);
     EXPECT_TRUE(apm3.isInitialized());
+}
+
+// Test: Advanced settings work together
+TEST_F(AudioProcessingModuleTest, AdvancedSettingsCombined) {
+    ASSERT_TRUE(apm.initialize());
+    
+    // Configure all advanced settings
+    apm.setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel::kHigh);
+    apm.setGainControlMode(AudioProcessingModule::GainControlMode::kFixedDigital);
+    apm.setFixedDigitalGainDb(6.0f);
+    apm.setEchoEnhancedFilterEnabled(true);
+    apm.setHighPassFilterEnabled(true);
+    apm.setStreamDelayMs(60);
+    
+    // Process should still work fine
+    auto audio = generateSineWave(480, 48000, 440);
+    EXPECT_TRUE(apm.processFrame(audio.data(), 480, 48000, 1));
+}
+
+// Test: Switching AGC modes at runtime
+TEST_F(AudioProcessingModuleTest, RuntimeAgcModeSwitch) {
+    ASSERT_TRUE(apm.initialize());
+    
+    // Start with adaptive
+    apm.setGainControlMode(AudioProcessingModule::GainControlMode::kAdaptiveDigital);
+    apm.setAdaptiveDigitalMaxGainDb(30.0f);
+    
+    auto audio1 = generateSineWave(480, 48000, 440);
+    EXPECT_TRUE(apm.processFrame(audio1.data(), 480, 48000, 1));
+    
+    // Switch to fixed at runtime
+    apm.setGainControlMode(AudioProcessingModule::GainControlMode::kFixedDigital);
+    apm.setFixedDigitalGainDb(6.0f);
+    
+    auto audio2 = generateSineWave(480, 48000, 440);
+    EXPECT_TRUE(apm.processFrame(audio2.data(), 480, 48000, 1));
+    
+    // Switch back
+    apm.setGainControlMode(AudioProcessingModule::GainControlMode::kAdaptiveDigital);
+    
+    auto audio3 = generateSineWave(480, 48000, 440);
+    EXPECT_TRUE(apm.processFrame(audio3.data(), 480, 48000, 1));
 }

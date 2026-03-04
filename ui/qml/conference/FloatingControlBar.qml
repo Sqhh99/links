@@ -555,6 +555,9 @@ Window {
 
     SettingsWindow {
         id: settingsDialog
+        onSettingsSaved: {
+            if (backend) backend.applyAudioSettings()
+        }
     }
 
 

@@ -27,6 +27,16 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
     microphoneCapturer_->setEchoCancellationEnabled(settings.isEchoCancellationEnabled());
     microphoneCapturer_->setNoiseSuppressionEnabled(settings.isNoiseSuppressionEnabled());
     microphoneCapturer_->setAutoGainControlEnabled(settings.isAutoGainControlEnabled());
+    microphoneCapturer_->setHighPassFilterEnabled(settings.isHighPassFilterEnabled());
+    
+    // Apply advanced audio processing settings
+    microphoneCapturer_->setNoiseSuppressionLevel(
+        static_cast<AudioProcessingModule::NoiseSuppressionLevel>(settings.noiseSuppressionLevel()));
+    microphoneCapturer_->setGainControlMode(
+        static_cast<AudioProcessingModule::GainControlMode>(settings.gainControlMode()));
+    microphoneCapturer_->setFixedDigitalGainDb(settings.fixedDigitalGainDb());
+    microphoneCapturer_->setAdaptiveDigitalMaxGainDb(settings.adaptiveDigitalMaxGainDb());
+    microphoneCapturer_->setEchoEnhancedFilterEnabled(settings.isEchoEnhancedFilterEnabled());
 
     QObject::connect(cameraCapturer_, &CameraCapturer::error, this, [](const QString& msg) {
         Logger::instance().error(QString("Camera error: %1").arg(msg));
@@ -405,4 +415,92 @@ void DeviceController::connectScreenSignals()
                                   this, [this](const QImage& frame) {
                                       emit localScreenFrameReady(frame);
                                   });
+}
+
+// =============================================================================
+// Audio processing settings (runtime-applicable)
+// =============================================================================
+
+void DeviceController::applyAudioSettings()
+{
+    if (!microphoneCapturer_) return;
+
+    auto& settings = Settings::instance();
+    
+    // Basic toggles
+    microphoneCapturer_->setEchoCancellationEnabled(settings.isEchoCancellationEnabled());
+    microphoneCapturer_->setNoiseSuppressionEnabled(settings.isNoiseSuppressionEnabled());
+    microphoneCapturer_->setAutoGainControlEnabled(settings.isAutoGainControlEnabled());
+    microphoneCapturer_->setHighPassFilterEnabled(settings.isHighPassFilterEnabled());
+    
+    // Advanced parameters
+    microphoneCapturer_->setNoiseSuppressionLevel(
+        static_cast<AudioProcessingModule::NoiseSuppressionLevel>(settings.noiseSuppressionLevel()));
+    microphoneCapturer_->setGainControlMode(
+        static_cast<AudioProcessingModule::GainControlMode>(settings.gainControlMode()));
+    microphoneCapturer_->setFixedDigitalGainDb(settings.fixedDigitalGainDb());
+    microphoneCapturer_->setAdaptiveDigitalMaxGainDb(settings.adaptiveDigitalMaxGainDb());
+    microphoneCapturer_->setEchoEnhancedFilterEnabled(settings.isEchoEnhancedFilterEnabled());
+
+    Logger::instance().info(QString("Audio settings re-applied (AEC=%1, NS=%2[lvl=%3], AGC=%4[mode=%5], HPF=%6, AEC-enhanced=%7)")
+                           .arg(settings.isEchoCancellationEnabled())
+                           .arg(settings.isNoiseSuppressionEnabled())
+                           .arg(settings.noiseSuppressionLevel())
+                           .arg(settings.isAutoGainControlEnabled())
+                           .arg(settings.gainControlMode())
+                           .arg(settings.isHighPassFilterEnabled())
+                           .arg(settings.isEchoEnhancedFilterEnabled()));
+}
+
+void DeviceController::setEchoCancellationEnabled(bool enabled)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setEchoCancellationEnabled(enabled);
+}
+
+void DeviceController::setNoiseSuppressionEnabled(bool enabled)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setNoiseSuppressionEnabled(enabled);
+}
+
+void DeviceController::setAutoGainControlEnabled(bool enabled)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setAutoGainControlEnabled(enabled);
+}
+
+void DeviceController::setHighPassFilterEnabled(bool enabled)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setHighPassFilterEnabled(enabled);
+}
+
+void DeviceController::setNoiseSuppressionLevel(AudioProcessingModule::NoiseSuppressionLevel level)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setNoiseSuppressionLevel(level);
+}
+
+void DeviceController::setGainControlMode(AudioProcessingModule::GainControlMode mode)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setGainControlMode(mode);
+}
+
+void DeviceController::setFixedDigitalGainDb(float gainDb)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setFixedDigitalGainDb(gainDb);
+}
+
+void DeviceController::setAdaptiveDigitalMaxGainDb(float maxGainDb)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setAdaptiveDigitalMaxGainDb(maxGainDb);
+}
+
+void DeviceController::setEchoEnhancedFilterEnabled(bool enabled)
+{
+    if (microphoneCapturer_) microphoneCapturer_->setEchoEnhancedFilterEnabled(enabled);
+}
+
+void DeviceController::feedReverseAudio(const int16_t* data, int samples,
+                                         int sampleRate, int channels)
+{
+    if (microphoneCapturer_ && microphoneCapturer_->isActive()) {
+        microphoneCapturer_->feedReverseStream(data, samples, sampleRate, channels);
+    }
 }

@@ -407,6 +407,14 @@ void ConferenceBackend::switchCamera(const QString& deviceId)
     }
 }
 
+void ConferenceBackend::applyAudioSettings()
+{
+    if (conferenceManager_) {
+        conferenceManager_->applyAudioSettings();
+        Logger::instance().info("Audio settings re-applied to active conference");
+    }
+}
+
 // UI controls
 void ConferenceBackend::toggleChat()
 {

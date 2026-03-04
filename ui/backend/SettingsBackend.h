@@ -22,6 +22,14 @@ class SettingsBackend : public QObject
     Q_PROPERTY(bool autoGainControl READ autoGainControl WRITE setAutoGainControl NOTIFY autoGainControlChanged)
     Q_PROPERTY(bool hardwareAccel READ hardwareAccel WRITE setHardwareAccel NOTIFY hardwareAccelChanged)
     Q_PROPERTY(QString apiUrl READ apiUrl WRITE setApiUrl NOTIFY apiUrlChanged)
+    
+    // Advanced audio processing properties
+    Q_PROPERTY(bool highPassFilter READ highPassFilter WRITE setHighPassFilter NOTIFY highPassFilterChanged)
+    Q_PROPERTY(int nsLevel READ nsLevel WRITE setNsLevel NOTIFY nsLevelChanged)
+    Q_PROPERTY(int agcMode READ agcMode WRITE setAgcMode NOTIFY agcModeChanged)
+    Q_PROPERTY(double fixedDigitalGainDb READ fixedDigitalGainDb WRITE setFixedDigitalGainDb NOTIFY fixedDigitalGainDbChanged)
+    Q_PROPERTY(double adaptiveDigitalMaxGainDb READ adaptiveDigitalMaxGainDb WRITE setAdaptiveDigitalMaxGainDb NOTIFY adaptiveDigitalMaxGainDbChanged)
+    Q_PROPERTY(bool echoEnhancedFilter READ echoEnhancedFilter WRITE setEchoEnhancedFilter NOTIFY echoEnhancedFilterChanged)
 
 public:
     explicit SettingsBackend(QObject* parent = nullptr);
@@ -58,6 +66,25 @@ public:
     
     QString apiUrl() const { return apiUrl_; }
     void setApiUrl(const QString& url);
+    
+    // Advanced audio processing
+    bool highPassFilter() const { return highPassFilter_; }
+    void setHighPassFilter(bool enabled);
+    
+    int nsLevel() const { return nsLevel_; }
+    void setNsLevel(int level);
+    
+    int agcMode() const { return agcMode_; }
+    void setAgcMode(int mode);
+    
+    double fixedDigitalGainDb() const { return fixedDigitalGainDb_; }
+    void setFixedDigitalGainDb(double gainDb);
+    
+    double adaptiveDigitalMaxGainDb() const { return adaptiveDigitalMaxGainDb_; }
+    void setAdaptiveDigitalMaxGainDb(double maxGainDb);
+    
+    bool echoEnhancedFilter() const { return echoEnhancedFilter_; }
+    void setEchoEnhancedFilter(bool enabled);
 
     Q_INVOKABLE void refreshDevices();
     Q_INVOKABLE void save();
@@ -76,6 +103,12 @@ signals:
     void autoGainControlChanged();
     void hardwareAccelChanged();
     void apiUrlChanged();
+    void highPassFilterChanged();
+    void nsLevelChanged();
+    void agcModeChanged();
+    void fixedDigitalGainDbChanged();
+    void adaptiveDigitalMaxGainDbChanged();
+    void echoEnhancedFilterChanged();
     void accepted();
     void rejected();
 
@@ -98,6 +131,14 @@ private:
     bool autoGainControl_{true};
     bool hardwareAccel_{true};
     QString apiUrl_;
+    
+    // Advanced audio processing
+    bool highPassFilter_{true};
+    int nsLevel_{1};            // 0=Low,1=Moderate,2=High,3=VeryHigh
+    int agcMode_{0};            // 0=AdaptiveDigital,1=FixedDigital
+    double fixedDigitalGainDb_{0.0};
+    double adaptiveDigitalMaxGainDb_{50.0};
+    bool echoEnhancedFilter_{true};
 };
 
 #endif // SETTINGSBACKEND_H

@@ -12,12 +12,19 @@
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <thread>
 #include "livekit/livekit.h"
 
 class ParticipantStore;
+
+/**
+ * Callback type for feeding far-end audio to the AEC.
+ * Parameters: data, samples, sampleRate, channels
+ */
+using ReverseAudioCallback = std::function<void(const int16_t*, int, int, int)>;
 
 class MediaPipeline : public QObject {
     Q_OBJECT
@@ -41,6 +48,12 @@ public:
     bool hasAudioStream(const QString& trackSid) const;
     void removeVideoStream(const QString& trackSid);
     void removeAudioStream(const QString& trackSid);
+
+    /**
+     * Set a callback that will be invoked with every remote audio frame
+     * so the AEC module can use it as a reference signal.
+     */
+    void setReverseAudioCallback(ReverseAudioCallback callback);
 
 signals:
     void videoFrameReady(const QString& participantIdentity,
@@ -71,6 +84,7 @@ private:
     std::map<QString, std::unique_ptr<std::thread>> audioStreamThreads_;
     QMap<QString, std::atomic<bool>*> streamStopFlags_;
     QMap<QString, AudioPlayback> audioPlayers_;
+    ReverseAudioCallback reverseAudioCallback_;
 };
 
 #endif // CORE_CONFERENCE_MEDIA_PIPELINE_H
