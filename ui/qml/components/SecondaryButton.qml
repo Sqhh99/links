@@ -1,5 +1,7 @@
 import QtQuick
+import Links
 import QtQuick.Controls
+import Links.Backend 1.0
 
 Button {
     id: root
@@ -9,8 +11,8 @@ Button {
     rightPadding: 16
 
     background: Rectangle {
-        color: root.enabled ? (root.hovered ? "#EEF2FF" : "#F8FAFC") : "#F3F4F6"
-        border.color: root.enabled ? "#CBD5F5" : "#E5E7EB"
+        color: root.enabled ? (root.hovered ? Theme.secondaryHoverBg : Theme.secondaryBg) : Theme.hoverBackground
+        border.color: root.enabled ? Theme.secondaryBorder : Theme.borderLight
         border.width: 1
         radius: 10
 
@@ -24,7 +26,7 @@ Button {
 
     contentItem: Text {
         text: root.text
-        color: root.enabled ? "#1D4ED8" : "#9CA3AF"
+        color: root.enabled ? Theme.secondaryText : Theme.disabledText
         font.pixelSize: 13
         font.weight: Font.DemiBold
         horizontalAlignment: Text.AlignHCenter

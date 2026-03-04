@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 ColumnLayout {
     id: root
@@ -48,7 +49,7 @@ ColumnLayout {
 
     Text {
         text: root.title
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 12
         font.weight: Font.DemiBold
         visible: root.title.length > 0
@@ -74,7 +75,7 @@ ColumnLayout {
 
     Text {
         text: root.hintText
-        color: "#9CA3AF"
+        color: Theme.textTertiary
         font.pixelSize: 11
         wrapMode: Text.WordWrap
         Layout.fillWidth: true

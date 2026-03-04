@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Links
 
 Rectangle {
     id: root
@@ -7,9 +8,9 @@ Rectangle {
     property var items: []
     property int selectedIndex: -1
     
-    color: "#FFFFFF"
+    color: Theme.cardBackground
     radius: 12
-    border.color: "#E5E7EB"
+    border.color: Theme.borderColor
     border.width: 1
     clip: true
     
@@ -34,7 +35,7 @@ Rectangle {
             contentItem: Rectangle {
                 implicitWidth: 8
                 radius: 4
-                color: parent.pressed ? "#9CA3AF" : (parent.hovered ? "#9CA3AF" : "#D1D5DB")
+                color: parent.pressed ? Theme.textTertiary : (parent.hovered ? Theme.textTertiary : Theme.textHint)
             }
         }
         

@@ -1,5 +1,7 @@
 import QtQuick
+import Links
 import QtQuick.Layouts
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -9,8 +11,8 @@ Rectangle {
     property string meetingTag: ""
 
     radius: 10
-    color: "#FFFFFF"
-    border.color: "#E5E7EB"
+    color: Theme.cardBackground
+    border.color: Theme.borderLight
     border.width: 1
 
     implicitHeight: 64
@@ -26,7 +28,7 @@ Rectangle {
 
             Text {
                 text: root.meetingTitle
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
                 elide: Text.ElideRight
@@ -34,7 +36,7 @@ Rectangle {
 
             Text {
                 text: root.meetingTime
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 11
                 elide: Text.ElideRight
             }
@@ -43,8 +45,8 @@ Rectangle {
         Rectangle {
             visible: root.meetingTag.length > 0
             radius: 8
-            color: "#EFF6FF"
-            border.color: "#BFDBFE"
+            color: Theme.accentLight
+            border.color: Theme.accentColor
             border.width: 1
             Layout.preferredHeight: 22
             Layout.preferredWidth: tagLabel.implicitWidth + 16
@@ -53,7 +55,7 @@ Rectangle {
                 id: tagLabel
                 anchors.centerIn: parent
                 text: root.meetingTag
-                color: "#2563EB"
+                color: Theme.accentColor
                 font.pixelSize: 10
                 font.weight: Font.DemiBold
             }

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 ColumnLayout {
     id: root
@@ -19,7 +20,7 @@ ColumnLayout {
     
     Text {
         text: root.guestMode ? "游客名称" : "显示名称"
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 13
         font.weight: Font.DemiBold
     }
@@ -39,8 +40,8 @@ ColumnLayout {
         Layout.fillWidth: true
         implicitHeight: 44
         radius: 10
-        color: "#F9FAFB"
-        border.color: "#E5E7EB"
+        color: Theme.sidebarBackground
+        border.color: Theme.borderLight
         border.width: 1
 
         Text {
@@ -48,7 +49,7 @@ ColumnLayout {
             anchors.left: parent.left
             anchors.leftMargin: 12
             text: root.userName
-            color: "#374151"
+            color: Theme.textSecondary
             font.pixelSize: 13
             font.weight: Font.Medium
         }
@@ -56,7 +57,7 @@ ColumnLayout {
     
     Text {
         text: root.guestMode ? "会议号 / 分享链接 / 房间名称" : "会议号 / 分享链接"
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 13
         font.weight: Font.DemiBold
     }

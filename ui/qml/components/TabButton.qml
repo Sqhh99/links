@@ -1,5 +1,7 @@
 import QtQuick
+import Links
 import QtQuick.Controls
+import Links.Backend 1.0
 
 Button {
     id: root
@@ -12,8 +14,8 @@ Button {
     implicitHeight: 36
     
     background: Rectangle {
-        color: root.checked ? "#2563EB" : "#F3F4F6"
-        border.color: root.checked ? "#2563EB" : "#E5E7EB"
+        color: root.checked ? Theme.tabActiveBg : Theme.tabInactiveBg
+        border.color: root.checked ? Theme.tabActiveBg : Theme.tabInactiveBorder
         border.width: 1
         radius: 10
         
@@ -27,7 +29,7 @@ Button {
     
     contentItem: Text {
         text: root.text
-        color: root.checked ? "white" : "#6B7280"
+        color: root.checked ? Theme.textOnAccent : Theme.tabInactiveText
         font.pixelSize: 13
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

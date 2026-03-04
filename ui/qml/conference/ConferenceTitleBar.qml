@@ -1,13 +1,14 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
 
     height: 52
-    color: "#FFFFFF" // Light theme
+    color: Theme.windowBackground // Use theme background
     radius: 12
     clip: true
 
@@ -76,14 +77,14 @@ Rectangle {
 
                 Text {
                     text: backend ? backend.roomName : "产品设计评审会"
-                    color: "#111827"
+                    color: Theme.textPrimary
                     font.pixelSize: 14
                     font.weight: Font.DemiBold
                 }
 
                 Text {
                     text: backend ? (backend.meetingNo && backend.meetingNo.length > 0 ? "会议号: " + backend.meetingNo : "房间: " + backend.roomName) : "会议"
-                    color: "#9CA3AF"
+                    color: Theme.textMuted
                     font.pixelSize: 10
                 }
             }
@@ -94,7 +95,7 @@ Rectangle {
                 implicitWidth: 32
                 implicitHeight: 32
                 radius: 6
-                color: shareBtnArea.containsMouse ? "#F3F4F6" : "transparent"
+                color: shareBtnArea.containsMouse ? Theme.hoverBackground : "transparent"
                 visible: backend && backend.meetingNo && backend.meetingNo.length > 0
 
                 Image {
@@ -131,9 +132,9 @@ Rectangle {
                     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
                     background: Rectangle {
-                        color: "#FFFFFF"
+                        color: Theme.popupBackground
                         radius: 12
-                        border.color: "#E5E7EB"
+                        border.color: Theme.popupBorder
                         border.width: 1
 
                         layer.enabled: true
@@ -146,7 +147,7 @@ Rectangle {
                         // Header
                         Text {
                             text: "分享会议"
-                            color: "#111827"
+                            color: Theme.textPrimary
                             font.pixelSize: 14
                             font.weight: Font.DemiBold
                             Layout.topMargin: 16
@@ -155,7 +156,7 @@ Rectangle {
                         }
 
                         // Divider
-                        Rectangle { Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+                        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
 
                         // Meeting number row
                         Rectangle {
@@ -164,8 +165,8 @@ Rectangle {
                             Layout.bottomMargin: 6
                             implicitHeight: 44
                             radius: 8
-                            color: "#F9FAFB"
-                            border.color: "#E5E7EB"
+                            color: Theme.cardBackground
+                            border.color: Theme.borderColor
                             border.width: 1
 
                             RowLayout {
@@ -180,12 +181,12 @@ Rectangle {
 
                                     Text {
                                         text: "会议号"
-                                        color: "#9CA3AF"
+                                        color: Theme.textMuted
                                         font.pixelSize: 10
                                     }
                                     Text {
                                         text: backend ? backend.meetingNo : ""
-                                        color: "#111827"
+                                        color: Theme.textPrimary
                                         font.pixelSize: 13
                                         font.weight: Font.Medium
                                     }
@@ -196,7 +197,7 @@ Rectangle {
                                     implicitWidth: 30
                                     implicitHeight: 30
                                     radius: 6
-                                    color: copyNoArea.containsMouse ? "#E5E7EB" : "transparent"
+                                    color: copyNoArea.containsMouse ? Theme.hoverBackground : "transparent"
                                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
                                     Image {
@@ -272,8 +273,8 @@ Rectangle {
                             Layout.bottomMargin: 12
                             implicitHeight: 44
                             radius: 8
-                            color: "#F9FAFB"
-                            border.color: "#E5E7EB"
+                            color: Theme.cardBackground
+                            border.color: Theme.borderColor
                             border.width: 1
 
                             RowLayout {
@@ -288,27 +289,26 @@ Rectangle {
 
                                     Text {
                                         text: "会议链接"
-                                        color: "#9CA3AF"
+                                        color: Theme.textMuted
                                         font.pixelSize: 10
                                     }
                                     Text {
                                         text: root.shareUrl
-                                        color: "#2563EB"
+                                        color: Theme.accentColor
                                         font.pixelSize: 11
                                         font.weight: Font.Medium
                                         elide: Text.ElideMiddle
                                         Layout.fillWidth: true
                                     }
-                                }
+                                    }
 
-                                Rectangle {
+                                    Rectangle {
                                     id: copyLinkBtn
                                     implicitWidth: 30
                                     implicitHeight: 30
                                     radius: 6
-                                    color: copyLinkArea.containsMouse ? "#E5E7EB" : "transparent"
+                                    color: copyLinkArea.containsMouse ? Theme.hoverBackground : "transparent"
                                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-
                                     Image {
                                         anchors.centerIn: parent
                                         source: "qrc:/res/icon/copy.png"
@@ -460,9 +460,9 @@ Rectangle {
                     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
                     background: Rectangle {
-                        color: "#FFFFFF"
+                        color: Theme.popupBackground
                         radius: 12
-                        border.color: "#E5E7EB"
+                        border.color: Theme.popupBorder
                         border.width: 1
                     }
 
@@ -477,35 +477,35 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.margins: 14
 
-                            Text { text: "连接状态"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: backend ? backend.connectionStatus : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "连接状态"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: backend ? backend.connectionStatus : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "连接质量"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: backend ? backend.networkQualityText : "检测中"; color: backend ? backend.networkQualityColor : "#6B7280"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "连接质量"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: backend ? backend.networkQualityText : "检测中"; color: backend ? backend.networkQualityColor : Theme.textMuted; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "会议时长"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: backend ? backend.meetingDuration : "00:00:00"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "会议时长"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: backend ? backend.meetingDuration : "00:00:00"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
 
-                            Text { text: "延迟 RTT"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatLatency(backend ? backend.networkRttMs : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "延迟 RTT"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatLatency(backend ? backend.networkRttMs : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "抖动"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatLatency(backend ? backend.networkJitterMs : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "抖动"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatLatency(backend ? backend.networkJitterMs : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "丢包率"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatPacketLoss(backend ? backend.networkPacketLossPercent : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "丢包率"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatPacketLoss(backend ? backend.networkPacketLossPercent : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "上行码率"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatBitrate(backend ? backend.networkUplinkKbps : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "上行码率"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatBitrate(backend ? backend.networkUplinkKbps : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "下行码率"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatBitrate(backend ? backend.networkDownlinkKbps : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "下行码率"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatBitrate(backend ? backend.networkDownlinkKbps : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
                         }
 
                         // --- Vertical Divider ---
-                        Rectangle { width: 1; Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; color: "#F3F4F6" }
+                        Rectangle { width: 1; Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; color: Theme.separatorColor }
 
                         // --- Right Column: Media & Codec ---
                         GridLayout {
@@ -515,27 +515,27 @@ Rectangle {
                             Layout.fillWidth: true
                             Layout.margins: 14
 
-                            Text { text: "传输协议"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: (backend && backend.transportProtocol.length > 0) ? backend.transportProtocol : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "传输协议"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: (backend && backend.transportProtocol.length > 0) ? backend.transportProtocol : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "可用带宽"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatBitrate(backend ? backend.availableSendBandwidth : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "可用带宽"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatBitrate(backend ? backend.availableSendBandwidth : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
 
-                            Text { text: "音频编码"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: (backend && backend.audioCodec.length > 0) ? backend.audioCodec : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "音频编码"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: (backend && backend.audioCodec.length > 0) ? backend.audioCodec : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "视频编码"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: (backend && backend.videoCodec.length > 0) ? backend.videoCodec : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "视频编码"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: (backend && backend.videoCodec.length > 0) ? backend.videoCodec : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
 
-                            Text { text: "视频分辨率"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: (backend && backend.videoResolution.length > 0) ? backend.videoResolution : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "视频分辨率"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: (backend && backend.videoResolution.length > 0) ? backend.videoResolution : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
 
-                            Text { text: "视频帧率"; color: "#6B7280"; font.pixelSize: 11 }
-                            Text { text: root.formatFps(backend ? backend.videoFps : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                            Text { text: "视频帧率"; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text { text: root.formatFps(backend ? backend.videoFps : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
                         }
                     }
                 }
@@ -545,9 +545,9 @@ Rectangle {
             Rectangle {
                 height: 28
                 width: 130
-                color: "#F3F4F6" // Gray-100
+                color: Theme.hoverBackground
                 radius: 6
-                border.color: "#E5E7EB"
+                border.color: Theme.borderColor
                 border.width: 1
 
                 RowLayout {
@@ -559,7 +559,7 @@ Rectangle {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: (backend && backend.viewMode === "gallery") ? "#FFFFFF" : "transparent"
+                        color: (backend && backend.viewMode === "gallery") ? Theme.windowBackground : "transparent"
                         radius: 4
 
                         RowLayout {
@@ -570,11 +570,12 @@ Rectangle {
                                 source: "qrc:/res/icon/user.png" // Using as grid icon
                                 sourceSize.width: 12
                                 sourceSize.height: 12
+                                opacity: (backend && backend.viewMode === "gallery") ? 1.0 : 0.6
                             }
 
                             Text {
                                 text: "画廊"
-                                color: (backend && backend.viewMode === "gallery") ? "#111827" : "#6B7280"
+                                color: (backend && backend.viewMode === "gallery") ? Theme.textPrimary : Theme.textMuted
                                 font.pixelSize: 10
                                 font.weight: Font.Bold
                             }
@@ -591,7 +592,7 @@ Rectangle {
                     Rectangle {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        color: (!backend || backend.viewMode === "speaker") ? "#FFFFFF" : "transparent"
+                        color: (!backend || backend.viewMode === "speaker") ? Theme.windowBackground : "transparent"
                         radius: 4
 
                         RowLayout {
@@ -602,11 +603,12 @@ Rectangle {
                                 source: "qrc:/res/icon/maximize.png"
                                 sourceSize.width: 12
                                 sourceSize.height: 12
+                                opacity: (!backend || backend.viewMode === "speaker") ? 1.0 : 0.6
                             }
 
                             Text {
                                 text: "演讲者"
-                                color: (!backend || backend.viewMode === "speaker") ? "#111827" : "#6B7280"
+                                color: (!backend || backend.viewMode === "speaker") ? Theme.textPrimary : Theme.textMuted
                                 font.pixelSize: 10
                                 font.weight: Font.Bold
                             }
@@ -632,21 +634,21 @@ Rectangle {
 
             IconButton {
                 iconSource: "qrc:/res/icon/minimize.png"
-                iconColor: "#9CA3AF"
-                hoverColor: "#F3F4F6"
+                iconColor: Theme.textMuted
+                hoverColor: Theme.hoverBackground
                 onClicked: if (root.targetWindow) root.targetWindow.showMinimized()
             }
 
             IconButton {
                 iconSource: (backend && backend.isFullscreen) ? "qrc:/res/icon/maximize_recovery.png" : "qrc:/res/icon/maximize.png"
-                iconColor: "#9CA3AF"
-                hoverColor: "#F3F4F6"
+                iconColor: Theme.textMuted
+                hoverColor: Theme.hoverBackground
                 onClicked: if (backend) backend.isFullscreen = !backend.isFullscreen
             }
 
             IconButton {
                 iconSource: "qrc:/res/icon/close.png"
-                iconColor: "#9CA3AF"
+                iconColor: Theme.textMuted
                 hoverColor: "#FEE2E2"
                 hoverIconColor: "#EF4444"
                 onClicked: if (backend) backend.leave()
@@ -660,7 +662,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: 1
-        color: "#E5E7EB"
+        color: Theme.separatorColor
     }
 
     // Icon Button Component
@@ -668,8 +670,8 @@ Rectangle {
         id: btn
         property string iconSource: ""
         property string toolTipText: ""
-        property color iconColor: "#6B7280" // Gray-500
-        property color hoverColor: "#F3F4F6" // Gray-100
+        property color iconColor: Theme.textMuted
+        property color hoverColor: Theme.hoverBackground
         property color hoverIconColor: btn.iconColor
         property bool checkable: false
         property bool checked: false

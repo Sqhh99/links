@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtMultimedia
+import Links
 import Links.Backend 1.0
 
 Rectangle {
@@ -21,11 +22,10 @@ Rectangle {
     border.width: 2
     
     // Background color: Only show color when selected. No background change on hover.
-    color: selected ? "#EFF6FF" : "transparent"
+    color: selected ? Theme.activeBackground : "transparent"
     
-    // Border color: Use specific transparent color (#00D1D5DB) for default state
-    // This ensures transition is pure opacity change (Alpha 0 -> Alpha 1) rather than Color change
-    border.color: selected ? "#2563EB" : (mouseArea.containsMouse ? "#D1D5DB" : "#00D1D5DB")
+    // Border color: Use specific transparent color for default state
+    border.color: selected ? Theme.accentColor : (mouseArea.containsMouse ? Theme.borderColor : "transparent")
     
     Behavior on border.color {
         ColorAnimation { duration: 150 }
@@ -41,7 +41,7 @@ Rectangle {
             width: 230
             height: 130
             radius: 10
-            color: "#F3F4F6"
+            color: Theme.hoverBackground
             clip: true
             
             // Use VideoRenderer with VideoOutput to display QImage
@@ -80,7 +80,7 @@ Rectangle {
         Text {
             width: 230
             text: root.title
-            color: "#374151"
+            color: Theme.textPrimary
             font.pixelSize: 12
             horizontalAlignment: Text.AlignHCenter
             elide: Text.ElideMiddle

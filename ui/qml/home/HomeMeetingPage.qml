@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Item {
     id: root
@@ -59,7 +60,7 @@ Item {
 
             Text {
                 text: "开始新的会议"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 21
                 font.weight: Font.DemiBold
             }
@@ -68,7 +69,7 @@ Item {
                 text: root.isGuest
                     ? "游客仅可加入已存在普通房间，创建会议需登录"
                     : "可加入、创建与预定会议"
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
         }
@@ -85,7 +86,7 @@ Item {
                 title: "加入会议"
                 subtitle: "输入会议号或链接"
                 iconSource: "qrc:/res/icon/video.png"
-                accentColor: "#2563EB"
+                accentColor: Theme.isDark ? "#3B82F6" : "#2563EB"
                 accentOpacity: 0.22
                 iconOpacity: 1.0
                 onClicked: root.openAction("join")
@@ -96,7 +97,7 @@ Item {
                 title: "快速会议"
                 subtitle: root.isGuest ? "登录后可创建临时会议" : "一键创建临时会议"
                 iconSource: "qrc:/res/icon/monitor-up.png"
-                accentColor: "#16A34A"
+                accentColor: Theme.isDark ? "#22C55E" : "#16A34A"
                 accentOpacity: 0.22
                 iconOpacity: 1.0
                 onClicked: root.openAction("quick")
@@ -107,7 +108,7 @@ Item {
                 title: "预定会议"
                 subtitle: root.isGuest ? "登录后可预定会议" : "设置时间、密码与准入策略"
                 iconSource: "qrc:/res/icon/pin.png"
-                accentColor: "#F59E0B"
+                accentColor: Theme.isDark ? "#FBBF24" : "#F59E0B"
                 accentOpacity: 0.18
                 iconOpacity: 0.9
                 onClicked: root.openAction("schedule")
@@ -118,7 +119,7 @@ Item {
                 title: "共享屏幕"
                 subtitle: "开始屏幕演示"
                 iconSource: "qrc:/res/icon/screen_sharing_sidebar.png"
-                accentColor: "#7C3AED"
+                accentColor: Theme.isDark ? "#8B5CF6" : "#7C3AED"
                 accentOpacity: 0.18
                 iconOpacity: 0.9
                 onClicked: root.openAction("share")
@@ -137,7 +138,7 @@ Item {
         anchors.centerIn: parent
 
         Overlay.modal: Rectangle {
-            color: "#00000066"
+            color: Theme.isDark ? Qt.rgba(0, 0, 0, 0.6) : Qt.rgba(0, 0, 0, 0.4)
         }
 
         background: Rectangle {
@@ -146,8 +147,8 @@ Item {
 
         contentItem: Rectangle {
             radius: 16
-            color: "#FFFFFF"
-            border.color: "#E5E7EB"
+            color: Theme.cardBackground
+            border.color: Theme.borderColor
             border.width: 1
 
             ColumnLayout {
@@ -160,7 +161,7 @@ Item {
 
                     Text {
                         text: root.actionTitle()
-                        color: "#111827"
+                        color: Theme.textPrimary
                         font.pixelSize: 16
                         font.weight: Font.DemiBold
                     }
@@ -254,9 +255,10 @@ Item {
                 }
 
                 Text {
+                    id: errorText
                     visible: root.loginBackend && root.loginBackend.errorMessage.length > 0
                     text: root.loginBackend ? root.loginBackend.errorMessage : ""
-                    color: "#EF4444"
+                    color: Theme.errorColor
                     font.pixelSize: 12
                     Layout.fillWidth: true
                     wrapMode: Text.WordWrap

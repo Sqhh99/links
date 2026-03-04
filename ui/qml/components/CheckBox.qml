@@ -1,5 +1,7 @@
 import QtQuick
+import Links
 import QtQuick.Controls
+import Links.Backend 1.0
 
 CheckBox {
     id: control
@@ -12,9 +14,9 @@ CheckBox {
         x: control.leftPadding
         y: parent.height / 2 - height / 2
         radius: 6
-        border.color: control.checked ? "#2563EB" : (control.hovered ? "#2563EB" : "#D1D5DB")
+        border.color: control.checked ? Theme.checkboxCheckedBorder : (control.hovered ? Theme.borderAccent : Theme.checkboxBorder)
         border.width: 1
-        color: control.checked ? "#2563EB" : "#FFFFFF"
+        color: control.checked ? Theme.checkboxCheckedBg : Theme.checkboxBg
 
         Behavior on color { ColorAnimation { duration: 100 } }
         Behavior on border.color { ColorAnimation { duration: 100 } }
@@ -34,7 +36,7 @@ CheckBox {
         text: control.text
         font: control.font
         opacity: enabled ? 1.0 : 0.3
-        color: "#374151"
+        color: Theme.textSecondary
         verticalAlignment: Text.AlignVCenter
         leftPadding: control.indicator.width + control.spacing
     }

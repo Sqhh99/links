@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtQuick.Window
@@ -56,12 +57,15 @@ Window {
     Rectangle {
         id: frame
         anchors.fill: parent
-        color: "#FFFFFF"
+        color: Theme.windowBackground
         radius: 16
-        border.color: "#E5E7EB"
+        border.color: Theme.windowBorder
         border.width: 1
         antialiasing: true
         clip: true
+
+        Behavior on color { ColorAnimation { duration: 200 } }
+        Behavior on border.color { ColorAnimation { duration: 200 } }
         
         // Unified drag area at the top of the entire panel (left side only, avoiding close button)
         MouseArea {
@@ -103,12 +107,14 @@ Window {
                 Rectangle {
                     Layout.preferredWidth: 200
                     Layout.fillHeight: true
-                    color: "#F9FAFB" // Light sidebar
+                    color: Theme.sidebarBackground
                     radius: 16
                     clip: true
+
+                    Behavior on color { ColorAnimation { duration: 200 } }
                     
                     // Borders
-                    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: "#E5E7EB" }
+                    Rectangle { anchors.right: parent.right; width: 1; height: parent.height; color: Theme.sidebarBorder }
                     
                     ColumnLayout {
                         anchors.fill: parent
@@ -117,9 +123,11 @@ Window {
                         
                         Text {
                             text: "设置"
-                            color: "#111827"
+                            color: Theme.textPrimary
                             font.pixelSize: 18
                             font.weight: Font.Bold
+
+                            Behavior on color { ColorAnimation { duration: 200 } }
                         }
                         
                         ColumnLayout {
@@ -142,9 +150,16 @@ Window {
                             
                             NavButton {
                                 text: "网络"
-                                iconSource: "qrc:/res/icon/network.png" // Placeholder
+                                iconSource: "qrc:/res/icon/network.png"
                                 active: pageStack.currentIndex === 2
                                 onClicked: pageStack.currentIndex = 2
+                            }
+
+                            NavButton {
+                                text: "界面"
+                                iconSource: "qrc:/res/icon/monitor.png"
+                                active: pageStack.currentIndex === 3
+                                onClicked: pageStack.currentIndex = 3
                             }
                         }
                         
@@ -156,9 +171,11 @@ Window {
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    color: "#FFFFFF"
+                    color: Theme.contentBackground
                     radius: 16
                     clip: true
+
+                    Behavior on color { ColorAnimation { duration: 200 } }
                     
                     ColumnLayout {
                         anchors.fill: parent
@@ -174,8 +191,8 @@ Window {
                             }
                             IconButton {
                                 iconSource: "qrc:/res/icon/close.png"
-                                iconColor: "#6B7280"
-                                hoverColor: "#F3F4F6"
+                                iconColor: Theme.textMuted
+                                hoverColor: Theme.hoverBackground
                                 onClicked: backend.cancel()
                             }
                         }
@@ -198,6 +215,9 @@ Window {
                             NetworkSettings {
                                 backend: backend
                             }
+
+                            AppearanceSettings {
+                            }
                         }
                         
                         // Footer Buttons
@@ -213,14 +233,16 @@ Window {
                                 implicitHeight: 36
                                 
                                 background: Rectangle {
-                                    color: parent.hovered ? "#F3F4F6" : "transparent"
+                                    color: parent.hovered ? Theme.buttonCancelHoverBg : Theme.buttonCancelBg
                                     radius: 8
-                                    border.color: "#D1D5DB"
+                                    border.color: Theme.buttonCancelBorder
+
+                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                                 
                                 contentItem: Text {
                                     text: parent.text
-                                    color: "#374151"
+                                    color: Theme.buttonCancelText
                                     font.pixelSize: 13
                                     font.weight: Font.Medium
                                     horizontalAlignment: Text.AlignHCenter
@@ -236,13 +258,15 @@ Window {
                                 implicitHeight: 36
                                 
                                 background: Rectangle {
-                                    color: parent.hovered ? "#1D4ED8" : "#2563EB"
+                                    color: parent.hovered ? Theme.accentHover : Theme.accentColor
                                     radius: 8
+
+                                    Behavior on color { ColorAnimation { duration: 150 } }
                                 }
                                 
                                 contentItem: Text {
                                     text: parent.text
-                                    color: "white"
+                                    color: Theme.textOnAccent
                                     font.pixelSize: 13
                                     font.weight: Font.Medium
                                     horizontalAlignment: Text.AlignHCenter
@@ -270,8 +294,10 @@ Window {
         checked: active
         
         background: Rectangle {
-            color: navBtn.checked ? "#EFF6FF" : (navBtn.hovered ? "#F3F4F6" : "transparent")
+            color: navBtn.checked ? Theme.activeBackground : (navBtn.hovered ? Theme.hoverBackground : "transparent")
             radius: 8
+
+            Behavior on color { ColorAnimation { duration: 150 } }
         }
         
         contentItem: RowLayout {
@@ -289,16 +315,18 @@ Window {
                     sourceSize.width: 18; sourceSize.height: 18
                     anchors.centerIn: parent
                     visible: true
-                    opacity: 0.7
+                    opacity: Theme.iconOpacity
                 }
             }
             
             Text {
                 text: navBtn.text
-                color: navBtn.active ? "#2563EB" : "#4B5563"
+                color: navBtn.active ? Theme.accentColor : Theme.textTertiary
                 font.pixelSize: 14
                 font.weight: navBtn.active ? Font.Bold : Font.Medium
                 Layout.fillWidth: true
+
+                Behavior on color { ColorAnimation { duration: 150 } }
             }
         }
         
@@ -312,8 +340,8 @@ Window {
     component IconButton: Button {
         id: btn
         property string iconSource: ""
-        property color iconColor: "#6B7280"
-        property color hoverColor: "#F3F4F6"
+        property color iconColor: Theme.textMuted
+        property color hoverColor: Theme.hoverBackground
         
         width: 32
         height: 32
@@ -331,7 +359,7 @@ Window {
                 sourceSize.height: 16
                 anchors.centerIn: parent
                 visible: true
-                opacity: 0.7
+                opacity: Theme.iconOpacity
             }
         }
     }

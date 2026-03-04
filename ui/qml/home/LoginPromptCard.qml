@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -17,8 +18,8 @@ Rectangle {
     signal secondaryClicked()
 
     radius: 12
-    color: "#F8FAFC"
-    border.color: "#E5E7EB"
+    color: Theme.hoverBackground
+    border.color: Theme.borderLight
     border.width: 1
 
     implicitHeight: 140
@@ -30,14 +31,14 @@ Rectangle {
 
         Text {
             text: root.title
-            color: "#111827"
+            color: Theme.textPrimary
             font.pixelSize: 14
             font.weight: Font.DemiBold
         }
 
         Text {
             text: root.message
-            color: "#6B7280"
+            color: Theme.textMuted
             font.pixelSize: 12
             wrapMode: Text.WordWrap
             Layout.fillWidth: true

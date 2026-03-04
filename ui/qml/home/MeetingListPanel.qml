@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Rectangle {
     id: root
@@ -16,8 +17,8 @@ Rectangle {
     signal joinMeetingClicked()
 
     radius: 14
-    color: "#FFFFFF"
-    border.color: "#E5E7EB"
+    color: Theme.cardBackground
+    border.color: Theme.borderLight
     border.width: 1
 
     ColumnLayout {
@@ -31,7 +32,7 @@ Rectangle {
 
             Text {
                 text: root.headerTitle
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 15
                 font.weight: Font.DemiBold
             }
@@ -39,8 +40,8 @@ Rectangle {
             Rectangle {
                 visible: root.headerTag.length > 0
                 radius: 8
-                color: "#F3F4F6"
-                border.color: "#E5E7EB"
+                color: Theme.hoverBackground
+                border.color: Theme.borderLight
                 border.width: 1
                 Layout.preferredHeight: 20
                 Layout.preferredWidth: tagLabel.implicitWidth + 14
@@ -49,7 +50,7 @@ Rectangle {
                     id: tagLabel
                     anchors.centerIn: parent
                     text: root.headerTag
-                    color: "#6B7280"
+                    color: Theme.textMuted
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
                 }
@@ -101,7 +102,7 @@ Rectangle {
 
                 Text {
                     text: root.isGuest ? "暂无本地会议记录" : "暂无会议记录"
-                    color: "#374151"
+                    color: Theme.textSecondary
                     font.pixelSize: 13
                     font.weight: Font.DemiBold
                     horizontalAlignment: Text.AlignHCenter
@@ -109,7 +110,7 @@ Rectangle {
 
                 Text {
                     text: "发起会议或加入会议后将自动记录"
-                    color: "#9CA3AF"
+                    color: Theme.textTertiary
                     font.pixelSize: 11
                     horizontalAlignment: Text.AlignHCenter
                 }

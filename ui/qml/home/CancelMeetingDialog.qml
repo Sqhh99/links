@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
+import Links.Backend 1.0
 
 Popup {
     id: root
@@ -29,8 +30,8 @@ Popup {
 
     contentItem: Rectangle {
         radius: 16
-        color: "#FFFFFF"
-        border.color: "#E5E7EB"
+        color: Theme.windowBackground
+        border.color: Theme.borderLight
         border.width: 1
 
         ColumnLayout {
@@ -40,7 +41,7 @@ Popup {
 
             Text {
                 text: "取消预定会议"
-                color: "#111827"
+                color: Theme.textPrimary
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
             }
@@ -49,7 +50,7 @@ Popup {
                 text: root.meetingTitle.length > 0
                     ? "确认取消预定：" + root.meetingTitle
                     : "确认取消该预定会议？"
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
@@ -58,7 +59,7 @@ Popup {
             Text {
                 visible: root.meetingNo.length > 0
                 text: "会议号: " + root.meetingNo
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 11
             }
 

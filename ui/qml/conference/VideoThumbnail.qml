@@ -2,13 +2,16 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtMultimedia
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
     
     radius: 8
-    color: "#F3F4F6" // Light theme - no black borders
+    color: Theme.cardBackground // Use theme background
+    border.color: Theme.borderColor
+    border.width: 1
     clip: true
     
     property string participantId: ""
@@ -68,12 +71,12 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         visible: !renderer.hasFrame
-        color: "#F3F4F6" // Light theme placeholder background
+        color: Theme.hoverBackground // Use theme placeholder background
         
         Text {
             anchors.centerIn: parent
             text: root.getInitials()
-            color: "#6B7280" // Light theme text
+            color: Theme.textMuted // Use theme text color
             font.pixelSize: 28
             font.weight: Font.Bold
         }
@@ -87,7 +90,7 @@ Rectangle {
         height: 36
         gradient: Gradient {
             GradientStop { position: 0.0; color: "transparent" }
-            GradientStop { position: 1.0; color: "#80000000" }
+            GradientStop { position: 1.0; color: Theme.isDark ? Qt.rgba(0, 0, 0, 0.4) : Qt.rgba(0, 0, 0, 0.3) }
         }
     }
     

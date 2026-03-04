@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Layouts
+import Links
 // import QtQuick.Effects
 
 Rectangle {
@@ -8,11 +9,11 @@ Rectangle {
     implicitHeight: contentLayout.implicitHeight + 24
     radius: 12
     
-    // Bubble style: Blue for Local, White for Remote
-    color: isLocal ? "#2563EB" : "#FFFFFF"
+    // Bubble style: Accent for Local, Card for Remote
+    color: isLocal ? Theme.accentColor : Theme.cardBackground
     
     // Remote bubbles get a border/shadow
-    border.color: isLocal ? "transparent" : "#E5E7EB"
+    border.color: isLocal ? "transparent" : Theme.borderColor
     border.width: isLocal ? 0 : 1
     
     property string senderName: ""
@@ -44,7 +45,7 @@ Rectangle {
             
             Text {
                 text: root.senderName
-                color: root.isLocal ? "#BFDBFE" : "#6B7280" // Blue-200 : Gray-500
+                color: root.isLocal ? Qt.rgba(1,1,1,0.7) : Theme.textTertiary
                 font.pixelSize: 10
                 font.weight: Font.Medium
             }
@@ -53,7 +54,7 @@ Rectangle {
             
             Text {
                 text: formatTime(root.timestamp)
-                color: root.isLocal ? "#BFDBFE" : "#9CA3AF"
+                color: root.isLocal ? Qt.rgba(1,1,1,0.5) : Theme.textMuted
                 font.pixelSize: 10
                 
                 function formatTime(ts) {
@@ -69,7 +70,7 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             text: root.message
-            color: root.isLocal ? "#FFFFFF" : "#1F2937" // White : Gray-800
+            color: root.isLocal ? Theme.textOnAccent : Theme.textPrimary
             font.pixelSize: 13
             wrapMode: Text.Wrap
         }

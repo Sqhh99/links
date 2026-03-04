@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Window
 import QtMultimedia
+import Links
 import Links.Backend 1.0
 
 /*
@@ -43,10 +44,10 @@ Window {
         anchors.fill: parent
         visible: !root.minimized
         radius: 12
-        color: "#1F2937"
+        color: Theme.cardBackground
         clip: true
         border.width: 2
-        border.color: root.hovered ? "#3B82F6" : "#374151"
+        border.color: root.hovered ? Theme.accentColor : Theme.borderColor
         
         // Video renderer (C++ backend - non-visual data provider)
         VideoRenderer {
@@ -75,7 +76,7 @@ Window {
         Rectangle {
             anchors.fill: parent
             anchors.margins: 2
-            color: "#374151"
+            color: Theme.hoverBackground
             visible: !backend || !backend.camEnabled
             
             Text {
@@ -109,7 +110,7 @@ Window {
                     width: 24
                     height: 24
                     radius: 12
-                    color: minimizeArea.containsMouse ? "#374151" : Qt.rgba(0, 0, 0, 0.4)
+                    color: minimizeArea.containsMouse ? Theme.hoverBackground : Qt.rgba(0, 0, 0, 0.4)
                     
                     Text {
                         anchors.centerIn: parent
@@ -134,7 +135,7 @@ Window {
         MouseArea {
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.SizeAllCursor
+            cursorShape: Qt.PointingHandCursor
             
             onEntered: root.hovered = true
             onExited: root.hovered = false
@@ -160,14 +161,15 @@ Window {
         height: 40
         radius: 20
         visible: root.minimized
-        color: minimizedArea.containsMouse ? "#3B82F6" : "#1F2937"
+        color: minimizedArea.containsMouse ? Theme.accentColor : Theme.cardBackground
         border.width: 2
-        border.color: "#374151"
+        border.color: Theme.borderColor
         
         Text {
             anchors.centerIn: parent
             text: "📷"
             font.pixelSize: 18
+            color: Theme.textPrimary
         }
         
         MouseArea {

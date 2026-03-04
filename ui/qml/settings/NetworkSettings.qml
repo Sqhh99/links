@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links
@@ -23,7 +24,7 @@ ScrollView {
             
             Text {
                 text: "信令地址"
-                color: "#374151"
+                color: Theme.textSecondary
                 font.pixelSize: 13
                 font.weight: Font.Medium
             }

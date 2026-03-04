@@ -1,12 +1,14 @@
 import QtQuick
+import Links
 import QtQuick.Controls
+import Links.Backend 1.0
 
 Button {
     id: root
     
     property string iconSource: ""
     property string toolTipText: ""
-    property string hoverColor: "#F3F4F6"
+    property string hoverColor: Theme.hoverBackground
     
     implicitWidth: 32
     implicitHeight: 24
@@ -24,6 +26,7 @@ Button {
         sourceSize.width: 14
         sourceSize.height: 14
         smooth: true
+        opacity: Theme.iconOpacity
     }
     
     ToolTip.visible: toolTipText.length > 0 && hovered

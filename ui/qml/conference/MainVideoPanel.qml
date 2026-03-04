@@ -2,12 +2,13 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtMultimedia
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
     
-    color: "#F9FAFB" // Light theme - no black borders
+    color: Theme.windowBackground // Use theme background
     radius: 12
     clip: true
     
@@ -46,7 +47,7 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         visible: !renderer.hasFrame
-        color: "#F9FAFB" // Light theme background
+        color: Theme.windowBackground // Use theme background
         radius: 12
         
         ColumnLayout {
@@ -58,12 +59,12 @@ Rectangle {
                 width: 80
                 height: 80
                 radius: 40
-                color: "#E5E7EB" // Light gray circle
+                color: Theme.hoverBackground // Use theme hover background
                 
                 Text {
                     anchors.centerIn: parent
                     text: getInitials()
-                    color: "#6B7280" // Dark gray text
+                    color: Theme.textMuted // Use theme text muted
                     font.pixelSize: 32
                     font.weight: Font.Bold
                     
@@ -92,7 +93,7 @@ Rectangle {
                     var info = backend.getParticipantInfo(backend.mainParticipantId)
                     return info.name || backend.mainParticipantId
                 }
-                color: "#111827" // Dark text
+                color: Theme.textPrimary // Use theme text primary
                 font.pixelSize: 18
                 font.weight: Font.Medium
             }

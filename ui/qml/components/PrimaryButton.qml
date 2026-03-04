@@ -1,5 +1,7 @@
 import QtQuick
+import Links
 import QtQuick.Controls
+import Links.Backend 1.0
 
 Button {
     id: root
@@ -12,10 +14,10 @@ Button {
 
     background: Rectangle {
         color: {
-            if (!root.enabled) return "#E5E7EB"
-            if (root.pressed) return "#1E40AF"
-            if (root.hovered) return "#1D4ED8"
-            return "#2563EB"
+            if (!root.enabled) return Theme.disabledBg
+            if (root.pressed) return Theme.accentPressed
+            if (root.hovered) return Theme.accentHover
+            return Theme.accentColor
         }
         radius: 10
 
@@ -41,7 +43,7 @@ Button {
             id: label
             anchors.centerIn: parent
             text: root.text
-            color: root.enabled ? "#ffffff" : "#9CA3AF"
+            color: root.enabled ? Theme.textOnAccent : Theme.disabledText
             font.pixelSize: 15
             font.weight: Font.Bold
             horizontalAlignment: Text.AlignHCenter
