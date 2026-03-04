@@ -1,6 +1,7 @@
 #include "conference_manager.h"
 #include "../room_event_delegate.h"
 #include "../../utils/logger.h"
+#include <QFutureWatcher>
 #include <QDateTime>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -8,6 +9,7 @@
 #include <QSet>
 #include <QStringList>
 #include <QTimer>
+#include <QtConcurrent/QtConcurrentRun>
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
@@ -19,6 +21,11 @@
 #include "livekit/video_stream.h"
 
 namespace {
+
+struct AsyncNetworkPollResult {
+    bool hasData{false};
+    NetworkStatsAggregationResult aggregation;
+};
 
 bool networkStatsEquivalent(const NetworkStatsSnapshot& lhs,
                             const NetworkStatsSnapshot& rhs)
@@ -738,6 +745,31 @@ void ConferenceManager::pollLocalNetworkStats()
 
     const auto tracks = collectTrackStatsSources();
     const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    QSet<QString> currentTrackSids;
+    currentTrackSids.reserve(static_cast<int>(tracks.size()));
+    for (const auto& track : tracks) {
+        if (!track) {
+            continue;
+        }
+
+        const QString sid = QString::fromStdString(track->sid());
+        if (!sid.isEmpty()) {
+            currentTrackSids.insert(sid);
+        }
+    }
+
+    const bool trackSetChanged = (currentTrackSids != lastPolledTrackSids_);
+    if (trackSetChanged) {
+        lastPolledTrackSids_ = currentTrackSids;
+        previousNetworkByteCounters_ = NetworkByteCounters{};
+
+        // Invalidate in-flight results derived from a different track set.
+        if (networkStatsPollInFlight_) {
+            ++networkStatsPollSeq_;
+            networkStatsPollInFlight_ = false;
+        }
+    }
+
     if (tracks.empty()) {
         previousNetworkByteCounters_ = NetworkByteCounters{};
         if (!usingEstimatedNetworkStats_) {
@@ -751,57 +783,105 @@ void ConferenceManager::pollLocalNetworkStats()
         return;
     }
 
-    std::vector<livekit::RtcStats> aggregatedStats;
-    for (const auto& track : tracks) {
-        if (!track) {
-            continue;
-        }
+    if (networkStatsPollInFlight_) {
+        return;
+    }
 
+    const NetworkByteCounters baselineCounters = previousNetworkByteCounters_;
+    const quint64 pollSeq = ++networkStatsPollSeq_;
+    networkStatsPollInFlight_ = true;
+
+    auto* watcher = new QFutureWatcher<AsyncNetworkPollResult>(this);
+    QObject::connect(watcher, &QFutureWatcher<AsyncNetworkPollResult>::finished,
+                     this, [this, watcher, pollSeq]() {
+        AsyncNetworkPollResult asyncResult;
         try {
-            auto statsFuture = track->getStats();
-            std::vector<livekit::RtcStats> stats = statsFuture.get();
-            aggregatedStats.insert(aggregatedStats.end(), stats.begin(), stats.end());
+            asyncResult = watcher->result();
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Failed to collect track stats: %1").arg(e.what()));
+            Logger::instance().warning(QString("Asynchronous network stats polling failed: %1")
+                                       .arg(e.what()));
+        } catch (...) {
+            Logger::instance().warning("Asynchronous network stats polling failed with unknown error");
         }
-    }
+        watcher->deleteLater();
 
-    if (aggregatedStats.empty()) {
-        return;
-    }
+        if (pollSeq != networkStatsPollSeq_) {
+            return;
+        }
 
-    const NetworkStatsAggregationResult aggregated =
-        aggregateNetworkStats(aggregatedStats, previousNetworkByteCounters_, nowMs);
-    previousNetworkByteCounters_ = aggregated.counters;
+        networkStatsPollInFlight_ = false;
+        if (!connected_ || !roomController_ || !roomController_->room()) {
+            return;
+        }
 
-    // Grace period: keep estimated stats for the first 5 seconds after connection
-    // to avoid a visual "blip" to empty values. After that, always use real data.
-    const bool withinGracePeriod = usingEstimatedNetworkStats_
-        && (nowMs - localNetworkStats_.sampledAtMs) < 5000;
-    if (!hasNetworkStatsData(aggregated.snapshot) && withinGracePeriod) {
-        return;
-    }
-    usingEstimatedNetworkStats_ = false;
+        if (!asyncResult.hasData) {
+            return;
+        }
 
-    if (!networkStatsEquivalent(localNetworkStats_, aggregated.snapshot)) {
-        localNetworkStats_ = aggregated.snapshot;
-        Logger::instance().debug(
-            QString("LiveKit network stats updated: rtt=%1ms, jitter=%2ms, loss=%3%, up=%4kbps, down=%5kbps, "
-                    "bw=%6kbps, proto=%7, video=%8x%9@%10fps, acodec=%11, vcodec=%12")
-                .arg(localNetworkStats_.rttMs)
-                .arg(localNetworkStats_.jitterMs)
-                .arg(localNetworkStats_.packetLossPercent, 0, 'f', 1)
-                .arg(localNetworkStats_.uplinkKbps)
-                .arg(localNetworkStats_.downlinkKbps)
-                .arg(localNetworkStats_.availableSendBandwidthKbps)
-                .arg(localNetworkStats_.transportProtocol.isEmpty() ? QStringLiteral("none") : localNetworkStats_.transportProtocol)
-                .arg(localNetworkStats_.videoWidth)
-                .arg(localNetworkStats_.videoHeight)
-                .arg(localNetworkStats_.videoFps, 0, 'f', 1)
-                .arg(localNetworkStats_.audioCodec.isEmpty() ? QStringLiteral("none") : localNetworkStats_.audioCodec)
-                .arg(localNetworkStats_.videoCodec.isEmpty() ? QStringLiteral("none") : localNetworkStats_.videoCodec));
-        emit localNetworkStatsUpdated(localNetworkStats_);
-    }
+        const NetworkStatsAggregationResult& aggregated = asyncResult.aggregation;
+        previousNetworkByteCounters_ = aggregated.counters;
+
+        // Grace period: keep estimated stats for the first 5 seconds after connection
+        // to avoid a visual "blip" to empty values. After that, always use real data.
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        const bool withinGracePeriod = usingEstimatedNetworkStats_
+            && (now - localNetworkStats_.sampledAtMs) < 5000;
+        if (!hasNetworkStatsData(aggregated.snapshot) && withinGracePeriod) {
+            return;
+        }
+        usingEstimatedNetworkStats_ = false;
+
+        if (!networkStatsEquivalent(localNetworkStats_, aggregated.snapshot)) {
+            localNetworkStats_ = aggregated.snapshot;
+            Logger::instance().debug(
+                QString("LiveKit network stats updated: rtt=%1ms, jitter=%2ms, loss=%3%, up=%4kbps, down=%5kbps, "
+                        "bw=%6kbps, proto=%7, video=%8x%9@%10fps, acodec=%11, vcodec=%12")
+                    .arg(localNetworkStats_.rttMs)
+                    .arg(localNetworkStats_.jitterMs)
+                    .arg(localNetworkStats_.packetLossPercent, 0, 'f', 1)
+                    .arg(localNetworkStats_.uplinkKbps)
+                    .arg(localNetworkStats_.downlinkKbps)
+                    .arg(localNetworkStats_.availableSendBandwidthKbps)
+                    .arg(localNetworkStats_.transportProtocol.isEmpty()
+                        ? QStringLiteral("none") : localNetworkStats_.transportProtocol)
+                    .arg(localNetworkStats_.videoWidth)
+                    .arg(localNetworkStats_.videoHeight)
+                    .arg(localNetworkStats_.videoFps, 0, 'f', 1)
+                    .arg(localNetworkStats_.audioCodec.isEmpty()
+                        ? QStringLiteral("none") : localNetworkStats_.audioCodec)
+                    .arg(localNetworkStats_.videoCodec.isEmpty()
+                        ? QStringLiteral("none") : localNetworkStats_.videoCodec));
+            emit localNetworkStatsUpdated(localNetworkStats_);
+        }
+    });
+
+    QFuture<AsyncNetworkPollResult> future = QtConcurrent::run(
+        [tracks, baselineCounters, nowMs]() -> AsyncNetworkPollResult {
+            AsyncNetworkPollResult result;
+            std::vector<livekit::RtcStats> aggregatedStats;
+            for (const auto& track : tracks) {
+                if (!track) {
+                    continue;
+                }
+
+                try {
+                    auto statsFuture = track->getStats();
+                    std::vector<livekit::RtcStats> stats = statsFuture.get();
+                    aggregatedStats.insert(aggregatedStats.end(), stats.begin(), stats.end());
+                } catch (...) {
+                    // Ignore individual track failures to keep polling robust.
+                }
+            }
+
+            if (aggregatedStats.empty()) {
+                return result;
+            }
+
+            result.hasData = true;
+            result.aggregation = aggregateNetworkStats(aggregatedStats, baselineCounters, nowMs);
+            return result;
+        });
+    watcher->setFuture(future);
 }
 
 QString ConferenceManager::resolveLocalParticipantIdentity() const
@@ -906,4 +986,7 @@ void ConferenceManager::resetNetworkMetrics()
     localNetworkStats_ = NetworkStatsSnapshot{};
     previousNetworkByteCounters_ = NetworkByteCounters{};
     usingEstimatedNetworkStats_ = false;
+    networkStatsPollInFlight_ = false;
+    ++networkStatsPollSeq_;
+    lastPolledTrackSids_.clear();
 }

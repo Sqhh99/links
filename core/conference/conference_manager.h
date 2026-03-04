@@ -6,6 +6,7 @@
 #include <QByteArray>
 #include <QImage>
 #include <QList>
+#include <QSet>
 #include <memory>
 #include <vector>
 #include "conference_types.h"
@@ -154,6 +155,9 @@ private:
     NetworkStatsSnapshot localNetworkStats_;
     NetworkByteCounters previousNetworkByteCounters_;
     bool usingEstimatedNetworkStats_{false};
+    bool networkStatsPollInFlight_{false};
+    quint64 networkStatsPollSeq_{0};
+    QSet<QString> lastPolledTrackSids_;
 };
 
 #endif // CORE_CONFERENCE_CONFERENCE_MANAGER_H

@@ -691,19 +691,6 @@ void ConferenceBackend::onConnected()
     connectionStatus_ = "Connected";
     connectionColor_ = "#4caf50";
     emit connectionStatusChanged();
-
-    bool networkChanged = false;
-    if (networkQuality_ != NetworkQualityLevel::Unknown) {
-        networkQuality_ = NetworkQualityLevel::Unknown;
-        networkChanged = true;
-    }
-    if (networkStatsDifferent(networkStats_, NetworkStatsSnapshot{})) {
-        networkStats_ = NetworkStatsSnapshot{};
-        networkChanged = true;
-    }
-    if (networkChanged) {
-        emit networkMetricsChanged();
-    }
     
     // Initialize local participant state
     micState_["local"] = conferenceManager_->isMicrophoneEnabled();
@@ -744,6 +731,7 @@ void ConferenceBackend::onDisconnected()
     participantReconcileTimer_.stop();
     meetingDurationTimer_.stop();
     meetingStartTime_ = QDateTime();  // invalidate
+    emit meetingDurationChanged();
     clearRemoteParticipantState();
     updateParticipantsList();
     emit participantCountChanged();
