@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import Links as Comp
+import Links
 import Links.Backend 1.0
 
 ScrollView {

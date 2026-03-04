@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Controls
 import Links.Backend 1.0
 
