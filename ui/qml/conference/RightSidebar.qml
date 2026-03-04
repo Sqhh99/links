@@ -12,6 +12,7 @@ Rectangle {
     
     property ConferenceBackend backend
     property bool isGuest: false
+    property bool chatActive: backend && !root.isGuest && backend.isChatVisible
     
     // Shadow for sidebar
     // layer.enabled: true
@@ -49,7 +50,7 @@ Rectangle {
                 anchors.rightMargin: 16
                 
                 Text {
-                    text: backend && !root.isGuest && backend.isChatVisible ? "消息讨论" : "参会成员"
+                    text: root.chatActive ? "消息讨论" : "参会成员"
                     color: "#111827" // Gray-900
                     font.pixelSize: 14
                     font.weight: Font.Bold
@@ -66,7 +67,7 @@ Rectangle {
                     Text {
                         id: countText
                         anchors.centerIn: parent
-                        text: backend ? ((!root.isGuest && backend.isChatVisible) ? backend.chatMessages.length : backend.participants.length) : "0"
+                        text: backend ? (root.chatActive ? backend.chatMessages.length : backend.participants.length) : "0"
                         color: "#6B7280"
                         font.pixelSize: 11
                     }
@@ -98,55 +99,87 @@ Rectangle {
             }
         }
         
-        // Content area - use StackLayout to switch between panels
-        StackLayout {
+        // Content area with animated panel switching
+        Item {
+            id: contentArea
             Layout.fillWidth: true
             Layout.fillHeight: true
-            currentIndex: backend && !root.isGuest && backend.isChatVisible ? 1 : 0
+            clip: true
             
-            // Index 0: Participants panel
-            ScrollView {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
-                clip: true
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
-                
-                ListView {
-                    id: participantsList
-                    spacing: 2
-                    anchors.margins: 8
+            states: [
+                State {
+                    name: "participants"
+                    when: !root.chatActive
+                    PropertyChanges { target: participantsPanel; x: 0; opacity: 1; enabled: true }
+                    PropertyChanges { target: chatPanel; x: 24; opacity: 0; enabled: false }
+                },
+                State {
+                    name: "chat"
+                    when: root.chatActive
+                    PropertyChanges { target: participantsPanel; x: -24; opacity: 0; enabled: false }
+                    PropertyChanges { target: chatPanel; x: 0; opacity: 1; enabled: true }
+                }
+            ]
+
+            transitions: Transition {
+                NumberAnimation {
+                    targets: [participantsPanel, chatPanel]
+                    properties: "x,opacity"
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+            }
+
+            Item {
+                id: participantsPanel
+                anchors.fill: parent
+                x: 0
+                opacity: 1
+
+                ScrollView {
+                    anchors.fill: parent
+                    clip: true
+                    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                     
-                    model: backend ? backend.participants : []
-                    
-                    delegate: ParticipantItem {
-                        width: ListView.view.width - 16
-                        x: 8
-                        identity: modelData.identity
-                        name: modelData.name
-                        micEnabled: modelData.micEnabled
-                        camEnabled: modelData.camEnabled
-                        isLocal: modelData.isLocal
-                        isLocalHost: backend ? backend.isHost : false
-                        isParticipantHost: modelData.isHost || false
+                    ListView {
+                        id: participantsList
+                        spacing: 2
+                        anchors.fill: parent
+                        anchors.margins: 8
                         
-                        onMicToggleClicked: function(identity) {
-                            if (backend) backend.muteParticipant(identity)
-                        }
-                        onCameraToggleClicked: function(identity) {
-                            if (backend) backend.hideParticipantVideo(identity)
-                        }
-                        onKickClicked: function(identity) {
-                            if (backend) backend.kickParticipant(identity)
+                        model: backend ? backend.participants : []
+                        
+                        delegate: ParticipantItem {
+                            width: ListView.view.width - 16
+                            x: 8
+                            identity: modelData.identity
+                            name: modelData.name
+                            micEnabled: modelData.micEnabled
+                            camEnabled: modelData.camEnabled
+                            isLocal: modelData.isLocal
+                            isLocalHost: backend ? backend.isHost : false
+                            isParticipantHost: modelData.isHost || false
+                            
+                            onMicToggleClicked: function(identity) {
+                                if (backend) backend.muteParticipant(identity)
+                            }
+                            onCameraToggleClicked: function(identity) {
+                                if (backend) backend.hideParticipantVideo(identity)
+                            }
+                            onKickClicked: function(identity) {
+                                if (backend) backend.kickParticipant(identity)
+                            }
                         }
                     }
                 }
             }
             
-            // Index 1: Chat panel
             Rectangle {
-                Layout.fillWidth: true
-                Layout.fillHeight: true
+                id: chatPanel
+                anchors.fill: parent
                 color: "#F9FAFB" // Gray-50
+                x: 24
+                opacity: 0
                 
                 ColumnLayout {
                     anchors.fill: parent
@@ -156,12 +189,13 @@ Rectangle {
                     ScrollView {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
+                        Layout.topMargin: 2
                         clip: true
                         ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
                         
                         ListView {
                             id: messagesList
-                            spacing: 12
+                            spacing: 10
                             verticalLayoutDirection: ListView.BottomToTop
                             anchors.margins: 12
                             
@@ -185,7 +219,7 @@ Rectangle {
                     // Input area
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: 72
+                        Layout.preferredHeight: 74
                         color: "#FFFFFF"
                         
                         // Top border
@@ -200,7 +234,7 @@ Rectangle {
                         RowLayout {
                             anchors.fill: parent
                             anchors.margins: 12
-                            spacing: 8
+                            spacing: 10
                             
                             TextField {
                                 id: messageInput
@@ -210,7 +244,7 @@ Rectangle {
                                 placeholderTextColor: "#9CA3AF"
                                 
                                 background: Rectangle {
-                                    color: "#F9FAFB"
+                                    color: "#FFFFFF"
                                     border.color: messageInput.activeFocus ? "#2563EB" : "#E5E7EB"
                                     border.width: 1
                                     radius: 8
@@ -233,18 +267,20 @@ Rectangle {
                             }
                             
                             Button {
+                                id: sendButton
                                 implicitWidth: 40
                                 implicitHeight: 40
                                 
                                 background: Rectangle {
-                                    color: parent.hovered ? "#1D4ED8" : "#2563EB"
+                                    color: sendButton.down ? "#1E40AF" : (sendButton.hovered ? "#1D4ED8" : "#2563EB")
                                     radius: 8
                                 }
                                 
                                 contentItem: Text {
                                     text: "→" // Should use send icon
                                     color: "white"
-                                    font.pixelSize: 18
+                                    font.pixelSize: 16
+                                    font.weight: Font.DemiBold
                                     horizontalAlignment: Text.AlignHCenter
                                     verticalAlignment: Text.AlignVCenter
                                 }
