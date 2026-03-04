@@ -19,6 +19,22 @@ Rectangle {
     property point dragStartPos
     property bool dragging: false
 
+    function formatLatency(value) {
+        return value >= 0 ? value + " ms" : "--"
+    }
+
+    function formatBitrate(value) {
+        return value >= 0 ? value + " kbps" : "--"
+    }
+
+    function formatPacketLoss(value) {
+        return value >= 0 ? Number(value).toFixed(1) + "%" : "--"
+    }
+
+    function formatFps(value) {
+        return value >= 0 ? Number(value).toFixed(1) + " FPS" : "--"
+    }
+
     MouseArea {
         anchors.fill: parent
 
@@ -378,25 +394,149 @@ Rectangle {
             spacing: 16
             Layout.alignment: Qt.AlignVCenter
 
-            // Network Status (Mock)
             Rectangle {
+                id: networkStatusPill
+
+                property color qualityColor: backend ? backend.networkQualityColor : "#6B7280"
+
                 height: 24
-                width: 80
+                width: Math.max(96, networkStatusLabelMetrics.width + 30)
                 radius: 12
-                color: "#ECFDF5" // Emerald-50
+                color: Qt.rgba(qualityColor.r, qualityColor.g, qualityColor.b, 0.12)
+                border.color: Qt.rgba(qualityColor.r, qualityColor.g, qualityColor.b, 0.32)
+                border.width: 1
 
                 RowLayout {
                     anchors.centerIn: parent
                     spacing: 4
+
                     Rectangle {
-                        width: 6; height: 6; radius: 3
-                        color: "#10B981" // Emerald-500
+                        width: 6
+                        height: 6
+                        radius: 3
+                        color: networkStatusPill.qualityColor
                     }
+
                     Text {
-                        text: "连接稳定"
-                        color: "#059669" // Emerald-600
+                        id: networkStatusLabel
+                        text: backend ? (backend.networkQualityText + " · "
+                                         + (backend.networkRttMs >= 0 ? backend.networkRttMs + "ms" : "--ms"))
+                                      : "检测中 · --ms"
+                        color: networkStatusPill.qualityColor
                         font.pixelSize: 11
                         font.weight: Font.Medium
+                    }
+                }
+
+                TextMetrics {
+                    id: networkStatusLabelMetrics
+                    text: networkStatusLabel.text
+                    font: networkStatusLabel.font
+                }
+
+                MouseArea {
+                    id: networkStatusArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (networkStatsPopup.visible)
+                            networkStatsPopup.close()
+                        else
+                            networkStatsPopup.open()
+                    }
+                }
+
+                ToolTip.visible: networkStatusArea.containsMouse && !networkStatsPopup.visible
+                ToolTip.text: "网络详情"
+                ToolTip.delay: 500
+
+                Popup {
+                    id: networkStatsPopup
+                    y: networkStatusPill.height + 8
+                    x: Math.round((networkStatusPill.width - width) / 2)
+                    width: 480
+                    padding: 0
+                    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+                    background: Rectangle {
+                        color: "#FFFFFF"
+                        radius: 12
+                        border.color: "#E5E7EB"
+                        border.width: 1
+                    }
+
+                    contentItem: RowLayout {
+                        spacing: 0
+
+                        // --- Left Column: Connection & Network ---
+                        GridLayout {
+                            columns: 2
+                            rowSpacing: 8
+                            columnSpacing: 12
+                            Layout.fillWidth: true
+                            Layout.margins: 14
+
+                            Text { text: "连接状态"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: backend ? backend.connectionStatus : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "连接质量"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: backend ? backend.networkQualityText : "检测中"; color: backend ? backend.networkQualityColor : "#6B7280"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "会议时长"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: backend ? backend.meetingDuration : "00:00:00"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+
+                            Text { text: "延迟 RTT"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatLatency(backend ? backend.networkRttMs : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "抖动"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatLatency(backend ? backend.networkJitterMs : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "丢包率"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatPacketLoss(backend ? backend.networkPacketLossPercent : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "上行码率"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatBitrate(backend ? backend.networkUplinkKbps : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "下行码率"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatBitrate(backend ? backend.networkDownlinkKbps : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                        }
+
+                        // --- Vertical Divider ---
+                        Rectangle { width: 1; Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; color: "#F3F4F6" }
+
+                        // --- Right Column: Media & Codec ---
+                        GridLayout {
+                            columns: 2
+                            rowSpacing: 8
+                            columnSpacing: 12
+                            Layout.fillWidth: true
+                            Layout.margins: 14
+
+                            Text { text: "传输协议"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: (backend && backend.transportProtocol.length > 0) ? backend.transportProtocol : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "可用带宽"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatBitrate(backend ? backend.availableSendBandwidth : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+
+                            Text { text: "音频编码"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: (backend && backend.audioCodec.length > 0) ? backend.audioCodec : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "视频编码"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: (backend && backend.videoCodec.length > 0) ? backend.videoCodec : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: "#F3F4F6" }
+
+                            Text { text: "视频分辨率"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: (backend && backend.videoResolution.length > 0) ? backend.videoResolution : "--"; color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+
+                            Text { text: "视频帧率"; color: "#6B7280"; font.pixelSize: 11 }
+                            Text { text: root.formatFps(backend ? backend.videoFps : -1); color: "#111827"; font.pixelSize: 11; font.weight: Font.Medium }
+                        }
                     }
                 }
             }

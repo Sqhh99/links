@@ -54,6 +54,7 @@ set(SOURCES
     main.cpp
     # Core modules
     core/conference/conference_manager.cpp
+    core/conference/network_stats_aggregator.cpp
     core/conference/participant_store.cpp
     core/conference/media_pipeline.cpp
     core/conference/device_controller.cpp
@@ -110,6 +111,7 @@ set(HEADERS
     # Core modules
     core/conference/conference_manager.h
     core/conference/conference_types.h
+    core/conference/network_stats_aggregator.h
     core/conference/participant_store.h
     core/conference/media_pipeline.h
     core/conference/device_controller.h

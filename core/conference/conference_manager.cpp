@@ -9,10 +9,35 @@
 #include <QStringList>
 #include <QTimer>
 #include <algorithm>
+#include <cmath>
+#include <unordered_set>
 #include <vector>
 #include "livekit/audio_stream.h"
+#include "livekit/local_participant.h"
 #include "livekit/remote_participant.h"
+#include "livekit/track.h"
 #include "livekit/video_stream.h"
+
+namespace {
+
+bool networkStatsEquivalent(const NetworkStatsSnapshot& lhs,
+                            const NetworkStatsSnapshot& rhs)
+{
+    return lhs.rttMs == rhs.rttMs
+        && lhs.jitterMs == rhs.jitterMs
+        && lhs.uplinkKbps == rhs.uplinkKbps
+        && lhs.downlinkKbps == rhs.downlinkKbps
+        && std::fabs(lhs.packetLossPercent - rhs.packetLossPercent) < 0.001
+        && lhs.videoWidth == rhs.videoWidth
+        && lhs.videoHeight == rhs.videoHeight
+        && std::fabs(lhs.videoFps - rhs.videoFps) < 0.1
+        && lhs.audioCodec == rhs.audioCodec
+        && lhs.videoCodec == rhs.videoCodec
+        && lhs.availableSendBandwidthKbps == rhs.availableSendBandwidthKbps
+        && lhs.transportProtocol == rhs.transportProtocol;
+}
+
+} // namespace
 
 ConferenceManager::ConferenceManager(QObject* parent)
     : QObject(parent),
@@ -25,6 +50,7 @@ ConferenceManager::ConferenceManager(QObject* parent)
     Logger::instance().info("ConferenceManager created");
     qRegisterMetaType<livekit::TrackSource>("livekit::TrackSource");
     qRegisterMetaType<livekit::TrackKind>("livekit::TrackKind");
+    qRegisterMetaType<NetworkStatsSnapshot>("NetworkStatsSnapshot");
 
     roomController_->setDelegate(roomDelegate_.get());
 
@@ -42,6 +68,8 @@ ConferenceManager::ConferenceManager(QObject* parent)
                      this, &ConferenceManager::onTrackUnmutedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::trackUnpublishedQueued,
                      this, &ConferenceManager::onTrackUnpublishedQueued);
+    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::connectionQualityChangedQueued,
+                     this, &ConferenceManager::onConnectionQualityChangedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::connectionStateChangedQueued,
                      this, &ConferenceManager::onConnectionStateChangedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::dataReceivedQueued,
@@ -69,6 +97,11 @@ ConferenceManager::ConferenceManager(QObject* parent)
         [this](const int16_t* data, int samples, int sampleRate, int channels) {
             feedReverseAudio(data, samples, sampleRate, channels);
         });
+
+    networkStatsTimer_.setInterval(1000);
+    networkStatsTimer_.setSingleShot(false);
+    QObject::connect(&networkStatsTimer_, &QTimer::timeout,
+                     this, &ConferenceManager::pollLocalNetworkStats);
 }
 
 ConferenceManager::~ConferenceManager()
@@ -130,6 +163,11 @@ void ConferenceManager::disconnect()
         connected_ = false;
         participantStore_->clear();
         participantIdentity_.clear();
+        networkStatsTimer_.stop();
+        resetNetworkMetrics();
+
+        emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
+        emit localNetworkStatsUpdated(localNetworkStats_);
 
         emit disconnected();
     } catch (const std::exception& e) {
@@ -483,6 +521,42 @@ void ConferenceManager::onTrackUnpublishedQueued(QString trackSid, QString parti
     reconcileParticipantsInternal("track_unpublished_event");
 }
 
+void ConferenceManager::onConnectionQualityChangedQueued(QString participantIdentity, int quality)
+{
+    if (participantIdentity.trimmed().isEmpty()) {
+        return;
+    }
+
+    const QString localIdentity = resolveLocalParticipantIdentity();
+    if (localIdentity.isEmpty() || participantIdentity != localIdentity) {
+        return;
+    }
+
+    const auto mappedQuality =
+        toNetworkQualityLevel(static_cast<livekit::ConnectionQuality>(quality));
+    if (mappedQuality == localNetworkQuality_) {
+        return;
+    }
+
+    localNetworkQuality_ = mappedQuality;
+    emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
+
+    if (!hasNetworkStatsData(localNetworkStats_) || usingEstimatedNetworkStats_) {
+        const NetworkStatsSnapshot estimated =
+            buildEstimatedNetworkSnapshot(localNetworkQuality_, QDateTime::currentMSecsSinceEpoch());
+        usingEstimatedNetworkStats_ = true;
+        if (!networkStatsEquivalent(localNetworkStats_, estimated)) {
+            localNetworkStats_ = estimated;
+            Logger::instance().debug(
+                QString("Estimated network stats applied from quality: rtt=%1ms, jitter=%2ms, loss=%3%")
+                    .arg(localNetworkStats_.rttMs)
+                    .arg(localNetworkStats_.jitterMs)
+                    .arg(localNetworkStats_.packetLossPercent, 0, 'f', 1));
+            emit localNetworkStatsUpdated(localNetworkStats_);
+        }
+    }
+}
+
 void ConferenceManager::onConnectionStateChangedQueued(int state)
 {
     livekit::ConnectionState connState = static_cast<livekit::ConnectionState>(state);
@@ -501,12 +575,25 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
         }
 
         reconcileParticipantsInternal("connection_connected_state");
+        if (!networkStatsTimer_.isActive()) {
+            networkStatsTimer_.start();
+        }
+        pollLocalNetworkStats();
 
         emit connected();
+    } else if (connState == livekit::ConnectionState::Reconnecting) {
+        networkStatsTimer_.stop();
+        resetNetworkMetrics();
+        emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
+        emit localNetworkStatsUpdated(localNetworkStats_);
     } else if (connState == livekit::ConnectionState::Disconnected) {
         connected_ = false;
         participantStore_->clear();
         participantIdentity_.clear();
+        networkStatsTimer_.stop();
+        resetNetworkMetrics();
+        emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
+        emit localNetworkStatsUpdated(localNetworkStats_);
         emit disconnected();
     }
 
@@ -641,4 +728,182 @@ void ConferenceManager::reconcileParticipantsInternal(const char* source)
         }
         Logger::instance().info(message);
     }
+}
+
+void ConferenceManager::pollLocalNetworkStats()
+{
+    if (!connected_ || !roomController_ || !roomController_->room()) {
+        return;
+    }
+
+    const auto tracks = collectTrackStatsSources();
+    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
+    if (tracks.empty()) {
+        previousNetworkByteCounters_ = NetworkByteCounters{};
+        if (!usingEstimatedNetworkStats_) {
+            NetworkStatsSnapshot snapshot;
+            snapshot.sampledAtMs = nowMs;
+            if (!networkStatsEquivalent(snapshot, localNetworkStats_)) {
+                localNetworkStats_ = snapshot;
+                emit localNetworkStatsUpdated(localNetworkStats_);
+            }
+        }
+        return;
+    }
+
+    std::vector<livekit::RtcStats> aggregatedStats;
+    for (const auto& track : tracks) {
+        if (!track) {
+            continue;
+        }
+
+        try {
+            auto statsFuture = track->getStats();
+            std::vector<livekit::RtcStats> stats = statsFuture.get();
+            aggregatedStats.insert(aggregatedStats.end(), stats.begin(), stats.end());
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Failed to collect track stats: %1").arg(e.what()));
+        }
+    }
+
+    if (aggregatedStats.empty()) {
+        return;
+    }
+
+    const NetworkStatsAggregationResult aggregated =
+        aggregateNetworkStats(aggregatedStats, previousNetworkByteCounters_, nowMs);
+    previousNetworkByteCounters_ = aggregated.counters;
+
+    // Grace period: keep estimated stats for the first 5 seconds after connection
+    // to avoid a visual "blip" to empty values. After that, always use real data.
+    const bool withinGracePeriod = usingEstimatedNetworkStats_
+        && (nowMs - localNetworkStats_.sampledAtMs) < 5000;
+    if (!hasNetworkStatsData(aggregated.snapshot) && withinGracePeriod) {
+        return;
+    }
+    usingEstimatedNetworkStats_ = false;
+
+    if (!networkStatsEquivalent(localNetworkStats_, aggregated.snapshot)) {
+        localNetworkStats_ = aggregated.snapshot;
+        Logger::instance().debug(
+            QString("LiveKit network stats updated: rtt=%1ms, jitter=%2ms, loss=%3%, up=%4kbps, down=%5kbps, "
+                    "bw=%6kbps, proto=%7, video=%8x%9@%10fps, acodec=%11, vcodec=%12")
+                .arg(localNetworkStats_.rttMs)
+                .arg(localNetworkStats_.jitterMs)
+                .arg(localNetworkStats_.packetLossPercent, 0, 'f', 1)
+                .arg(localNetworkStats_.uplinkKbps)
+                .arg(localNetworkStats_.downlinkKbps)
+                .arg(localNetworkStats_.availableSendBandwidthKbps)
+                .arg(localNetworkStats_.transportProtocol.isEmpty() ? QStringLiteral("none") : localNetworkStats_.transportProtocol)
+                .arg(localNetworkStats_.videoWidth)
+                .arg(localNetworkStats_.videoHeight)
+                .arg(localNetworkStats_.videoFps, 0, 'f', 1)
+                .arg(localNetworkStats_.audioCodec.isEmpty() ? QStringLiteral("none") : localNetworkStats_.audioCodec)
+                .arg(localNetworkStats_.videoCodec.isEmpty() ? QStringLiteral("none") : localNetworkStats_.videoCodec));
+        emit localNetworkStatsUpdated(localNetworkStats_);
+    }
+}
+
+QString ConferenceManager::resolveLocalParticipantIdentity() const
+{
+    if (!participantIdentity_.isEmpty()) {
+        return participantIdentity_;
+    }
+
+    if (!roomController_ || !roomController_->localParticipant()) {
+        return {};
+    }
+
+    return QString::fromStdString(roomController_->localParticipant()->identity());
+}
+
+std::vector<std::shared_ptr<livekit::Track>> ConferenceManager::collectTrackStatsSources() const
+{
+    std::vector<std::shared_ptr<livekit::Track>> tracks;
+    if (!roomController_ || !roomController_->room()) {
+        return tracks;
+    }
+
+    std::unordered_set<std::string> collectedTrackSids;
+    auto appendTrack = [&](const std::shared_ptr<livekit::Track>& track) {
+        if (!track) {
+            return;
+        }
+
+        const std::string sid = track->sid();
+        if (sid.empty()) {
+            return;
+        }
+
+        if (collectedTrackSids.insert(sid).second) {
+            tracks.push_back(track);
+        }
+    };
+
+    if (auto* localParticipant = roomController_->localParticipant()) {
+        for (const auto& publicationEntry : localParticipant->trackPublications()) {
+            const auto& publication = publicationEntry.second;
+            if (!publication) {
+                continue;
+            }
+            appendTrack(publication->track());
+        }
+    }
+
+    const auto remoteParticipants = roomController_->remoteParticipants();
+    for (const auto& participant : remoteParticipants) {
+        if (!participant) {
+            continue;
+        }
+
+        for (const auto& publicationEntry : participant->trackPublications()) {
+            const auto& publication = publicationEntry.second;
+            if (!publication) {
+                continue;
+            }
+            appendTrack(publication->track());
+        }
+    }
+
+    return tracks;
+}
+
+NetworkStatsSnapshot ConferenceManager::buildEstimatedNetworkSnapshot(
+    NetworkQualityLevel quality,
+    qint64 nowMs) const
+{
+    NetworkStatsSnapshot snapshot;
+    snapshot.sampledAtMs = nowMs;
+
+    switch (quality) {
+        case NetworkQualityLevel::Excellent:
+            snapshot.rttMs = 60;
+            snapshot.jitterMs = 8;
+            snapshot.packetLossPercent = 0.2;
+            break;
+        case NetworkQualityLevel::Good:
+            snapshot.rttMs = 120;
+            snapshot.jitterMs = 18;
+            snapshot.packetLossPercent = 1.0;
+            break;
+        case NetworkQualityLevel::Poor:
+            snapshot.rttMs = 260;
+            snapshot.jitterMs = 45;
+            snapshot.packetLossPercent = 4.0;
+            break;
+        case NetworkQualityLevel::Lost:
+        case NetworkQualityLevel::Unknown:
+        default:
+            break;
+    }
+
+    return snapshot;
+}
+
+void ConferenceManager::resetNetworkMetrics()
+{
+    localNetworkQuality_ = NetworkQualityLevel::Unknown;
+    localNetworkStats_ = NetworkStatsSnapshot{};
+    previousNetworkByteCounters_ = NetworkByteCounters{};
+    usingEstimatedNetworkStats_ = false;
 }
