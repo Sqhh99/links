@@ -268,6 +268,7 @@ qt_add_qml_module(links
         res/icon/copy.png
         res/icon/square-arrow-out-up-right.png
         res/icon/monitor.png
+        res/icon/file-chart-column-increasing.png
 )
 
 # Link libraries
