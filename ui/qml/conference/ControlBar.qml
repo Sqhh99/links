@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 import Links.Backend 1.0
 
 // Fixed footer control bar with split button device controls
@@ -8,7 +9,7 @@ Rectangle {
     id: root
     
     height: 68
-    color: "#FFFFFF"
+    color: Theme.windowBackground
     radius: 12
     clip: true
     
@@ -18,7 +19,7 @@ Rectangle {
         anchors.right: parent.right
         anchors.top: parent.top
         height: 1
-        color: "#E5E7EB"
+        color: Theme.separatorColor
     }
     
     property ConferenceBackend backend
@@ -94,8 +95,8 @@ Rectangle {
                 iconSource: "qrc:/res/icon/monitor-up.png"
                 isActive: backend ? backend.screenSharing : false
                 enabled: backend ? backend.screenShareSupported : false
-                activeColor: "#D1FAE5" // emerald-100
-                activeIconColor: "#059669" // emerald-600
+                activeColor: Theme.accentLight
+                activeIconColor: Theme.accentColor
                 toolTip: backend && !backend.screenShareSupported ? "当前平台暂不支持屏幕共享" : "共享屏幕"
                 onClicked: {
                     if (backend) {
@@ -109,6 +110,8 @@ Rectangle {
                 visible: !root.isGuest
                 iconSource: "qrc:/res/icon/message.png"
                 isActive: backend ? backend.isChatVisible : false
+                activeColor: Theme.accentLight
+                activeIconColor: Theme.accentColor
                 toolTip: "聊天"
                 onClicked: if (backend) backend.isChatVisible = !backend.isChatVisible
             }
@@ -116,6 +119,8 @@ Rectangle {
             IconOnlyButton {
                 iconSource: "qrc:/res/icon/user.png"
                 isActive: backend ? backend.isParticipantsVisible : false
+                activeColor: Theme.accentLight
+                activeIconColor: Theme.accentColor
                 toolTip: "成员"
                 badgeCount: backend ? backend.participants.length : 1
                 onClicked: if (backend) backend.isParticipantsVisible = !backend.isParticipantsVisible
@@ -164,9 +169,9 @@ Rectangle {
             id: container
             anchors.fill: parent
             radius: 12
-            color: splitBtn.isActive ? "#FFFFFF" : "#FEF2F2"
+            color: splitBtn.isActive ? Theme.windowBackground : Theme.accentLight
             border.width: 1
-            border.color: splitBtn.isActive ? "#E5E7EB" : "#FEE2E2"
+            border.color: splitBtn.isActive ? Theme.borderColor : Theme.borderAccent
             clip: true
             
             Row {
@@ -178,12 +183,7 @@ Rectangle {
                     id: mainButton
                     width: 42
                     height: parent.height
-                    color: {
-                        if (mainButtonArea.containsMouse) {
-                            return splitBtn.isActive ? "#F3F4F6" : "#FEE2E2"
-                        }
-                        return "transparent"
-                    }
+                    color: mainButtonArea.containsMouse ? Theme.hoverBackground : "transparent"
                     
                     Image {
                         anchors.centerIn: parent
@@ -210,7 +210,7 @@ Rectangle {
                     width: 1
                     height: parent.height - 12
                     anchors.verticalCenter: parent.verticalCenter
-                    color: splitBtn.isActive ? "#E5E7EB" : "#FECACA"
+                    color: splitBtn.isActive ? Theme.separatorColor : Theme.borderAccent
                 }
                 
                 // Right: Dropdown button with arrow
@@ -218,19 +218,14 @@ Rectangle {
                     id: dropdownButton
                     width: 25
                     height: parent.height
-                    color: {
-                        if (dropdownArea.containsMouse) {
-                            return splitBtn.isActive ? "#F3F4F6" : "#FEE2E2"
-                        }
-                        return "transparent"
-                    }
+                    color: dropdownArea.containsMouse ? Theme.hoverBackground : "transparent"
                     
                     Image {
                         anchors.centerIn: parent
                         source: menuPopup.visible ? "qrc:/res/icon/chevron-down.png" : "qrc:/res/icon/chevron-up.png"
                         sourceSize.width: 10
                         sourceSize.height: 10
-                        opacity: splitBtn.isActive ? 0.5 : 0.7
+                        opacity: Theme.iconOpacity
                     }
                     
                     MouseArea {
@@ -260,10 +255,10 @@ Rectangle {
             closePolicy: Popup.CloseOnEscape
             
             background: Rectangle {
-                color: "#FFFFFF"
+                color: Theme.popupBackground
                 radius: 12
                 border.width: 1
-                border.color: "#E5E7EB"
+                border.color: Theme.popupBorder
                 
                 // Shadow effect
                 layer.enabled: true
@@ -278,7 +273,7 @@ Rectangle {
                 // Header
                 Text {
                     text: "选择设备"
-                    color: "#9CA3AF"
+                    color: Theme.textMuted
                     font.pixelSize: 10
                     font.weight: Font.Bold
                     font.letterSpacing: 0.5
@@ -294,7 +289,7 @@ Rectangle {
                         width: 244
                         height: 36
                         radius: 8
-                        color: modelData.id === splitBtn.selectedDeviceId ? "#EFF6FF" : (deviceItemArea.containsMouse ? "#F9FAFB" : "transparent")
+                        color: modelData.id === splitBtn.selectedDeviceId ? Theme.activeBackground : (deviceItemArea.containsMouse ? Theme.hoverBackground : "transparent")
                         
                         RowLayout {
                             anchors.fill: parent
@@ -304,7 +299,7 @@ Rectangle {
                             
                             Text {
                                 text: modelData.name || modelData.label || modelData.id
-                                color: modelData.id === splitBtn.selectedDeviceId ? "#2563EB" : "#374151"
+                                color: modelData.id === splitBtn.selectedDeviceId ? Theme.accentColor : Theme.textSecondary
                                 font.pixelSize: 12
                                 font.weight: modelData.id === splitBtn.selectedDeviceId ? Font.Bold : Font.Normal
                                 elide: Text.ElideRight
@@ -315,7 +310,7 @@ Rectangle {
                             Text {
                                 visible: modelData.id === splitBtn.selectedDeviceId
                                 text: "✓"
-                                color: "#2563EB"
+                                color: Theme.accentColor
                                 font.pixelSize: 12
                                 font.weight: Font.Bold
                             }
@@ -338,7 +333,7 @@ Rectangle {
                 Rectangle {
                     width: 244
                     height: 1
-                    color: "#F3F4F6"
+                    color: Theme.separatorColor
                 }
                 
                 // Settings button
@@ -346,7 +341,7 @@ Rectangle {
                     width: 244
                     height: 36
                     radius: 8
-                    color: settingsArea.containsMouse ? "#F9FAFB" : "transparent"
+                    color: settingsArea.containsMouse ? Theme.hoverBackground : "transparent"
                     
                     RowLayout {
                         anchors.fill: parent
@@ -357,12 +352,12 @@ Rectangle {
                             source: "qrc:/res/icon/set_up.png"
                             sourceSize.width: 14
                             sourceSize.height: 14
-                            opacity: 0.6
+                            opacity: Theme.iconOpacity
                         }
                         
                         Text {
                             text: "音视频设置..."
-                            color: "#6B7280"
+                            color: Theme.textSecondary
                             font.pixelSize: 12
                         }
                     }
@@ -387,8 +382,8 @@ Rectangle {
         id: iBtn
         property string iconSource: ""
         property bool isActive: false
-        property color activeColor: "#EFF6FF"
-        property color activeIconColor: "#2563EB"
+        property color activeColor: Theme.accentLight
+        property color activeIconColor: Theme.accentColor
         property string toolTip: ""
         property int badgeCount: 0
         
@@ -407,6 +402,7 @@ Rectangle {
                 source: iBtn.iconSource
                 sourceSize.width: 22
                 sourceSize.height: 22
+                opacity: (iBtn.isActive || iBtn.hovered) ? 1.0 : Theme.iconOpacity
             }
             
             // Badge
@@ -415,13 +411,13 @@ Rectangle {
                 width: 16
                 height: 16
                 radius: 8
-                color: "#EF4444"
+                color: "#EF4444" // Keeping red for notification badge
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: -2
                 anchors.rightMargin: -2
                 border.width: 1
-                border.color: "white"
+                border.color: Theme.windowBackground
                 
                 Text {
                     anchors.centerIn: parent

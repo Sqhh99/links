@@ -2,13 +2,14 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import QtMultimedia
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
     
     radius: 8
-    color: "#F3F4F6" // Light theme - no black borders
+    color: Theme.windowBackground // Use theme background
     clip: true
     
     property string participantId: ""
@@ -68,12 +69,12 @@ Rectangle {
     Rectangle {
         anchors.fill: parent
         visible: !renderer.hasFrame
-        color: "#F3F4F6" // Light theme placeholder background
+        color: Theme.hoverBackground // Use theme placeholder background
         
         Text {
             anchors.centerIn: parent
             text: root.getInitials()
-            color: "#6B7280" // Light theme text
+            color: Theme.textMuted // Use theme text color
             font.pixelSize: 28
             font.weight: Font.Bold
         }

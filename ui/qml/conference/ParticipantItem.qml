@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 // import QtQuick.Effects
 
 Rectangle {
@@ -8,7 +9,7 @@ Rectangle {
     
     height: 52
     radius: 8
-    color: hovered ? "#F3F4F6" : "transparent"
+    color: hovered ? Theme.hoverBackground : "transparent"
     
     property string identity: ""
     property string name: ""
@@ -47,14 +48,14 @@ Rectangle {
             width: 36
             height: 36
             radius: 18
-            color: "#EFF6FF" // Blue-50
-            border.color: "#BFDBFE"
+            color: Theme.accentLight
+            border.color: Theme.borderLight
             border.width: 1
             
             Text {
                 anchors.centerIn: parent
                 text: getInitials()
-                color: "#3B82F6" // Blue-500
+                color: Theme.accentColor
                 font.pixelSize: 13
                 font.weight: Font.Bold
                 
@@ -79,7 +80,7 @@ Rectangle {
             
             Text {
                 text: root.name + (root.isLocal ? " (我)" : "")
-                color: "#1F2937" // Gray-800
+                color: Theme.textPrimary
                 font.pixelSize: 13
                 font.weight: Font.Medium
                 elide: Text.ElideRight
@@ -89,7 +90,7 @@ Rectangle {
             Text {
                 visible: root.isLocal || root.isParticipantHost
                 text: root.isParticipantHost ? "主持人" : "参会者"
-                color: "#9CA3AF"
+                color: Theme.textMuted
                 font.pixelSize: 10
             }
         }
@@ -166,8 +167,8 @@ Rectangle {
     component IconButton: Button {
         id: btn
         property string iconSource: ""
-        property color iconColor: "#6B7280"
-        property color hoverColor: "#E5E7EB"
+        property color iconColor: Theme.textMuted
+        property color hoverColor: Theme.hoverBackground
         
         width: 28
         height: 28

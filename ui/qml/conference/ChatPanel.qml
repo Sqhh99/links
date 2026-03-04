@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 import Links.Backend 1.0
 
 Rectangle {
     id: root
     
-    color: "#13131a"  // Background for visibility
+    color: Theme.sidebarBackground
     
     property ConferenceBackend backend
     
@@ -48,7 +49,7 @@ Rectangle {
         Rectangle {
             Layout.fillWidth: true
             height: 56
-            color: "#13131a"
+            color: Theme.sidebarBackground
             
             // Top border
             Rectangle {
@@ -56,7 +57,7 @@ Rectangle {
                 anchors.right: parent.right
                 anchors.top: parent.top
                 height: 1
-                color: "#2a2a35"
+                color: Theme.sidebarBorder
             }
             
             RowLayout {
@@ -68,16 +69,16 @@ Rectangle {
                     id: messageInput
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    placeholderText: "Type a message..."
+                    placeholderText: "输入消息..."
                     
                     background: Rectangle {
-                        color: "#0e0e14"
-                        border.color: messageInput.activeFocus ? "#5865f2" : "#2a2a35"
+                        color: Theme.inputBackground
+                        border.color: messageInput.activeFocus ? Theme.inputBorderFocus : Theme.inputBorder
                         border.width: 1
                         radius: 8
                     }
                     
-                    color: "#ffffff"
+                    color: Theme.inputText
                     font.pixelSize: 13
                     leftPadding: 12
                     rightPadding: 12
@@ -94,17 +95,18 @@ Rectangle {
                 }
                 
                 Button {
+                    id: sendBtn
                     implicitWidth: 40
                     implicitHeight: 40
                     
                     background: Rectangle {
-                        color: parent.hovered ? "#4752c4" : "#5865f2"
+                        color: sendBtn.hovered ? Theme.accentHover : Theme.accentColor
                         radius: 8
                     }
                     
                     contentItem: Text {
                         text: "→"
-                        color: "white"
+                        color: Theme.textOnAccent
                         font.pixelSize: 16
                         font.weight: Font.Bold
                         horizontalAlignment: Text.AlignHCenter
