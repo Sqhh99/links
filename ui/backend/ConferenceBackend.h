@@ -200,6 +200,7 @@ signals:
 
     void participantJoined(const QString& identity, const QString& name);
     void participantLeft(const QString& identity);
+    void meetingEndedByHost();
     void remoteViewStateChanged(const QString& participantId);
     void remoteTrackEnded(const QString& participantId, bool isScreenShare);
     void localCameraEnded();
@@ -264,6 +265,7 @@ private:
     QMap<QString, bool> micState_;
     QMap<QString, bool> camState_;
     QMap<QString, bool> screenShareState_;
+    QMap<QString, bool> hostState_;
     QMap<QString, bool> remoteShowScreenShareInMain_;
     QMap<QString, QString> nameMap_;
     QMap<QString, bool> mutedParticipants_;
@@ -277,6 +279,10 @@ private:
     QPointer<QWindow> conferenceWindow_;
     int currentSharedScreenIndex_{-1};
     qulonglong currentSharedWindowId_{0};
+    bool meetingEndedTriggered_{false};
+    bool userInitiatedLeave_{false};
+    bool sawReconnectingSinceConnected_{false};
+    bool hadAnyRemoteParticipantInSession_{false};
 };
 
 #endif // CONFERENCE_BACKEND_H

@@ -118,7 +118,7 @@ signals:
     
 private:
     // Queued slots for RoomEventDelegate signals (thread-safe event handling)
-    void onParticipantConnectedQueued(QString identity, QString sid, QString name);
+    void onParticipantConnectedQueued(QString identity, QString sid, QString name, bool isHost);
     void onParticipantDisconnectedQueued(QString identity, int reason);
     void onTrackSubscribedQueued(QString trackSid, QString participantIdentity,
                                  int kind, int source, bool muted,

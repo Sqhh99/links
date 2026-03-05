@@ -2,15 +2,24 @@
 
 ParticipantInfo ParticipantStore::addParticipant(const QString& identity,
                                                  const QString& sid,
-                                                 const QString& name)
+                                                 const QString& name,
+                                                 bool isHost)
 {
     ParticipantInfo info;
-    info.identity = identity;
-    info.sid = sid;
-    info.name = name;
-    info.isMicrophoneEnabled = false;
-    info.isCameraEnabled = false;
-    info.isScreenSharing = false;
+    if (participants_.contains(identity)) {
+        info = participants_.value(identity);
+        info.sid = sid;
+        info.name = name;
+        info.isHost = isHost;
+    } else {
+        info.identity = identity;
+        info.sid = sid;
+        info.name = name;
+        info.isMicrophoneEnabled = false;
+        info.isCameraEnabled = false;
+        info.isScreenSharing = false;
+        info.isHost = isHost;
+    }
 
     participants_[identity] = info;
     return info;

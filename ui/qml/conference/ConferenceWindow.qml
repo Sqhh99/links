@@ -47,6 +47,11 @@ Window {
 
         onLeaveRequested: Qt.callLater(function() { leaveDialog.open() })
         onShowSettings: settingsDialog.open()
+        onMeetingEndedByHost: {
+            leaveDialog.close()
+            meetingEndedPopup.open()
+            meetingEndedAutoCloseTimer.restart()
+        }
 
         // Video frame routing
         onLocalVideoFrameReady: function(frame) {
@@ -943,6 +948,56 @@ Window {
         anchors.centerIn: parent
         onConfirmClicked: {
             backend.confirmLeave()
+            root.close()
+        }
+    }
+
+    Popup {
+        id: meetingEndedPopup
+        modal: false
+        focus: false
+        closePolicy: Popup.NoAutoClose
+        width: 320
+        height: 120
+        anchors.centerIn: parent
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.popupBackground
+            border.color: Theme.popupBorder
+            border.width: 1
+        }
+
+        contentItem: Column {
+            anchors.centerIn: parent
+            spacing: 8
+
+            Text {
+                text: "会议已结束"
+                color: Theme.textPrimary
+                font.pixelSize: 18
+                font.weight: Font.DemiBold
+                horizontalAlignment: Text.AlignHCenter
+            }
+
+            Text {
+                text: "主持人已离开会议，正在退出..."
+                color: Theme.textMuted
+                font.pixelSize: 12
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+    }
+
+    Timer {
+        id: meetingEndedAutoCloseTimer
+        interval: 1500
+        repeat: false
+        onTriggered: {
+            backend.confirmLeave()
+            if (meetingEndedPopup.opened) {
+                meetingEndedPopup.close()
+            }
             root.close()
         }
     }

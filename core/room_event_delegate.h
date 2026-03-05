@@ -41,7 +41,7 @@ public:
 
 signals:
     // Internal signals to queue events to main thread
-    void participantConnectedQueued(QString identity, QString sid, QString name);
+    void participantConnectedQueued(QString identity, QString sid, QString name, bool isHost);
     void participantDisconnectedQueued(QString identity, int reason);
     void trackSubscribedQueued(QString trackSid, QString participantIdentity, 
                                int kind, int source, bool muted,

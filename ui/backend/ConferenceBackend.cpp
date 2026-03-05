@@ -254,6 +254,7 @@ void ConferenceBackend::clearRemoteParticipantState()
     }
 
     screenShareState_.clear();
+    hostState_.clear();
     remoteShowScreenShareInMain_.clear();
     mutedParticipants_.clear();
     hiddenVideoParticipants_.clear();
@@ -499,26 +500,38 @@ void ConferenceBackend::stopRecordingIfActive()
 // Media controls
 void ConferenceBackend::toggleMicrophone()
 {
-    if (conferenceManager_) {
-        conferenceManager_->toggleMicrophone();
-        micState_["local"] = conferenceManager_->isMicrophoneEnabled();
-        emit micEnabledChanged();
-        updateParticipantsList();
+    if (!conferenceManager_) {
+        return;
     }
+    if (!conferenceManager_->isConnected()) {
+        Logger::instance().warning("Ignoring microphone toggle: conference is not connected");
+        return;
+    }
+
+    conferenceManager_->toggleMicrophone();
+    micState_["local"] = conferenceManager_->isMicrophoneEnabled();
+    emit micEnabledChanged();
+    updateParticipantsList();
 }
 
 void ConferenceBackend::toggleCamera()
 {
-    if (conferenceManager_) {
-        bool wasEnabled = conferenceManager_->isCameraEnabled();
-        conferenceManager_->toggleCamera();
-        camState_["local"] = conferenceManager_->isCameraEnabled();
-        emit camEnabledChanged();
-        updateParticipantsList();
-        // Emit localCameraEnded when camera is turned off
-        if (wasEnabled && !conferenceManager_->isCameraEnabled()) {
-            emit localCameraEnded();
-        }
+    if (!conferenceManager_) {
+        return;
+    }
+    if (!conferenceManager_->isConnected()) {
+        Logger::instance().warning("Ignoring camera toggle: conference is not connected");
+        return;
+    }
+
+    bool wasEnabled = conferenceManager_->isCameraEnabled();
+    conferenceManager_->toggleCamera();
+    camState_["local"] = conferenceManager_->isCameraEnabled();
+    emit camEnabledChanged();
+    updateParticipantsList();
+    // Emit localCameraEnded when camera is turned off
+    if (wasEnabled && !conferenceManager_->isCameraEnabled()) {
+        emit localCameraEnded();
     }
 }
 
@@ -546,6 +559,10 @@ void ConferenceBackend::startScreenShare(int screenIndex)
     }
 
     if (!conferenceManager_) return;
+    if (!conferenceManager_->isConnected()) {
+        Logger::instance().warning("Ignoring startScreenShare: conference is not connected");
+        return;
+    }
     
     const auto screens = QGuiApplication::screens();
     if (screenIndex >= 0 && screenIndex < screens.size()) {
@@ -569,6 +586,10 @@ void ConferenceBackend::startWindowShare(qulonglong windowId)
     }
 
     if (!conferenceManager_) return;
+    if (!conferenceManager_->isConnected()) {
+        Logger::instance().warning("Ignoring startWindowShare: conference is not connected");
+        return;
+    }
     
     currentSharedScreenIndex_ = -1;
     currentSharedWindowId_ = windowId;
@@ -583,7 +604,14 @@ void ConferenceBackend::startWindowShare(qulonglong windowId)
 
 void ConferenceBackend::stopScreenShare()
 {
-    if (conferenceManager_ && conferenceManager_->isScreenSharing()) {
+    if (!conferenceManager_) {
+        return;
+    }
+    if (!conferenceManager_->isConnected()) {
+        Logger::instance().warning("Ignoring stopScreenShare: conference is not connected");
+        return;
+    }
+    if (conferenceManager_->isScreenSharing()) {
         conferenceManager_->toggleScreenShare();
         currentSharedScreenIndex_ = -1;
         currentSharedWindowId_ = 0;
@@ -638,6 +666,7 @@ void ConferenceBackend::confirmLeave()
         return;
     }
 
+    userInitiatedLeave_ = true;
     stopRecordingIfActive();
 
     const QString authToken = userAuthToken_.trimmed();
@@ -777,6 +806,10 @@ void ConferenceBackend::onConnected()
     Logger::instance().info("Connected to conference");
     currentSharedScreenIndex_ = -1;
     currentSharedWindowId_ = 0;
+    meetingEndedTriggered_ = false;
+    userInitiatedLeave_ = false;
+    sawReconnectingSinceConnected_ = false;
+    hadAnyRemoteParticipantInSession_ = false;
     connectionStatus_ = "Connected";
     connectionColor_ = "#4caf50";
     emit connectionStatusChanged();
@@ -804,6 +837,35 @@ void ConferenceBackend::onDisconnected()
     currentSharedScreenIndex_ = -1;
     currentSharedWindowId_ = 0;
 
+    const bool hadLocalMic = micState_.value("local", false);
+    const bool hadLocalCam = camState_.value("local", false);
+    if (hadLocalMic) {
+        micState_["local"] = false;
+        emit micEnabledChanged();
+    }
+    if (hadLocalCam) {
+        camState_["local"] = false;
+        emit camEnabledChanged();
+        emit localCameraEnded();
+    }
+    emit localScreenShareEnded();
+    emit screenSharingChanged();
+    if (shareModeManager_ && shareModeManager_->isActive()) {
+        shareModeManager_->exitShareMode();
+    }
+
+    const bool shouldTreatAsMeetingEnded =
+        !isHost_
+        && !userInitiatedLeave_
+        && !meetingEndedTriggered_
+        && !sawReconnectingSinceConnected_
+        && hadAnyRemoteParticipantInSession_;
+    if (shouldTreatAsMeetingEnded) {
+        meetingEndedTriggered_ = true;
+        Logger::instance().info("Unexpected disconnect for attendee, treating as meeting ended by host");
+        emit meetingEndedByHost();
+    }
+
     connectionStatus_ = "Disconnected";
     connectionColor_ = "#ff5252";
     emit connectionStatusChanged();
@@ -828,6 +890,11 @@ void ConferenceBackend::onDisconnected()
     clearRemoteParticipantState();
     updateParticipantsList();
     emit participantCountChanged();
+
+    sawReconnectingSinceConnected_ = false;
+    hadAnyRemoteParticipantInSession_ = false;
+    userInitiatedLeave_ = false;
+    meetingEndedTriggered_ = false;
 }
 
 void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
@@ -842,6 +909,7 @@ void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
             connectionColor_ = "#ff5252";
             break;
         case livekit::ConnectionState::Reconnecting:
+            sawReconnectingSinceConnected_ = true;
             connectionStatus_ = "Reconnecting...";
             connectionColor_ = "#ff9800";
             if (networkQuality_ != NetworkQualityLevel::Unknown
@@ -868,10 +936,12 @@ void ConferenceBackend::onParticipantJoined(const ParticipantInfo& info)
 
     const bool isNewParticipant = !nameMap_.contains(info.identity);
     Logger::instance().debug(QString("Participant joined (backend): %1").arg(info.name));
+    hadAnyRemoteParticipantInSession_ = true;
     
     nameMap_[info.identity] = info.name.isEmpty() ? info.identity : info.name;
     micState_[info.identity] = info.isMicrophoneEnabled;
     camState_[info.identity] = info.isCameraEnabled;
+    hostState_[info.identity] = info.isHost;
     
     updateParticipantsList();
     if (isNewParticipant) {
@@ -894,6 +964,7 @@ void ConferenceBackend::onParticipantLeft(const QString& identity)
     const bool existed = nameMap_.contains(identity)
         || micState_.contains(identity)
         || camState_.contains(identity)
+        || hostState_.contains(identity)
         || screenShareState_.contains(identity)
         || remoteShowScreenShareInMain_.contains(identity);
     if (!existed) {
@@ -903,10 +974,12 @@ void ConferenceBackend::onParticipantLeft(const QString& identity)
     }
 
     Logger::instance().debug(QString("Participant left (backend): %1").arg(identity));
+    const bool wasHost = hostState_.value(identity, false);
     
     nameMap_.remove(identity);
     micState_.remove(identity);
     camState_.remove(identity);
+    hostState_.remove(identity);
     screenShareState_.remove(identity);
     remoteShowScreenShareInMain_.remove(identity);
 
@@ -919,6 +992,17 @@ void ConferenceBackend::onParticipantLeft(const QString& identity)
         mainParticipantId_.clear();
         pinnedMain_ = false;
         emit mainParticipantChanged();
+    }
+
+    if (!isHost_ && wasHost && !meetingEndedTriggered_) {
+        meetingEndedTriggered_ = true;
+        userInitiatedLeave_ = true;
+        Logger::instance().info("Host left the meeting, triggering meeting-ended flow");
+        emit meetingEndedByHost();
+        if (conferenceManager_ && conferenceManager_->isConnected()) {
+            conferenceManager_->disconnect();
+        }
+        return;
     }
     
     updateParticipantsList();
@@ -1152,6 +1236,7 @@ void ConferenceBackend::updateParticipantsList()
             continue;
         }
 
+        hadAnyRemoteParticipantInSession_ = true;
         remoteIds.insert(info.identity);
 
         const QString displayName = info.name.isEmpty() ? info.identity : info.name;
@@ -1159,6 +1244,7 @@ void ConferenceBackend::updateParticipantsList()
         micState_[info.identity] = micState_.value(info.identity, info.isMicrophoneEnabled);
         camState_[info.identity] = camState_.value(info.identity, info.isCameraEnabled);
         screenShareState_[info.identity] = screenShareState_.value(info.identity, info.isScreenSharing);
+        hostState_[info.identity] = info.isHost;
 
         QVariantMap participant;
         participant["identity"] = info.identity;
@@ -1200,6 +1286,14 @@ void ConferenceBackend::updateParticipantsList()
         screenShareIt.next();
         if (!remoteIds.contains(screenShareIt.key())) {
             screenShareIt.remove();
+        }
+    }
+
+    QMutableMapIterator<QString, bool> hostIt(hostState_);
+    while (hostIt.hasNext()) {
+        hostIt.next();
+        if (!remoteIds.contains(hostIt.key())) {
+            hostIt.remove();
         }
     }
 

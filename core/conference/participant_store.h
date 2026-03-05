@@ -8,7 +8,10 @@
 
 class ParticipantStore {
 public:
-    ParticipantInfo addParticipant(const QString& identity, const QString& sid, const QString& name);
+    ParticipantInfo addParticipant(const QString& identity,
+                                   const QString& sid,
+                                   const QString& name,
+                                   bool isHost = false);
     void removeParticipant(const QString& identity);
     bool contains(const QString& identity) const;
     ParticipantInfo participantInfo(const QString& identity) const;
