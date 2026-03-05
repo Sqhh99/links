@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QDateTime>
+#include <QPointer>
 #include <QVariant>
 #include <QVariantList>
 #include <QImage>
@@ -12,6 +13,9 @@
 #include "../core/network_client.h"
 #include "../core/screen_capturer.h"
 #include "ShareModeManager.h"
+
+class QWindow;
+class LocalRecordingManager;
 
 class ConferenceBackend : public QObject
 {
@@ -41,6 +45,9 @@ class ConferenceBackend : public QObject
     Q_PROPERTY(int availableSendBandwidth READ availableSendBandwidth NOTIFY networkMetricsChanged)
     Q_PROPERTY(QString transportProtocol READ transportProtocol NOTIFY networkMetricsChanged)
     Q_PROPERTY(QString meetingDuration READ meetingDuration NOTIFY meetingDurationChanged)
+    Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(QString recordingDuration READ recordingDuration NOTIFY recordingDurationChanged)
+    Q_PROPERTY(QString recordingOutputPath READ recordingOutputPath NOTIFY recordingOutputPathChanged)
 
     Q_PROPERTY(bool micEnabled READ micEnabled NOTIFY micEnabledChanged)
     Q_PROPERTY(bool camEnabled READ camEnabled NOTIFY camEnabledChanged)
@@ -96,6 +103,9 @@ public:
     int availableSendBandwidth() const { return networkStats_.availableSendBandwidthKbps; }
     QString transportProtocol() const { return networkStats_.transportProtocol; }
     QString meetingDuration() const;
+    bool recording() const;
+    QString recordingDuration() const;
+    QString recordingOutputPath() const;
     bool micEnabled() const;
     bool camEnabled() const;
     bool screenSharing() const;
@@ -137,6 +147,9 @@ public:
     Q_INVOKABLE void toggleRemoteMainViewSource(const QString& participantId);
     Q_INVOKABLE bool getRemoteShowScreenInMain(const QString& participantId) const;
     Q_INVOKABLE bool getRemoteScreenSharing(const QString& participantId) const;
+    Q_INVOKABLE void setConferenceWindow(QObject* windowObject);
+    Q_INVOKABLE void toggleRecording();
+    Q_INVOKABLE void stopRecordingIfActive();
     Q_INVOKABLE void leave();
     Q_INVOKABLE void confirmLeave();
 
@@ -160,6 +173,9 @@ signals:
     void connectionStatusChanged();
     void networkMetricsChanged();
     void meetingDurationChanged();
+    void recordingChanged();
+    void recordingDurationChanged();
+    void recordingOutputPathChanged();
     void micEnabledChanged();
     void camEnabledChanged();
     void screenSharingChanged();
@@ -257,6 +273,10 @@ private:
     QTimer participantReconcileTimer_;
     QTimer meetingDurationTimer_;
     QDateTime meetingStartTime_;
+    LocalRecordingManager* recordingManager_{nullptr};
+    QPointer<QWindow> conferenceWindow_;
+    int currentSharedScreenIndex_{-1};
+    qulonglong currentSharedWindowId_{0};
 };
 
 #endif // CONFERENCE_BACKEND_H

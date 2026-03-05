@@ -1,4 +1,5 @@
 #include "ConferenceBackend.h"
+#include "LocalRecordingManager.h"
 #include "../utils/logger.h"
 #include "../utils/settings.h"
 #include <QCoreApplication>
@@ -9,6 +10,7 @@
 #include <QTimer>
 #include <QGuiApplication>
 #include <QScreen>
+#include <QWindow>
 #include <cmath>
 
 namespace {
@@ -70,6 +72,18 @@ ConferenceBackend::ConferenceBackend(QObject* parent)
     , shareModeManager_(new ShareModeManager(this))
     , isHost_(false)
 {
+    recordingManager_ = &LocalRecordingManager::instance();
+    connect(recordingManager_, &LocalRecordingManager::recordingStateChanged,
+            this, [this]() {
+                emit recordingChanged();
+                emit recordingDurationChanged();
+                emit recordingOutputPathChanged();
+            });
+    connect(recordingManager_, &LocalRecordingManager::recordingDurationChanged,
+            this, &ConferenceBackend::recordingDurationChanged);
+    connect(recordingManager_, &LocalRecordingManager::currentOutputPathChanged,
+            this, &ConferenceBackend::recordingOutputPathChanged);
+
     setupParticipantReconcileTimer();
 
     meetingDurationTimer_.setInterval(1000);
@@ -82,6 +96,7 @@ ConferenceBackend::ConferenceBackend(QObject* parent)
 ConferenceBackend::~ConferenceBackend()
 {
     participantReconcileTimer_.stop();
+    stopRecordingIfActive();
     if (conferenceManager_ && conferenceManager_->isConnected()) {
         conferenceManager_->disconnect();
     }
@@ -162,6 +177,11 @@ void ConferenceBackend::setupConnections()
                     shareModeManager_->enterShareMode();
                 } else {
                     shareModeManager_->exitShareMode();
+                    if (recordingManager_) {
+                        recordingManager_->clearScreenShareFrame();
+                    }
+                    currentSharedScreenIndex_ = -1;
+                    currentSharedWindowId_ = 0;
                     // Note: localScreenShareEnded is emitted from stopScreenShare() method
                 }
             });
@@ -296,6 +316,22 @@ QString ConferenceBackend::meetingDuration() const
         .arg(s, 2, 10, QChar('0'));
 }
 
+bool ConferenceBackend::recording() const
+{
+    return recordingManager_ && recordingManager_->isRecording();
+}
+
+QString ConferenceBackend::recordingDuration() const
+{
+    return recordingManager_ ? recordingManager_->recordingDurationText()
+                             : QStringLiteral("00:00:00");
+}
+
+QString ConferenceBackend::recordingOutputPath() const
+{
+    return recordingManager_ ? recordingManager_->currentOutputPath() : QString{};
+}
+
 bool ConferenceBackend::micEnabled() const
 {
     return conferenceManager_ && conferenceManager_->isMicrophoneEnabled();
@@ -419,6 +455,47 @@ bool ConferenceBackend::getRemoteScreenSharing(const QString& participantId) con
     return screenShareState_.value(participantId, false);
 }
 
+void ConferenceBackend::setConferenceWindow(QObject* windowObject)
+{
+    auto* window = qobject_cast<QWindow*>(windowObject);
+    if (!window) {
+        Logger::instance().warning("setConferenceWindow received invalid window object");
+        return;
+    }
+
+    conferenceWindow_ = window;
+}
+
+void ConferenceBackend::toggleRecording()
+{
+    if (!recordingManager_) {
+        return;
+    }
+
+    if (recordingManager_->isRecording()) {
+        recordingManager_->stopRecording();
+        return;
+    }
+
+    // Feed current participant names before starting
+    recordingManager_->setParticipantNames(nameMap_);
+
+    const bool started = recordingManager_->startConferenceRecording(
+        meetingNo_,
+        userName_);
+    if (!started) {
+        Logger::instance().warning(QString("Failed to start local recording: %1")
+                                       .arg(recordingManager_->lastError()));
+    }
+}
+
+void ConferenceBackend::stopRecordingIfActive()
+{
+    if (recordingManager_ && recordingManager_->isRecording()) {
+        recordingManager_->stopRecording();
+    }
+}
+
 // Media controls
 void ConferenceBackend::toggleMicrophone()
 {
@@ -472,6 +549,9 @@ void ConferenceBackend::startScreenShare(int screenIndex)
     
     const auto screens = QGuiApplication::screens();
     if (screenIndex >= 0 && screenIndex < screens.size()) {
+        currentSharedScreenIndex_ = screenIndex;
+        currentSharedWindowId_ = 0;
+
         QScreen* screen = screens[screenIndex];
         conferenceManager_->setScreenShareMode(ScreenCapturer::Mode::Screen, screen, 0);
         if (!conferenceManager_->isScreenSharing()) {
@@ -490,6 +570,9 @@ void ConferenceBackend::startWindowShare(qulonglong windowId)
 
     if (!conferenceManager_) return;
     
+    currentSharedScreenIndex_ = -1;
+    currentSharedWindowId_ = windowId;
+
     WId id = static_cast<WId>(windowId);
     conferenceManager_->setScreenShareMode(ScreenCapturer::Mode::Window, nullptr, id);
     if (!conferenceManager_->isScreenSharing()) {
@@ -502,6 +585,8 @@ void ConferenceBackend::stopScreenShare()
 {
     if (conferenceManager_ && conferenceManager_->isScreenSharing()) {
         conferenceManager_->toggleScreenShare();
+        currentSharedScreenIndex_ = -1;
+        currentSharedWindowId_ = 0;
         emit screenSharingChanged();
         emit localScreenShareEnded();  // Notify QML to clear the frame
     }
@@ -552,6 +637,8 @@ void ConferenceBackend::confirmLeave()
     if (!conferenceManager_) {
         return;
     }
+
+    stopRecordingIfActive();
 
     const QString authToken = userAuthToken_.trimmed();
     const QString meetingNo = meetingNo_.trimmed();
@@ -688,6 +775,8 @@ bool ConferenceBackend::isParticipantCamEnabled(const QString& identity) const
 void ConferenceBackend::onConnected()
 {
     Logger::instance().info("Connected to conference");
+    currentSharedScreenIndex_ = -1;
+    currentSharedWindowId_ = 0;
     connectionStatus_ = "Connected";
     connectionColor_ = "#4caf50";
     emit connectionStatusChanged();
@@ -711,6 +800,10 @@ void ConferenceBackend::onConnected()
 void ConferenceBackend::onDisconnected()
 {
     Logger::instance().info("Disconnected from conference");
+    stopRecordingIfActive();
+    currentSharedScreenIndex_ = -1;
+    currentSharedWindowId_ = 0;
+
     connectionStatus_ = "Disconnected";
     connectionColor_ = "#ff5252";
     emit connectionStatusChanged();
@@ -816,6 +909,11 @@ void ConferenceBackend::onParticipantLeft(const QString& identity)
     camState_.remove(identity);
     screenShareState_.remove(identity);
     remoteShowScreenShareInMain_.remove(identity);
+
+    // Remove from recording compositor
+    if (recordingManager_) {
+        recordingManager_->removeRemoteParticipant(identity);
+    }
     
     if (mainParticipantId_ == identity) {
         mainParticipantId_.clear();
@@ -870,6 +968,15 @@ void ConferenceBackend::onVideoFrameReceived(const QString& participantIdentity,
     // When not pinned and mainParticipantId_ is already set, don't switch
     // User must click to change the main participant
     
+    // Feed to recording compositor
+    if (recordingManager_ && recordingManager_->isRecording()) {
+        if (isScreenShare) {
+            recordingManager_->feedScreenShareFrame(participantIdentity, frame);
+        } else {
+            recordingManager_->feedRemoteCameraFrame(participantIdentity, frame);
+        }
+    }
+
     // Emit appropriate signal based on track type
     if (isScreenShare) {
         emit remoteScreenFrameReady(participantIdentity, frame);
@@ -880,11 +987,17 @@ void ConferenceBackend::onVideoFrameReceived(const QString& participantIdentity,
 
 void ConferenceBackend::onLocalVideoFrameReady(const QImage& frame)
 {
+    if (recordingManager_ && recordingManager_->isRecording()) {
+        recordingManager_->feedLocalCameraFrame(frame);
+    }
     emit localVideoFrameReady(frame);
 }
 
 void ConferenceBackend::onLocalScreenFrameReady(const QImage& frame)
 {
+    if (recordingManager_ && recordingManager_->isRecording()) {
+        recordingManager_->feedScreenShareFrame(QStringLiteral("local"), frame);
+    }
     emit localScreenFrameReady(frame);
 }
 
@@ -1128,6 +1241,11 @@ void ConferenceBackend::updateParticipantsList()
         mainParticipantId_.clear();
         pinnedMain_ = false;
         emit mainParticipantChanged();
+    }
+
+    // Sync participant names to recording compositor
+    if (recordingManager_) {
+        recordingManager_->setParticipantNames(nameMap_);
     }
     
     emit participantsChanged();

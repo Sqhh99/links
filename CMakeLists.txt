@@ -85,6 +85,7 @@ set(SOURCES
     ui/backend/AuthBackend.cpp
     ui/backend/ThemeManager.cpp
     ui/backend/AppearanceManager.cpp
+    ui/backend/LocalRecordingManager.cpp
 )
 
 # Windows-specific desktop capture sources
@@ -147,6 +148,7 @@ set(HEADERS
     ui/backend/AuthBackend.h
     ui/backend/ThemeManager.h
     ui/backend/AppearanceManager.h
+    ui/backend/LocalRecordingManager.h
 )
 
 # Create executable
@@ -269,6 +271,7 @@ qt_add_qml_module(links
         res/icon/square-arrow-out-up-right.png
         res/icon/monitor.png
         res/icon/file-chart-column-increasing.png
+        res/icon/disc.png
 )
 
 # Link libraries

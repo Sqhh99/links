@@ -14,7 +14,7 @@ Window {
     id: root
     
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
-    width: 500
+    width: 540
     height: 48
     visible: true
     color: "transparent"
@@ -317,6 +317,14 @@ Window {
                     toolTipText: "分享会议"
                     visible: backend && backend.meetingNo && backend.meetingNo.length > 0
                     onClicked: root.toggleInfoPopup(sharePopup, shareBtn)
+                }
+
+                IconButton {
+                    id: recordingBtn
+                    iconSource: "qrc:/res/icon/disc.png"
+                    toolTipText: backend && backend.recording ? "停止录制" : "开始录制"
+                    active: backend ? backend.recording : false
+                    onClicked: if (backend) backend.toggleRecording()
                 }
                 
                 IconButton {
@@ -699,6 +707,7 @@ Window {
         id: iconBtn
         property string iconSource: ""
         property string toolTipText: ""
+        property bool active: false
         
         implicitWidth: 36
         implicitHeight: 36
@@ -709,6 +718,12 @@ Window {
         }
         
         contentItem: Item {
+            Rectangle {
+                anchors.fill: parent
+                radius: 18
+                color: iconBtn.active ? "#FEE2E2" : "transparent"
+            }
+
             Image {
                 anchors.centerIn: parent
                 source: iconBtn.iconSource
