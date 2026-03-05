@@ -46,6 +46,7 @@ class ConferenceBackend : public QObject
     Q_PROPERTY(QString transportProtocol READ transportProtocol NOTIFY networkMetricsChanged)
     Q_PROPERTY(QString meetingDuration READ meetingDuration NOTIFY meetingDurationChanged)
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
+    Q_PROPERTY(bool recordingAvailable READ recordingAvailable CONSTANT)
     Q_PROPERTY(QString recordingDuration READ recordingDuration NOTIFY recordingDurationChanged)
     Q_PROPERTY(QString recordingOutputPath READ recordingOutputPath NOTIFY recordingOutputPathChanged)
 
@@ -104,6 +105,7 @@ public:
     QString transportProtocol() const { return networkStats_.transportProtocol; }
     QString meetingDuration() const;
     bool recording() const;
+    bool recordingAvailable() const;
     QString recordingDuration() const;
     QString recordingOutputPath() const;
     bool micEnabled() const;

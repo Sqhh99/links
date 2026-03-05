@@ -129,8 +129,11 @@ Rectangle {
             IconOnlyButton {
                 iconSource: "qrc:/res/icon/disc.png"
                 isActive: backend ? backend.recording : false
+                enabled: backend ? backend.recordingAvailable : false
                 activeColor: "#FEE2E2"
-                toolTip: backend && backend.recording ? "停止录制" : "开始录制"
+                toolTip: backend && !backend.recordingAvailable
+                         ? "当前构建未启用本地录制"
+                         : (backend && backend.recording ? "停止录制" : "开始录制")
                 onClicked: if (backend) backend.toggleRecording()
             }
             

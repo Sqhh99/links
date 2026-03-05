@@ -1,5 +1,7 @@
 #include "LocalRecordingManager.h"
 
+#include "../../core/recording/frame_clock.h"
+#include "../../core/recording/recording_layout.h"
 #include "../utils/logger.h"
 
 #include <QAudioInput>
@@ -49,12 +51,27 @@ bool shouldSaveDiagnosticFrames()
     return value != "0" && value != "false" && value != "off";
 }
 
+#ifndef LINKS_ENABLE_LOCAL_RECORDING
+#define LINKS_ENABLE_LOCAL_RECORDING 1
+#endif
+
 } // namespace
 
 LocalRecordingManager& LocalRecordingManager::instance()
 {
     static LocalRecordingManager manager;
     return manager;
+}
+
+LocalRecordingManager::~LocalRecordingManager() = default;
+
+bool LocalRecordingManager::isAvailable() const
+{
+#if LINKS_ENABLE_LOCAL_RECORDING
+    return true;
+#else
+    return false;
+#endif
 }
 
 LocalRecordingManager::LocalRecordingManager(QObject* parent)
@@ -124,6 +141,12 @@ bool LocalRecordingManager::toggleRecording(const QString& meetingNo,
 bool LocalRecordingManager::startConferenceRecording(const QString& meetingNo,
                                                      const QString& userName)
 {
+#if !LINKS_ENABLE_LOCAL_RECORDING
+    Q_UNUSED(meetingNo);
+    Q_UNUSED(userName);
+    setLastError(QStringLiteral("当前构建未启用本地录制"));
+    return false;
+#else
     if (isRecording_) {
         return true;
     }
@@ -185,6 +208,7 @@ bool LocalRecordingManager::startConferenceRecording(const QString& meetingNo,
 
     Logger::instance().info(QString("Local recording started: %1").arg(currentOutputPath_));
     return true;
+#endif
 }
 
 void LocalRecordingManager::stopRecording()
@@ -447,23 +471,19 @@ void LocalRecordingManager::compositeAndPushFrame()
         }
 
         if (!thumbnails.isEmpty()) {
-            const int thumbW = 240;
-            const int thumbH = 135;
-            const int margin = 12;
-            const int maxThumbs = 4;
-            const int count = qMin(thumbnails.size(), maxThumbs);
+            const auto layout = links::recording::buildScreenShareLayout(
+                kCanvasWidth, kCanvasHeight, thumbnails.size());
 
-            int startX = kCanvasWidth - margin - thumbW;
-            int startY = kCanvasHeight - margin - count * (thumbH + margin) + margin;
-
-            for (int i = 0; i < count; ++i) {
-                const QRect thumbRect(startX, startY + i * (thumbH + margin), thumbW, thumbH);
+            for (size_t i = 0; i < layout.thumbnailRects.size(); ++i) {
+                const auto& rect = layout.thumbnailRects[i];
+                const QRect thumbRect(rect.x, rect.y, rect.width, rect.height);
                 // Draw a border/shadow
                 painter.setPen(Qt::NoPen);
                 painter.setBrush(QColor(0, 0, 0, 160));
                 painter.drawRoundedRect(thumbRect.adjusted(-2, -2, 2, 2), 6, 6);
                 drawParticipantCell(painter, thumbRect,
-                                    thumbnails[i].second, thumbnails[i].first);
+                                    thumbnails[static_cast<int>(i)].second,
+                                    thumbnails[static_cast<int>(i)].first);
             }
         }
     } else {
@@ -481,26 +501,12 @@ void LocalRecordingManager::compositeAndPushFrame()
         }
 
         const int count = participants.size();
-        int cols = 1, rows = 1;
-        if (count == 2) {
-            cols = 2; rows = 1;
-        } else if (count <= 4) {
-            cols = 2; rows = 2;
-        } else if (count <= 6) {
-            cols = 3; rows = 2;
-        } else if (count <= 9) {
-            cols = 3; rows = 3;
-        } else {
-            cols = 4; rows = (count + 3) / 4;
-        }
+        const auto layout = links::recording::buildGridLayout(kCanvasWidth, kCanvasHeight, count);
+        const int cellCount = qMin(count, static_cast<int>(layout.cells.size()));
 
-        const int cellW = kCanvasWidth / cols;
-        const int cellH = kCanvasHeight / rows;
-
-        for (int i = 0; i < count && i < cols * rows; ++i) {
-            const int col = i % cols;
-            const int row = i / cols;
-            const QRect cellRect(col * cellW, row * cellH, cellW, cellH);
+        for (int i = 0; i < cellCount; ++i) {
+            const auto& rect = layout.cells[static_cast<size_t>(i)];
+            const QRect cellRect(rect.x, rect.y, rect.width, rect.height);
 
             if (!participants[i].second.isNull()) {
                 drawParticipantCell(painter, cellRect,
@@ -534,13 +540,12 @@ void LocalRecordingManager::compositeAndPushFrame()
             .arg(rgbx.width()).arg(rgbx.height()).arg(rgbx.bytesPerLine()));
     }
 
-    qint64 startUs = static_cast<qint64>(compositeAttemptCount_) * 33333;
+    qint64 elapsedUs = -1;
     if (recordingElapsed_.isValid()) {
-        startUs = static_cast<qint64>(recordingElapsed_.elapsed()) * 1000;
+        elapsedUs = static_cast<qint64>(recordingElapsed_.elapsed()) * 1000;
     }
-    if (lastFrameStartUs_ >= 0 && startUs <= lastFrameStartUs_) {
-        startUs = lastFrameStartUs_ + 33333;
-    }
+    qint64 startUs = links::recording::computeNextFrameStartUs(
+        elapsedUs, lastFrameStartUs_, 33333, compositeAttemptCount_);
     lastFrameStartUs_ = startUs;
     QVideoFrame frame(rgbx);
     frame.setStartTime(startUs);

@@ -322,6 +322,11 @@ bool ConferenceBackend::recording() const
     return recordingManager_ && recordingManager_->isRecording();
 }
 
+bool ConferenceBackend::recordingAvailable() const
+{
+    return recordingManager_ && recordingManager_->isAvailable();
+}
+
 QString ConferenceBackend::recordingDuration() const
 {
     return recordingManager_ ? recordingManager_->recordingDurationText()
@@ -470,6 +475,10 @@ void ConferenceBackend::setConferenceWindow(QObject* windowObject)
 void ConferenceBackend::toggleRecording()
 {
     if (!recordingManager_) {
+        return;
+    }
+    if (!recordingAvailable()) {
+        Logger::instance().warning("Local recording is unavailable on this build");
         return;
     }
 

@@ -136,6 +136,33 @@ target_include_directories(conference_network_stats_tests PRIVATE
 )
 
 # =============================================================================
+# Recording core tests (pure C++, no Qt dependency)
+# =============================================================================
+
+add_executable(recording_core_tests
+    core/test_recording_core.cpp
+    ${CMAKE_SOURCE_DIR}/core/recording/recording_layout.cpp
+    ${CMAKE_SOURCE_DIR}/core/recording/frame_clock.cpp
+)
+
+set_target_properties(recording_core_tests PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+)
+
+target_link_libraries(recording_core_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+)
+
+target_include_directories(recording_core_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/utils
+)
+
+# =============================================================================
 # Cross-platform capture tests (macOS/Linux only)
 # =============================================================================
 
@@ -248,6 +275,7 @@ gtest_discover_tests(audio_processing_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(microphone_capturer_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(desktop_capture_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(conference_network_stats_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(recording_core_tests DISCOVERY_MODE PRE_TEST)
 
 if(TARGET capture_platform_tests)
     gtest_discover_tests(capture_platform_tests DISCOVERY_MODE PRE_TEST)
@@ -294,4 +322,7 @@ if(WIN32)
 
     copy_runtime_if_exists(conference_network_stats_tests "${GTEST_DLL_DIR}/gtest.dll")
     copy_runtime_if_exists(conference_network_stats_tests "${GTEST_DLL_DIR}/gtest_main.dll")
+
+    copy_runtime_if_exists(recording_core_tests "${GTEST_DLL_DIR}/gtest.dll")
+    copy_runtime_if_exists(recording_core_tests "${GTEST_DLL_DIR}/gtest_main.dll")
 endif()

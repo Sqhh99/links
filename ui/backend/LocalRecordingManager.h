@@ -32,8 +32,10 @@ class LocalRecordingManager : public QObject
 
 public:
     static LocalRecordingManager& instance();
+    ~LocalRecordingManager() override;
 
     bool isRecording() const { return isRecording_; }
+    bool isAvailable() const;
     int recordingDurationSeconds() const;
     QString recordingDurationText() const;
     QString currentOutputPath() const { return currentOutputPath_; }

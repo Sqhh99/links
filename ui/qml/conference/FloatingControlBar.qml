@@ -322,7 +322,10 @@ Window {
                 IconButton {
                     id: recordingBtn
                     iconSource: "qrc:/res/icon/disc.png"
-                    toolTipText: backend && backend.recording ? "停止录制" : "开始录制"
+                    enabled: backend ? backend.recordingAvailable : false
+                    toolTipText: backend && !backend.recordingAvailable
+                                 ? "当前构建未启用本地录制"
+                                 : (backend && backend.recording ? "停止录制" : "开始录制")
                     active: backend ? backend.recording : false
                     onClicked: if (backend) backend.toggleRecording()
                 }

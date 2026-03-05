@@ -13,6 +13,11 @@ set(VCPKG_APPLOCAL_DEPS OFF)
 
 # Testing options
 option(LINKS_BUILD_TESTS "Build test suite" ON)
+if(WIN32)
+    option(LINKS_ENABLE_LOCAL_RECORDING "Enable local recording feature" ON)
+else()
+    option(LINKS_ENABLE_LOCAL_RECORDING "Enable local recording feature" OFF)
+endif()
 
 # =============================================================================
 # CMake Module Path
@@ -68,6 +73,8 @@ set(SOURCES
     core/room_event_delegate.cpp
     core/platform_window_ops.cpp
     core/thumbnail_service.cpp
+    core/recording/recording_layout.cpp
+    core/recording/frame_clock.cpp
     ui/adapters/qt/qt_capture_adapter.cpp
     # Desktop Capture module
     core/desktop_capture/desktop_frame.cpp
@@ -129,6 +136,8 @@ set(HEADERS
     core/image_types.h
     core/platform_window_ops.h
     core/thumbnail_service.h
+    core/recording/recording_layout.h
+    core/recording/frame_clock.h
     core/desktop_capture/mac/platform_window_ops_mac.h
     core/desktop_capture/mac/screen_capture_kit_adapter.h
     core/desktop_capture/mac/mac_capturer.h
@@ -288,6 +297,13 @@ target_link_libraries(links PRIVATE
     Qt6::Qml
     Qt6::Concurrent
 )
+
+if(LINKS_ENABLE_LOCAL_RECORDING)
+    target_compile_definitions(links PRIVATE LINKS_ENABLE_LOCAL_RECORDING=1)
+else()
+    target_compile_definitions(links PRIVATE LINKS_ENABLE_LOCAL_RECORDING=0)
+endif()
+message(STATUS "Local recording enabled: ${LINKS_ENABLE_LOCAL_RECORDING}")
 
 if(APPLE)
     find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
