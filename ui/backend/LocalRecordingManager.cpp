@@ -9,17 +9,16 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFont>
-#include <QGuiApplication>
 #include <QMediaFormat>
 #include <QMediaRecorder>
 #include <QMutexLocker>
 #include <QPainter>
-#include <QScreenCapture>
 #include <QStandardPaths>
 #include <QUrl>
 #include <QVideoFrame>
 #include <QVideoFrameFormat>
 #include <QVideoFrameInput>
+#include <QtGlobal>
 #include <algorithm>
 
 namespace {
@@ -38,6 +37,16 @@ QString sanitizePathPart(const QString& raw)
         value.replace(ch, QChar('_'));
     }
     return value;
+}
+
+bool shouldSaveDiagnosticFrames()
+{
+    if (!qEnvironmentVariableIsSet("LINKS_RECORDING_DIAG_FRAMES")) {
+        return false;
+    }
+
+    const QByteArray value = qgetenv("LINKS_RECORDING_DIAG_FRAMES").trimmed().toLower();
+    return value != "0" && value != "false" && value != "off";
 }
 
 } // namespace
@@ -73,14 +82,17 @@ LocalRecordingManager::LocalRecordingManager(QObject* parent)
     frameLogTimer_.setSingleShot(false);
     connect(&frameLogTimer_, &QTimer::timeout, this, [this]() {
         if (isRecording_) {
-            Logger::instance().debug(QString("Recording compositor: %1 frames pushed, "
-                                             "localCam=%2, remotes=%3, screenShare=%4")
+            Logger::instance().debug(QString("Recording compositor: %1 frames pushed "
+                                             "(attempts=%2), localCam=%3, remotes=%4, screenShare=%5")
                 .arg(compositeFrameCount_)
+                .arg(compositeAttemptCount_)
                 .arg(!lastLocalCameraFrame_.isNull())
                 .arg(lastRemoteCameraFrames_.size())
                 .arg(!lastScreenShareFrame_.isNull()));
         }
     });
+
+    saveDiagnosticFrames_ = shouldSaveDiagnosticFrames();
 
     refreshRecentRecordings();
 }
@@ -139,9 +151,7 @@ bool LocalRecordingManager::startConferenceRecording(const QString& meetingNo,
             this, &LocalRecordingManager::onRecorderErrorChanged);
     connect(videoFrameInput_.get(), &QVideoFrameInput::readyToSendVideoFrame,
             this, [this]() {
-                if (isRecording_ && compositeTimer_.isActive()) {
-                    compositeAndPushFrame();
-                }
+                frameInputReady_ = true;
             });
 
     // Wire into capture session
@@ -166,10 +176,12 @@ bool LocalRecordingManager::startConferenceRecording(const QString& meetingNo,
     // Start the recorder first; compositor starts after recorder enters RecordingState.
     recorder_->record();
     compositeFrameCount_ = 0;
-    frameInputReadyLogPrinted_ = false;
+    compositeAttemptCount_ = 0;
+    frameInputNotReadyCount_ = 0;
+    frameInputReady_ = false;
+    inCompositePush_ = false;
     lastFrameStartUs_ = -1;
     consecutiveSendFailures_ = 0;
-    usingScreenCaptureFallback_ = false;
 
     Logger::instance().info(QString("Local recording started: %1").arg(currentOutputPath_));
     return true;
@@ -189,8 +201,10 @@ void LocalRecordingManager::stopRecording()
         screenShareIdentity_.clear();
     }
     lastFrameStartUs_ = -1;
+    frameInputReady_ = false;
+    inCompositePush_ = false;
+    frameInputNotReadyCount_ = 0;
     consecutiveSendFailures_ = 0;
-    usingScreenCaptureFallback_ = false;
 
     if (!recorder_) {
         return;
@@ -286,6 +300,7 @@ void LocalRecordingManager::onRecorderStateChanged(QMediaRecorder::RecorderState
             compositeTimer_.setInterval(33);  // ~30 fps
             compositeTimer_.start();
             frameLogTimer_.start();
+            frameInputReady_ = videoFrameInput_ && videoFrameInput_->format().isValid();
             compositeAndPushFrame();  // push first frame as soon as recorder is ready
             emit recordingStateChanged();
             emit recordingDurationChanged();
@@ -368,7 +383,7 @@ QString LocalRecordingManager::buildOutputPath(const QString& meetingNo,
 
 void LocalRecordingManager::compositeAndPushFrame()
 {
-    if (!videoFrameInput_ || !recorder_ || usingScreenCaptureFallback_) {
+    if (!videoFrameInput_ || !recorder_ || inCompositePush_) {
         return;
     }
 
@@ -376,11 +391,27 @@ void LocalRecordingManager::compositeAndPushFrame()
         return;
     }
 
+    if (!frameInputReady_) {
+        ++frameInputNotReadyCount_;
+        if (frameInputNotReadyCount_ <= 3 || frameInputNotReadyCount_ % 120 == 0) {
+            const auto fmt = videoFrameInput_->format();
+            Logger::instance().debug(QString("compositeAndPushFrame: frame input not ready "
+                                             "(notReadyCount=%1, inputFmt=%2x%3 pix=%4)")
+                .arg(frameInputNotReadyCount_)
+                .arg(fmt.frameWidth())
+                .arg(fmt.frameHeight())
+                .arg(static_cast<int>(fmt.pixelFormat())));
+        }
+        return;
+    }
+    frameInputNotReadyCount_ = 0;
+
+    inCompositePush_ = true;
+
     // Snapshot the current frame state under lock
     QImage localCam;
     QMap<QString, QImage> remoteCams;
     QImage screenShare;
-    QString screenShareId;
     QMap<QString, QString> names;
 
     {
@@ -388,7 +419,6 @@ void LocalRecordingManager::compositeAndPushFrame()
         localCam = lastLocalCameraFrame_;
         remoteCams = lastRemoteCameraFrames_;
         screenShare = lastScreenShareFrame_;
-        screenShareId = screenShareIdentity_;
         names = participantNames_;
     }
 
@@ -485,9 +515,9 @@ void LocalRecordingManager::compositeAndPushFrame()
 
     // Diagnostic: save the first composited frame as PNG so we can verify
     // that QPainter is actually producing visible content.
-    if (compositeFrameCount_ < 3) {
+    if (saveDiagnosticFrames_ && compositeAttemptCount_ < 3) {
         const QString diagPath = QDir(outputDirectory_).filePath(
-            QStringLiteral("_diag_frame_%1.png").arg(compositeFrameCount_));
+            QStringLiteral("_diag_frame_%1.png").arg(compositeAttemptCount_));
         canvas.save(diagPath);
         Logger::instance().debug(QString("Diagnostic frame saved: %1 (%2x%3, format=%4)")
             .arg(diagPath)
@@ -498,13 +528,13 @@ void LocalRecordingManager::compositeAndPushFrame()
     // Keep an encoder-friendly RGBX buffer.
     QImage rgbx = canvas.convertToFormat(QImage::Format_RGBX8888);
 
-    if (compositeFrameCount_ < 5) {
+    if (compositeAttemptCount_ < 5) {
         Logger::instance().debug(QString(
             "composite frame prepared: src=%1x%2 stride=%3")
             .arg(rgbx.width()).arg(rgbx.height()).arg(rgbx.bytesPerLine()));
     }
 
-    qint64 startUs = static_cast<qint64>(compositeFrameCount_) * 33333;
+    qint64 startUs = static_cast<qint64>(compositeAttemptCount_) * 33333;
     if (recordingElapsed_.isValid()) {
         startUs = static_cast<qint64>(recordingElapsed_.elapsed()) * 1000;
     }
@@ -519,8 +549,8 @@ void LocalRecordingManager::compositeAndPushFrame()
     const bool sent = videoFrameInput_->sendVideoFrame(frame);
     if (!sent) {
         ++consecutiveSendFailures_;
-        if (!frameInputReadyLogPrinted_ || compositeFrameCount_ % 30 == 0) {
-            frameInputReadyLogPrinted_ = true;
+        frameInputReady_ = false;
+        if (consecutiveSendFailures_ <= 3 || consecutiveSendFailures_ % 60 == 0) {
             const auto fmt = videoFrameInput_->format();
             Logger::instance().warning(QString("compositeAndPushFrame: sendVideoFrame returned false "
                                                "(failures=%1, recorderState=%2, inputFmt=%3x%4 pix=%5)")
@@ -530,36 +560,13 @@ void LocalRecordingManager::compositeAndPushFrame()
                 .arg(fmt.frameHeight())
                 .arg(static_cast<int>(fmt.pixelFormat())));
         }
-
-        if (!usingScreenCaptureFallback_ && consecutiveSendFailures_ >= 30) {
-            Logger::instance().warning("QVideoFrameInput failed continuously, switching to QScreenCapture fallback");
-
-            usingScreenCaptureFallback_ = true;
-            compositeTimer_.stop();
-            frameLogTimer_.stop();
-
-            captureSession_.setVideoFrameInput(nullptr);
-            videoFrameInput_.reset();
-
-            screenCapture_ = std::make_unique<QScreenCapture>();
-            captureSession_.setScreenCapture(screenCapture_.get());
-
-            if (QScreen* primary = QGuiApplication::primaryScreen()) {
-                screenCapture_->setScreen(primary);
-            }
-
-            screenCapture_->setActive(true);
-            if (screenCapture_->isActive()) {
-                Logger::instance().info("QScreenCapture fallback is active");
-            } else {
-                Logger::instance().error("QScreenCapture fallback failed to activate");
-            }
-        }
     } else {
         consecutiveSendFailures_ = 0;
-        frameInputReadyLogPrinted_ = false;
+        frameInputReady_ = false;
+        ++compositeFrameCount_;
     }
-    ++compositeFrameCount_;
+    ++compositeAttemptCount_;
+    inCompositePush_ = false;
 }
 
 void LocalRecordingManager::drawParticipantCell(QPainter& painter,
@@ -664,7 +671,6 @@ void LocalRecordingManager::releaseSessionResources()
     captureSession_.setAudioInput(nullptr);
     recorder_.reset();
     videoFrameInput_.reset();
-    screenCapture_.reset();
     audioInput_.reset();
 }
 

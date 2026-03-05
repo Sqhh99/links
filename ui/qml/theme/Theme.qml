@@ -126,7 +126,9 @@ QtObject {
     // Disabled states
     // ==========================================
     readonly property color disabledBg:          isDark ? "#252538" : "#E5E7EB"
+    readonly property color disabledBackground:  disabledBg
     readonly property color disabledText:        isDark ? "#5A5A74" : "#9CA3AF"
+    readonly property color errorColor:          isDark ? "#F87171" : "#DC2626"
 
     // ==========================================
     // Close button hover (red)

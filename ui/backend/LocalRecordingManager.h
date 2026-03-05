@@ -16,7 +16,6 @@
 class QAudioInput;
 class QObject;
 class QPainter;
-class QScreenCapture;
 class QVideoFrameInput;
 
 class LocalRecordingManager : public QObject
@@ -91,7 +90,6 @@ private:
     QMediaCaptureSession captureSession_;
     std::unique_ptr<QAudioInput> audioInput_;
     std::unique_ptr<QVideoFrameInput> videoFrameInput_;
-    std::unique_ptr<QScreenCapture> screenCapture_;
     std::unique_ptr<QMediaRecorder> recorder_;
 
     bool isRecording_{false};
@@ -101,10 +99,13 @@ private:
     QTimer compositeTimer_;
     QTimer frameLogTimer_;
     int compositeFrameCount_{0};
+    qint64 compositeAttemptCount_{0};
     qint64 lastFrameStartUs_{-1};
-    bool frameInputReadyLogPrinted_{false};
+    bool frameInputReady_{false};
+    bool inCompositePush_{false};
+    int frameInputNotReadyCount_{0};
     int consecutiveSendFailures_{0};
-    bool usingScreenCaptureFallback_{false};
+    bool saveDiagnosticFrames_{false};
 
     // Composite frame state (protected by mutex for thread safety)
     mutable QMutex frameMutex_;

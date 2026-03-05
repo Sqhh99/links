@@ -201,20 +201,21 @@ void CameraCapturer::setCamera(const QCameraDevice& device)
     Logger::instance().info(QString("Camera device set to: %1").arg(device.description()));
 }
 
-void CameraCapturer::setCameraById(const QByteArray& deviceId)
+bool CameraCapturer::setCameraById(const QByteArray& deviceId)
 {
     if (deviceId.isEmpty()) {
         selectedDevice_ = QCameraDevice();
-        return;
+        return true;
     }
     
     const auto cameras = QMediaDevices::videoInputs();
     for (const auto& device : cameras) {
         if (device.id() == deviceId) {
             setCamera(device);
-            return;
+            return true;
         }
     }
     Logger::instance().warning(QString("Camera with ID '%1' not found")
                               .arg(QString(deviceId)));
+    return false;
 }
