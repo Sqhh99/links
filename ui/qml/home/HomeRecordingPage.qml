@@ -9,6 +9,32 @@ Item {
 
     property bool isGuest: true
 
+    function toLocalFileUrl(path) {
+        if (!path || path.length === 0) {
+            return ""
+        }
+
+        var normalized = path.replace(/\\/g, "/")
+        var isWindowsAbsolutePath = /^[A-Za-z]:\//.test(normalized)
+        var encodedPath = normalized.split("/").map(function(segment, index) {
+            if (segment.length === 0) {
+                return segment
+            }
+            if (isWindowsAbsolutePath && index === 0 && /^[A-Za-z]:$/.test(segment)) {
+                return segment
+            }
+            return encodeURIComponent(segment)
+        }).join("/")
+
+        if (isWindowsAbsolutePath) {
+            return "file:///" + encodedPath
+        }
+        if (encodedPath.startsWith("/")) {
+            return "file://" + encodedPath
+        }
+        return "file:///" + encodedPath
+    }
+
     Component.onCompleted: {
         LocalRecordingManager.refreshRecentRecordings()
     }
@@ -140,7 +166,12 @@ Item {
 
                                     LinkButton {
                                         text: "打开"
-                                        onClicked: Qt.openUrlExternally("file:///" + modelData.path.replace(/\\/g, "/"))
+                                        onClicked: {
+                                            var url = root.toLocalFileUrl(modelData.path)
+                                            if (url.length > 0) {
+                                                Qt.openUrlExternally(url)
+                                            }
+                                        }
                                     }
                                 }
                             }

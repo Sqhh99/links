@@ -136,6 +136,33 @@ target_include_directories(conference_network_stats_tests PRIVATE
 )
 
 # =============================================================================
+# Conference participant metadata parser tests
+# =============================================================================
+
+add_executable(conference_metadata_parser_tests
+    core/test_participant_metadata_parser.cpp
+    ${CMAKE_SOURCE_DIR}/core/conference/participant_metadata_parser.cpp
+)
+
+set_target_properties(conference_metadata_parser_tests PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+)
+
+target_link_libraries(conference_metadata_parser_tests PRIVATE
+    GTest::gtest
+    GTest::gtest_main
+    Qt6::Core
+)
+
+target_include_directories(conference_metadata_parser_tests PRIVATE
+    ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/core
+    ${CMAKE_SOURCE_DIR}/utils
+)
+
+# =============================================================================
 # Recording core tests (pure C++, no Qt dependency)
 # =============================================================================
 
@@ -275,6 +302,7 @@ gtest_discover_tests(audio_processing_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(microphone_capturer_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(desktop_capture_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(conference_network_stats_tests DISCOVERY_MODE PRE_TEST)
+gtest_discover_tests(conference_metadata_parser_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(recording_core_tests DISCOVERY_MODE PRE_TEST)
 
 if(TARGET capture_platform_tests)
@@ -322,6 +350,9 @@ if(WIN32)
 
     copy_runtime_if_exists(conference_network_stats_tests "${GTEST_DLL_DIR}/gtest.dll")
     copy_runtime_if_exists(conference_network_stats_tests "${GTEST_DLL_DIR}/gtest_main.dll")
+
+    copy_runtime_if_exists(conference_metadata_parser_tests "${GTEST_DLL_DIR}/gtest.dll")
+    copy_runtime_if_exists(conference_metadata_parser_tests "${GTEST_DLL_DIR}/gtest_main.dll")
 
     copy_runtime_if_exists(recording_core_tests "${GTEST_DLL_DIR}/gtest.dll")
     copy_runtime_if_exists(recording_core_tests "${GTEST_DLL_DIR}/gtest_main.dll")

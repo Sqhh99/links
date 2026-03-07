@@ -11,6 +11,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QFont>
+#include <QFontMetrics>
 #include <QMediaFormat>
 #include <QMediaRecorder>
 #include <QMutexLocker>
@@ -205,6 +206,7 @@ bool LocalRecordingManager::startConferenceRecording(const QString& meetingNo,
     inCompositePush_ = false;
     lastFrameStartUs_ = -1;
     consecutiveSendFailures_ = 0;
+    compositeBufferIndex_ = 0;
 
     Logger::instance().info(QString("Local recording started: %1").arg(currentOutputPath_));
     return true;
@@ -464,8 +466,12 @@ void LocalRecordingManager::compositeAndPushFrame()
         names = participantNames_;
     }
 
-    // Create canvas using ARGB32 — QPainter's native format on Windows.
-    QImage canvas(kCanvasWidth, kCanvasHeight, QImage::Format_ARGB32);
+    // Reuse compositing buffers to avoid allocating a full-frame image every tick.
+    QImage& canvas = compositeBuffers_[compositeBufferIndex_];
+    if (canvas.size() != QSize(kCanvasWidth, kCanvasHeight)
+        || canvas.format() != QImage::Format_RGBX8888) {
+        canvas = QImage(kCanvasWidth, kCanvasHeight, QImage::Format_RGBX8888);
+    }
     canvas.fill(QColor(30, 30, 35));  // dark background
 
     QPainter painter(&canvas);
@@ -549,13 +555,10 @@ void LocalRecordingManager::compositeAndPushFrame()
             .arg(canvas.format()));
     }
 
-    // Keep an encoder-friendly RGBX buffer.
-    QImage rgbx = canvas.convertToFormat(QImage::Format_RGBX8888);
-
     if (compositeAttemptCount_ < 5) {
         Logger::instance().debug(QString(
             "composite frame prepared: src=%1x%2 stride=%3")
-            .arg(rgbx.width()).arg(rgbx.height()).arg(rgbx.bytesPerLine()));
+            .arg(canvas.width()).arg(canvas.height()).arg(canvas.bytesPerLine()));
     }
 
     qint64 elapsedUs = -1;
@@ -565,7 +568,7 @@ void LocalRecordingManager::compositeAndPushFrame()
     qint64 startUs = links::recording::computeNextFrameStartUs(
         elapsedUs, lastFrameStartUs_, 33333, compositeAttemptCount_);
     lastFrameStartUs_ = startUs;
-    QVideoFrame frame(rgbx);
+    QVideoFrame frame(canvas);
     frame.setStartTime(startUs);
     frame.setEndTime(startUs + 33333);
 
@@ -588,6 +591,7 @@ void LocalRecordingManager::compositeAndPushFrame()
         frameInputReady_ = false;
         ++compositeFrameCount_;
     }
+    compositeBufferIndex_ = (compositeBufferIndex_ + 1) % compositeBuffers_.size();
     ++compositeAttemptCount_;
     inCompositePush_ = false;
 }
@@ -608,14 +612,18 @@ void LocalRecordingManager::drawParticipantCell(QPainter& painter,
 
     // Draw name label
     if (!name.isEmpty()) {
-        QFont font(QStringLiteral("Microsoft YaHei"), 11);
-        font.setWeight(QFont::Medium);
-        painter.setFont(font);
+        static const QFont labelFont = []() {
+            QFont font(QStringLiteral("Microsoft YaHei"), 11);
+            font.setWeight(QFont::Medium);
+            return font;
+        }();
+        static const QFontMetrics labelMetrics(labelFont);
 
-        QFontMetrics fm(font);
-        const int textWidth = fm.horizontalAdvance(name);
+        painter.setFont(labelFont);
+
+        const int textWidth = labelMetrics.horizontalAdvance(name);
         const int padding = 8;
-        const int labelH = fm.height() + padding;
+        const int labelH = labelMetrics.height() + padding;
         const int labelW = textWidth + padding * 2;
         const int labelX = cellRect.x() + 8;
         const int labelY = cellRect.bottom() - labelH - 8;
@@ -625,7 +633,7 @@ void LocalRecordingManager::drawParticipantCell(QPainter& painter,
         painter.drawRoundedRect(labelX, labelY, labelW, labelH, 4, 4);
 
         painter.setPen(Qt::white);
-        painter.drawText(labelX + padding, labelY + fm.ascent() + padding / 2, name);
+        painter.drawText(labelX + padding, labelY + labelMetrics.ascent() + padding / 2, name);
     }
 }
 
@@ -656,8 +664,11 @@ void LocalRecordingManager::drawPlaceholderCell(QPainter& painter,
 
     // Draw name below avatar
     if (!name.isEmpty()) {
-        QFont nameFont(QStringLiteral("Microsoft YaHei"), 13);
-        nameFont.setWeight(QFont::Medium);
+        static const QFont nameFont = []() {
+            QFont font(QStringLiteral("Microsoft YaHei"), 13);
+            font.setWeight(QFont::Medium);
+            return font;
+        }();
         painter.setFont(nameFont);
         painter.setPen(QColor(180, 180, 190));
         painter.drawText(QRect(cellRect.x(), cy + avatarSize / 2 + 8,

@@ -1,4 +1,5 @@
 #include "conference_manager.h"
+#include "participant_metadata_parser.h"
 #include "../room_event_delegate.h"
 #include "../../utils/logger.h"
 #include <QFutureWatcher>
@@ -42,22 +43,6 @@ bool networkStatsEquivalent(const NetworkStatsSnapshot& lhs,
         && lhs.videoCodec == rhs.videoCodec
         && lhs.availableSendBandwidthKbps == rhs.availableSendBandwidthKbps
         && lhs.transportProtocol == rhs.transportProtocol;
-}
-
-bool parseIsHostFromParticipantMetadata(const std::string& metadataRaw)
-{
-    if (metadataRaw.empty()) {
-        return false;
-    }
-
-    QJsonParseError parseError;
-    const QJsonDocument metadataDoc =
-        QJsonDocument::fromJson(QByteArray::fromStdString(metadataRaw), &parseError);
-    if (parseError.error != QJsonParseError::NoError || !metadataDoc.isObject()) {
-        return false;
-    }
-
-    return metadataDoc.object().value(QStringLiteral("isHost")).toBool(false);
 }
 
 } // namespace
@@ -749,7 +734,7 @@ void ConferenceManager::reconcileParticipantsInternal(const char* source)
         info.isMicrophoneEnabled = false;
         info.isCameraEnabled = false;
         info.isScreenSharing = false;
-        info.isHost = parseIsHostFromParticipantMetadata(participant->metadata());
+        info.isHost = links::conference::parseIsHostFromParticipantMetadata(participant->metadata());
         remoteSnapshot.insert(identity, info);
     }
 

@@ -362,7 +362,7 @@ Window {
         y: 0
         width: 340
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         onOpened: {
             if (backend && backend.shareMode && sharePopup.window) {
@@ -614,7 +614,7 @@ Window {
         y: 0
         width: 480
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         onOpened: {
             if (backend && backend.shareMode && networkStatsPopup.window) {

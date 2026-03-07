@@ -11,6 +11,7 @@
 #include <QString>
 #include <QTimer>
 #include <QVariantList>
+#include <array>
 #include <memory>
 
 class QAudioInput;
@@ -109,6 +110,8 @@ private:
     int frameInputNotReadyCount_{0};
     int consecutiveSendFailures_{0};
     bool saveDiagnosticFrames_{false};
+    std::array<QImage, 3> compositeBuffers_;
+    std::size_t compositeBufferIndex_{0};
 
     // Composite frame state (protected by mutex for thread safety)
     mutable QMutex frameMutex_;

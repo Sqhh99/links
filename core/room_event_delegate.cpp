@@ -1,32 +1,11 @@
 #include "room_event_delegate.h"
+#include "conference/participant_metadata_parser.h"
 #include "../utils/logger.h"
 #include "livekit/participant.h"
 #include "livekit/remote_participant.h"
 #include "livekit/remote_track_publication.h"
 #include "livekit/track.h"
-#include <QJsonDocument>
-#include <QJsonObject>
 #include <QMetaObject>
-
-namespace {
-
-bool parseIsHostFromMetadata(const std::string& metadataRaw)
-{
-    if (metadataRaw.empty()) {
-        return false;
-    }
-
-    QJsonParseError parseError;
-    const QJsonDocument metadataDoc =
-        QJsonDocument::fromJson(QByteArray::fromStdString(metadataRaw), &parseError);
-    if (parseError.error != QJsonParseError::NoError || !metadataDoc.isObject()) {
-        return false;
-    }
-
-    return metadataDoc.object().value(QStringLiteral("isHost")).toBool(false);
-}
-
-} // namespace
 
 RoomEventDelegate::RoomEventDelegate(QObject* parent)
     : QObject(parent)
@@ -42,7 +21,7 @@ void RoomEventDelegate::onParticipantConnected(livekit::Room& room,
     QString identity = QString::fromStdString(event.participant->identity());
     QString sid = QString::fromStdString(event.participant->sid());
     QString name = QString::fromStdString(event.participant->name());
-    const bool isHost = parseIsHostFromMetadata(event.participant->metadata());
+    const bool isHost = links::conference::parseIsHostFromParticipantMetadata(event.participant->metadata());
     
     Logger::instance().info(QString("RoomEventDelegate: Participant connected: %1").arg(name));
     

@@ -474,6 +474,10 @@ void ConferenceBackend::toggleRecording()
         recordingManager_->stopRecording();
         return;
     }
+    if (!conferenceManager_ || !conferenceManager_->isConnected()) {
+        Logger::instance().warning("Ignoring start recording: conference is not connected");
+        return;
+    }
 
     // Feed current participant names before starting
     recordingManager_->setParticipantNames(nameMap_);
