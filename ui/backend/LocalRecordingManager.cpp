@@ -272,6 +272,20 @@ void LocalRecordingManager::feedScreenShareFrame(const QString& identity,
     screenShareIdentity_ = identity;
 }
 
+void LocalRecordingManager::clearScreenShareFrame(const QString& identity)
+{
+    if (identity.isEmpty()) {
+        return;
+    }
+
+    QMutexLocker lock(&frameMutex_);
+    if (screenShareIdentity_ != identity) {
+        return;
+    }
+    lastScreenShareFrame_ = QImage();
+    screenShareIdentity_.clear();
+}
+
 void LocalRecordingManager::clearScreenShareFrame()
 {
     QMutexLocker lock(&frameMutex_);
@@ -283,6 +297,10 @@ void LocalRecordingManager::removeRemoteParticipant(const QString& identity)
 {
     QMutexLocker lock(&frameMutex_);
     lastRemoteCameraFrames_.remove(identity);
+    if (screenShareIdentity_ == identity) {
+        lastScreenShareFrame_ = QImage();
+        screenShareIdentity_.clear();
+    }
 }
 
 void LocalRecordingManager::setParticipantNames(const QMap<QString, QString>& names)

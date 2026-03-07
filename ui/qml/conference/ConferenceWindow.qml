@@ -39,7 +39,6 @@ Window {
         id: backend
 
         Component.onCompleted: {
-            setConferenceWindow(root)
             if (root.serverUrl && root.token) {
                 initialize(root.serverUrl, root.token, root.roomName, root.meetingNo, root.userName, root.isHost, root.userAuthToken)
             }

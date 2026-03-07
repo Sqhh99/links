@@ -10,7 +10,6 @@
 #include <QTimer>
 #include <QGuiApplication>
 #include <QScreen>
-#include <QWindow>
 #include <cmath>
 
 namespace {
@@ -459,17 +458,6 @@ bool ConferenceBackend::getRemoteShowScreenInMain(const QString& participantId) 
 bool ConferenceBackend::getRemoteScreenSharing(const QString& participantId) const
 {
     return screenShareState_.value(participantId, false);
-}
-
-void ConferenceBackend::setConferenceWindow(QObject* windowObject)
-{
-    auto* window = qobject_cast<QWindow*>(windowObject);
-    if (!window) {
-        Logger::instance().warning("setConferenceWindow received invalid window object");
-        return;
-    }
-
-    conferenceWindow_ = window;
 }
 
 void ConferenceBackend::toggleRecording()
@@ -1129,6 +1117,9 @@ void ConferenceBackend::onTrackMutedStateChanged(const QString& trackSid, const 
                 screenShareState_[identity] = !muted;
                 Logger::instance().info(QString("Screen share %1 for: %2").arg(muted ? "muted" : "unmuted", identity));
                 if (muted) {
+                    if (recordingManager_) {
+                        recordingManager_->clearScreenShareFrame(identity);
+                    }
                     emit remoteTrackEnded(identity, true);  // Clear screen share frame
                 }
             } else {
@@ -1161,6 +1152,9 @@ void ConferenceBackend::onTrackUnsubscribed(const QString& trackSid, const QStri
         
         if (isScreenShare) {
             screenShareState_[identity] = false;
+            if (recordingManager_) {
+                recordingManager_->clearScreenShareFrame(identity);
+            }
             emit remoteTrackEnded(identity, true);  // isScreenShare = true
             Logger::instance().info(QString("Screen share ended for: %1").arg(identity));
         } else {
@@ -1176,6 +1170,9 @@ void ConferenceBackend::onTrackUnsubscribed(const QString& trackSid, const QStri
         // Check if this participant had screen share - if so, clear it
         if (screenShareState_.value(participantIdentity, false)) {
             screenShareState_[participantIdentity] = false;
+            if (recordingManager_) {
+                recordingManager_->clearScreenShareFrame(participantIdentity);
+            }
             emit remoteTrackEnded(participantIdentity, true);
             updateParticipantsList();
         }
@@ -1205,6 +1202,9 @@ void ConferenceBackend::onTrackUnpublished(const QString& trackSid, const QStrin
     if (isScreenShare) {
         Logger::instance().info(QString("Screen share unpublished for: %1").arg(participantIdentity));
         screenShareState_[participantIdentity] = false;
+        if (recordingManager_) {
+            recordingManager_->clearScreenShareFrame(participantIdentity);
+        }
         emit remoteTrackEnded(participantIdentity, true);  // isScreenShare = true
     } else {
         Logger::instance().info(QString("Camera unpublished for: %1").arg(participantIdentity));

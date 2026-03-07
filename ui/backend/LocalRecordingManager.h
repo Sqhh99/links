@@ -56,6 +56,7 @@ public:
     void feedLocalCameraFrame(const QImage& frame);
     void feedRemoteCameraFrame(const QString& identity, const QImage& frame);
     void feedScreenShareFrame(const QString& identity, const QImage& frame);
+    void clearScreenShareFrame(const QString& identity);
     void clearScreenShareFrame();
     void removeRemoteParticipant(const QString& identity);
     void setParticipantNames(const QMap<QString, QString>& names);

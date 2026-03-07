@@ -4,7 +4,6 @@
 #include <QObject>
 #include <QTimer>
 #include <QDateTime>
-#include <QPointer>
 #include <QVariant>
 #include <QVariantList>
 #include <QImage>
@@ -14,7 +13,6 @@
 #include "../core/screen_capturer.h"
 #include "ShareModeManager.h"
 
-class QWindow;
 class LocalRecordingManager;
 
 class ConferenceBackend : public QObject
@@ -149,7 +147,6 @@ public:
     Q_INVOKABLE void toggleRemoteMainViewSource(const QString& participantId);
     Q_INVOKABLE bool getRemoteShowScreenInMain(const QString& participantId) const;
     Q_INVOKABLE bool getRemoteScreenSharing(const QString& participantId) const;
-    Q_INVOKABLE void setConferenceWindow(QObject* windowObject);
     Q_INVOKABLE void toggleRecording();
     Q_INVOKABLE void stopRecordingIfActive();
     Q_INVOKABLE void leave();
@@ -278,7 +275,6 @@ private:
     QTimer meetingDurationTimer_;
     QDateTime meetingStartTime_;
     LocalRecordingManager* recordingManager_{nullptr};
-    QPointer<QWindow> conferenceWindow_;
     int currentSharedScreenIndex_{-1};
     qulonglong currentSharedWindowId_{0};
     bool meetingEndedTriggered_{false};

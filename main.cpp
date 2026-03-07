@@ -139,7 +139,6 @@ int main(int argc, char* argv[])
 
     // Local recording manager singleton
     auto* localRecordingManager = &LocalRecordingManager::instance();
-    localRecordingManager->setParent(&app);
     qmlRegisterSingletonInstance("Links.Backend", 1, 0, "LocalRecordingManager", localRecordingManager);
 
     QQmlApplicationEngine engine;
