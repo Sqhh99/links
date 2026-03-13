@@ -85,8 +85,17 @@ void QtAudioPreviewSource::onReadyRead()
         return;
     }
 
-    std::vector<int16_t> samples(static_cast<std::size_t>(data.size() / static_cast<int>(sizeof(int16_t))), 0);
-    std::memcpy(samples.data(), data.constData(), static_cast<std::size_t>(data.size()));
+    const qsizetype sampleByteCount = data.size() - (data.size() % static_cast<qsizetype>(sizeof(int16_t)));
+    if (sampleByteCount <= 0) {
+        return;
+    }
+    if (sampleByteCount != data.size()) {
+        Logger::instance().warning(QString("Dropping %1 trailing byte(s) from preview audio buffer")
+                                   .arg(data.size() - sampleByteCount));
+    }
+
+    std::vector<int16_t> samples(static_cast<std::size_t>(sampleByteCount / static_cast<qsizetype>(sizeof(int16_t))), 0);
+    std::memcpy(samples.data(), data.constData(), static_cast<std::size_t>(sampleByteCount));
     frameCallback_(samples, sampleRate_, channelCount_);
 }
 

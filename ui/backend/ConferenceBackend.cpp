@@ -809,8 +809,6 @@ void ConferenceBackend::onConnected()
     currentSharedWindowId_ = 0;
     meetingEndedTriggered_ = false;
     userInitiatedLeave_ = false;
-    sawReconnectingSinceConnected_ = false;
-    hadAnyRemoteParticipantInSession_ = false;
     connectionStatus_ = "Connected";
     connectionColor_ = "#4caf50";
     emit connectionStatusChanged();
@@ -855,18 +853,6 @@ void ConferenceBackend::onDisconnected()
         shareModeManager_->exitShareMode();
     }
 
-    const bool shouldTreatAsMeetingEnded =
-        !isHost_
-        && !userInitiatedLeave_
-        && !meetingEndedTriggered_
-        && !sawReconnectingSinceConnected_
-        && hadAnyRemoteParticipantInSession_;
-    if (shouldTreatAsMeetingEnded) {
-        meetingEndedTriggered_ = true;
-        Logger::instance().info("Unexpected disconnect for attendee, treating as meeting ended by host");
-        emit meetingEndedByHost();
-    }
-
     connectionStatus_ = "Disconnected";
     connectionColor_ = "#ff5252";
     emit connectionStatusChanged();
@@ -892,8 +878,6 @@ void ConferenceBackend::onDisconnected()
     updateParticipantsList();
     emit participantCountChanged();
 
-    sawReconnectingSinceConnected_ = false;
-    hadAnyRemoteParticipantInSession_ = false;
     userInitiatedLeave_ = false;
     meetingEndedTriggered_ = false;
 }
@@ -910,7 +894,6 @@ void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
             connectionColor_ = "#ff5252";
             break;
         case livekit::ConnectionState::Reconnecting:
-            sawReconnectingSinceConnected_ = true;
             connectionStatus_ = "Reconnecting...";
             connectionColor_ = "#ff9800";
             if (networkQuality_ != NetworkQualityLevel::Unknown
@@ -937,7 +920,6 @@ void ConferenceBackend::onParticipantJoined(const ParticipantInfo& info)
 
     const bool isNewParticipant = !nameMap_.contains(info.identity);
     Logger::instance().debug(QString("Participant joined (backend): %1").arg(info.name));
-    hadAnyRemoteParticipantInSession_ = true;
     
     nameMap_[info.identity] = info.name.isEmpty() ? info.identity : info.name;
     micState_[info.identity] = info.isMicrophoneEnabled;
@@ -1249,7 +1231,6 @@ void ConferenceBackend::updateParticipantsList()
             continue;
         }
 
-        hadAnyRemoteParticipantInSession_ = true;
         remoteIds.insert(info.identity);
 
         const QString displayName = info.name.isEmpty() ? info.identity : info.name;

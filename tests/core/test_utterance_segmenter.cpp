@@ -13,7 +13,10 @@ std::vector<std::int16_t> makeFrame(std::int16_t value)
 
 TEST(UtteranceSegmenterTest, ProducesSegmentAfterTrailingSilence)
 {
-    links::speech::UtteranceSegmenter segmenter;
+    links::speech::UtteranceSegmenter::Config config;
+    config.minSpeechMs = 300;
+    config.endSilenceMs = 700;
+    links::speech::UtteranceSegmenter segmenter(config);
     std::vector<links::speech::SpeechSegment> results;
 
     for (int index = 0; index < 40; ++index) {
@@ -32,7 +35,10 @@ TEST(UtteranceSegmenterTest, ProducesSegmentAfterTrailingSilence)
 
 TEST(UtteranceSegmenterTest, IgnoresShortNoiseBursts)
 {
-    links::speech::UtteranceSegmenter segmenter;
+    links::speech::UtteranceSegmenter::Config config;
+    config.minSpeechMs = 300;
+    config.endSilenceMs = 700;
+    links::speech::UtteranceSegmenter segmenter(config);
     std::vector<links::speech::SpeechSegment> results;
 
     for (int index = 0; index < 5; ++index) {

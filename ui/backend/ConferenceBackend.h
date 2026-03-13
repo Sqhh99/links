@@ -279,8 +279,6 @@ private:
     qulonglong currentSharedWindowId_{0};
     bool meetingEndedTriggered_{false};
     bool userInitiatedLeave_{false};
-    bool sawReconnectingSinceConnected_{false};
-    bool hadAnyRemoteParticipantInSession_{false};
 };
 
 #endif // CONFERENCE_BACKEND_H

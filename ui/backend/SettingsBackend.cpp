@@ -462,7 +462,6 @@ void SettingsBackend::saveToSettings()
 
     settings.setSpeechModelDirectory(speechModelDirectory_);
     settings.setSelectedSpeechModelPath(selectedSpeechModelPath_);
-    settings.setSpeechBackend(QStringLiteral("cuda"));
 
     settings.sync();
     Logger::instance().info("Settings saved successfully");
