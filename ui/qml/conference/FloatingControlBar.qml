@@ -14,7 +14,7 @@ Window {
     id: root
     
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
-    width: 400
+    width: 500
     height: 48
     visible: true
     color: "transparent"
@@ -29,6 +29,16 @@ Window {
     property bool isGuest: false
     property point dragStart: Qt.point(0, 0)
     property int edgePadding: 0
+    property string shareUrl: {
+        if (!backend || !backend.meetingNo || backend.meetingNo.length === 0) {
+            return ""
+        }
+        if (!settingsBackend || !settingsBackend.apiUrl || settingsBackend.apiUrl.length === 0) {
+            return ""
+        }
+        var base = settingsBackend.apiUrl.replace(/\/+$/, "")
+        return base + "/join?meetingNo=" + encodeURIComponent(backend.meetingNo)
+    }
     
     signal stopSharingClicked()
     
@@ -85,6 +95,70 @@ Window {
         settingsDialog.x = targetX - root.x
         settingsDialog.y = targetY - root.y
         settingsDialog.open()
+    }
+
+    function formatLatency(value) {
+        return value >= 0 ? value + " ms" : "--"
+    }
+
+    function formatBitrate(value) {
+        return value >= 0 ? value + " kbps" : "--"
+    }
+
+    function formatPacketLoss(value) {
+        return value >= 0 ? Number(value).toFixed(1) + "%" : "--"
+    }
+
+    function formatFps(value) {
+        return value >= 0 ? Number(value).toFixed(1) + " FPS" : "--"
+    }
+
+    function closeInfoPopups(exceptPopup) {
+        if (networkStatsPopup.visible && exceptPopup !== networkStatsPopup) {
+            networkStatsPopup.close()
+        }
+        if (sharePopup.visible && exceptPopup !== sharePopup) {
+            sharePopup.close()
+        }
+    }
+
+    function openAnchoredPopup(popup, anchorItem) {
+        if (!popup || !anchorItem) return
+
+        var geo = screenGeometry()
+        var localPos = anchorItem.mapToItem(root.contentItem, 0, 0)
+        var popupWidth = popup.width > 0 ? popup.width : popup.implicitWidth
+        var popupHeight = popup.implicitHeight > 0 ? popup.implicitHeight : popup.height
+        var offset = 8
+
+        var targetX = localPos.x + Math.round((anchorItem.width - popupWidth) / 2)
+        var targetY = localPos.y + anchorItem.height + offset
+
+        var anchorGlobalTop = root.y + localPos.y
+        var anchorGlobalBottom = anchorGlobalTop + anchorItem.height
+        var spaceAbove = anchorGlobalTop - geo.y
+        var spaceBelow = geo.y + geo.height - anchorGlobalBottom
+        if (spaceBelow < popupHeight + offset && spaceAbove >= popupHeight + offset) {
+            targetY = localPos.y - popupHeight - offset
+        }
+
+        var globalTargetX = root.x + targetX
+        var clampedGlobalX = Math.min(Math.max(globalTargetX, geo.x), geo.x + geo.width - popupWidth)
+        targetX += (clampedGlobalX - globalTargetX)
+
+        popup.x = targetX
+        popup.y = targetY
+        popup.open()
+    }
+
+    function toggleInfoPopup(popup, anchorItem) {
+        if (!popup || !anchorItem) return
+        if (popup.visible) {
+            popup.close()
+            return
+        }
+        closeInfoPopups(popup)
+        openAnchoredPopup(popup, anchorItem)
     }
     
     // Main container with frosted glass effect
@@ -229,9 +303,25 @@ Window {
                     height: 20
                     color: Theme.separatorColor
                 }
+
+                IconButton {
+                    id: networkStatusBtn
+                    iconSource: "qrc:/res/icon/file-chart-column-increasing.png"
+                    toolTipText: "网络状态"
+                    onClicked: root.toggleInfoPopup(networkStatsPopup, networkStatusBtn)
+                }
+
+                IconButton {
+                    id: shareBtn
+                    iconSource: "qrc:/res/icon/square-arrow-out-up-right.png"
+                    toolTipText: "分享会议"
+                    visible: backend && backend.meetingNo && backend.meetingNo.length > 0
+                    onClicked: root.toggleInfoPopup(sharePopup, shareBtn)
+                }
                 
                 IconButton {
                     iconSource: "qrc:/res/icon/set_up.png"
+                    toolTipText: "设置"
                     onClicked: root.openSettingsDialog()
                 }
             }
@@ -248,15 +338,367 @@ Window {
             // --- Right: End Share button ---
             IconButton {
                 iconSource: "qrc:/res/icon/screen-share-off.png"
+                toolTipText: "结束共享"
                 onClicked: root.stopSharingClicked()
             }
         }
+    }
+
+    Popup {
+        id: sharePopup
+        popupType: Popup.Window
+        x: 0
+        y: 0
+        width: 340
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+        onOpened: {
+            if (backend && backend.shareMode && sharePopup.window) {
+                backend.shareMode.excludeFromCapture(sharePopup.window)
+            }
+        }
+
+        background: Rectangle {
+            color: Theme.popupBackground
+            radius: 12
+            border.color: Theme.popupBorder
+            border.width: 1
+            layer.enabled: true
+            layer.effect: null
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 0
+
+            Text {
+                text: "分享会议"
+                color: Theme.textPrimary
+                font.pixelSize: 14
+                font.weight: Font.DemiBold
+                Layout.topMargin: 16
+                Layout.leftMargin: 16
+                Layout.bottomMargin: 12
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.margins: 12
+                Layout.bottomMargin: 6
+                implicitHeight: 44
+                radius: 8
+                color: Theme.cardBackground
+                border.color: Theme.borderColor
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+
+                        Text {
+                            text: "会议号"
+                            color: Theme.textMuted
+                            font.pixelSize: 10
+                        }
+                        Text {
+                            text: backend ? backend.meetingNo : ""
+                            color: Theme.textPrimary
+                            font.pixelSize: 13
+                            font.weight: Font.Medium
+                        }
+                    }
+
+                    Rectangle {
+                        implicitWidth: 30
+                        implicitHeight: 30
+                        radius: 6
+                        color: copyNoArea.containsMouse ? Theme.hoverBackground : "transparent"
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/res/icon/copy.png"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            opacity: copyNoArea.containsMouse ? 1.0 : 0.5
+                        }
+
+                        MouseArea {
+                            id: copyNoArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                shareCopyHelper.text = backend ? backend.meetingNo : ""
+                                shareCopyHelper.selectAll()
+                                shareCopyHelper.copy()
+                                copyNoBubble.show()
+                            }
+                        }
+
+                        Rectangle {
+                            id: copyNoBubble
+                            anchors.right: parent.right
+                            anchors.bottom: parent.top
+                            anchors.bottomMargin: 4
+                            width: 52
+                            height: 24
+                            radius: 6
+                            color: "#111827"
+                            visible: false
+                            opacity: 0
+
+                            function show() {
+                                visible = true
+                                opacity = 1
+                                copyNoBubbleTimer.restart()
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "已复制"
+                                color: "#FFFFFF"
+                                font.pixelSize: 10
+                            }
+
+                            Timer {
+                                id: copyNoBubbleTimer
+                                interval: 1200
+                                onTriggered: copyNoBubbleAnim.start()
+                            }
+
+                            NumberAnimation on opacity {
+                                id: copyNoBubbleAnim
+                                running: false
+                                to: 0
+                                duration: 300
+                                onFinished: copyNoBubble.visible = false
+                            }
+                        }
+                    }
+                }
+            }
+
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.leftMargin: 12
+                Layout.rightMargin: 12
+                Layout.bottomMargin: 12
+                implicitHeight: 44
+                radius: 8
+                color: Theme.cardBackground
+                border.color: Theme.borderColor
+                border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 12
+                    anchors.rightMargin: 8
+                    spacing: 8
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+
+                        Text {
+                            text: "会议链接"
+                            color: Theme.textMuted
+                            font.pixelSize: 10
+                        }
+                        Text {
+                            text: root.shareUrl
+                            color: Theme.accentColor
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                            elide: Text.ElideMiddle
+                            Layout.fillWidth: true
+                        }
+                    }
+
+                    Rectangle {
+                        implicitWidth: 30
+                        implicitHeight: 30
+                        radius: 6
+                        color: copyLinkArea.containsMouse ? Theme.hoverBackground : "transparent"
+                        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+
+                        Image {
+                            anchors.centerIn: parent
+                            source: "qrc:/res/icon/copy.png"
+                            sourceSize.width: 14
+                            sourceSize.height: 14
+                            opacity: copyLinkArea.containsMouse ? 1.0 : 0.5
+                        }
+
+                        MouseArea {
+                            id: copyLinkArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                shareCopyHelper.text = root.shareUrl
+                                shareCopyHelper.selectAll()
+                                shareCopyHelper.copy()
+                                copyLinkBubble.show()
+                            }
+                        }
+
+                        Rectangle {
+                            id: copyLinkBubble
+                            anchors.right: parent.right
+                            anchors.bottom: parent.top
+                            anchors.bottomMargin: 4
+                            width: 52
+                            height: 24
+                            radius: 6
+                            color: "#111827"
+                            visible: false
+                            opacity: 0
+
+                            function show() {
+                                visible = true
+                                opacity = 1
+                                copyLinkBubbleTimer.restart()
+                            }
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "已复制"
+                                color: "#FFFFFF"
+                                font.pixelSize: 10
+                            }
+
+                            Timer {
+                                id: copyLinkBubbleTimer
+                                interval: 1200
+                                onTriggered: copyLinkBubbleAnim.start()
+                            }
+
+                            NumberAnimation on opacity {
+                                id: copyLinkBubbleAnim
+                                running: false
+                                to: 0
+                                duration: 300
+                                onFinished: copyLinkBubble.visible = false
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    Popup {
+        id: networkStatsPopup
+        popupType: Popup.Window
+        x: 0
+        y: 0
+        width: 480
+        padding: 0
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+        onOpened: {
+            if (backend && backend.shareMode && networkStatsPopup.window) {
+                backend.shareMode.excludeFromCapture(networkStatsPopup.window)
+            }
+        }
+
+        background: Rectangle {
+            color: Theme.popupBackground
+            radius: 12
+            border.color: Theme.popupBorder
+            border.width: 1
+        }
+
+        contentItem: RowLayout {
+            spacing: 0
+
+            GridLayout {
+                columns: 2
+                rowSpacing: 8
+                columnSpacing: 12
+                Layout.fillWidth: true
+                Layout.margins: 14
+
+                Text { text: "连接状态"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: backend ? backend.connectionStatus : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "连接质量"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: backend ? backend.networkQualityText : "检测中"; color: backend ? backend.networkQualityColor : Theme.textMuted; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "会议时长"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: backend ? backend.meetingDuration : "00:00:00"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
+
+                Text { text: "延迟 RTT"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatLatency(backend ? backend.networkRttMs : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "抖动"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatLatency(backend ? backend.networkJitterMs : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "丢包率"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatPacketLoss(backend ? backend.networkPacketLossPercent : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "上行码率"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatBitrate(backend ? backend.networkUplinkKbps : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "下行码率"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatBitrate(backend ? backend.networkDownlinkKbps : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+            }
+
+            Rectangle { width: 1; Layout.fillHeight: true; Layout.topMargin: 10; Layout.bottomMargin: 10; color: Theme.separatorColor }
+
+            GridLayout {
+                columns: 2
+                rowSpacing: 8
+                columnSpacing: 12
+                Layout.fillWidth: true
+                Layout.margins: 14
+
+                Text { text: "传输协议"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: (backend && backend.transportProtocol.length > 0) ? backend.transportProtocol : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "可用带宽"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatBitrate(backend ? backend.availableSendBandwidth : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
+
+                Text { text: "音频编码"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: (backend && backend.audioCodec.length > 0) ? backend.audioCodec : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "视频编码"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: (backend && backend.videoCodec.length > 0) ? backend.videoCodec : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Rectangle { Layout.columnSpan: 2; Layout.fillWidth: true; height: 1; color: Theme.separatorColor }
+
+                Text { text: "视频分辨率"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: (backend && backend.videoResolution.length > 0) ? backend.videoResolution : "--"; color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+
+                Text { text: "视频帧率"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { text: root.formatFps(backend ? backend.videoFps : -1); color: Theme.textPrimary; font.pixelSize: 11; font.weight: Font.Medium }
+            }
+        }
+    }
+
+    TextEdit {
+        id: shareCopyHelper
+        visible: false
     }
     
     // --- Icon Button Component ---
     component IconButton: Button {
         id: iconBtn
         property string iconSource: ""
+        property string toolTipText: ""
         
         implicitWidth: 36
         implicitHeight: 36
@@ -287,6 +729,10 @@ Window {
             cursorShape: Qt.PointingHandCursor
             onPressed: function(mouse) { mouse.accepted = false }
         }
+
+        ToolTip.visible: toolTipText.length > 0 && hovered
+        ToolTip.text: toolTipText
+        ToolTip.delay: 500
     }
 
     // --- Split Device Button Component ---
