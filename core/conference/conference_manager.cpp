@@ -1,4 +1,5 @@
 #include "conference_manager.h"
+#include "participant_metadata_parser.h"
 #include "../room_event_delegate.h"
 #include "../../utils/logger.h"
 #include <QFutureWatcher>
@@ -184,16 +185,28 @@ void ConferenceManager::disconnect()
 
 void ConferenceManager::toggleMicrophone()
 {
+    if (!connected_) {
+        Logger::instance().warning("Ignoring toggleMicrophone: conference is not connected");
+        return;
+    }
     deviceController_->toggleMicrophone();
 }
 
 void ConferenceManager::toggleCamera()
 {
+    if (!connected_) {
+        Logger::instance().warning("Ignoring toggleCamera: conference is not connected");
+        return;
+    }
     deviceController_->toggleCamera();
 }
 
 void ConferenceManager::toggleScreenShare()
 {
+    if (!connected_) {
+        Logger::instance().warning("Ignoring toggleScreenShare: conference is not connected");
+        return;
+    }
     deviceController_->toggleScreenShare();
 }
 
@@ -204,11 +217,19 @@ void ConferenceManager::setScreenShareMode(ScreenCapturer::Mode mode, QScreen* s
 
 void ConferenceManager::switchCamera(const QString& deviceId)
 {
+    if (!connected_) {
+        Logger::instance().warning("Ignoring switchCamera: conference is not connected");
+        return;
+    }
     deviceController_->switchCamera(deviceId);
 }
 
 void ConferenceManager::switchMicrophone(const QString& deviceId)
 {
+    if (!connected_) {
+        Logger::instance().warning("Ignoring switchMicrophone: conference is not connected");
+        return;
+    }
     deviceController_->switchMicrophone(deviceId);
 }
 
@@ -353,7 +374,10 @@ void ConferenceManager::reconcileParticipants()
     reconcileParticipantsInternal("manual");
 }
 
-void ConferenceManager::onParticipantConnectedQueued(QString identity, QString sid, QString name)
+void ConferenceManager::onParticipantConnectedQueued(QString identity,
+                                                     QString sid,
+                                                     QString name,
+                                                     bool isHost)
 {
     if (identity.trimmed().isEmpty()) {
         Logger::instance().warning("Participant connected event has empty identity, triggering reconciliation");
@@ -362,12 +386,17 @@ void ConferenceManager::onParticipantConnectedQueued(QString identity, QString s
     }
 
     if (participantStore_->contains(identity)) {
-        Logger::instance().debug(QString("Duplicate participant connected ignored: %1").arg(identity));
+        const ParticipantInfo before = participantStore_->participantInfo(identity);
+        const ParticipantInfo updated = participantStore_->addParticipant(identity, sid, name, isHost);
+        if (before.name != updated.name || before.sid != updated.sid || before.isHost != updated.isHost) {
+            emit participantUpdated(updated);
+        }
+        Logger::instance().debug(QString("Duplicate participant connected reconciled: %1").arg(identity));
         reconcileParticipantsInternal("participant_connected_duplicate");
         return;
     }
 
-    ParticipantInfo info = participantStore_->addParticipant(identity, sid, name);
+    ParticipantInfo info = participantStore_->addParticipant(identity, sid, name, isHost);
 
     Logger::instance().info(QString("Participant joined: %1")
                                 .arg(name.isEmpty() ? identity : name));
@@ -594,6 +623,23 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
         emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
         emit localNetworkStatsUpdated(localNetworkStats_);
     } else if (connState == livekit::ConnectionState::Disconnected) {
+        const bool hadMic = deviceController_->isMicrophoneEnabled();
+        const bool hadCam = deviceController_->isCameraEnabled();
+        const bool hadScreenShare = deviceController_->isScreenSharing();
+
+        deviceController_->stopCapturers();
+        deviceController_->resetLocalState();
+
+        if (hadMic) {
+            emit localMicrophoneChanged(false);
+        }
+        if (hadCam) {
+            emit localCameraChanged(false);
+        }
+        if (hadScreenShare) {
+            emit localScreenShareChanged(false);
+        }
+
         connected_ = false;
         participantStore_->clear();
         participantIdentity_.clear();
@@ -688,6 +734,7 @@ void ConferenceManager::reconcileParticipantsInternal(const char* source)
         info.isMicrophoneEnabled = false;
         info.isCameraEnabled = false;
         info.isScreenSharing = false;
+        info.isHost = links::conference::parseIsHostFromParticipantMetadata(participant->metadata());
         remoteSnapshot.insert(identity, info);
     }
 
@@ -712,12 +759,21 @@ void ConferenceManager::reconcileParticipantsInternal(const char* source)
     }
 
     for (auto it = remoteSnapshot.cbegin(); it != remoteSnapshot.cend(); ++it) {
+        const ParticipantInfo& snapshotInfo = it.value();
         if (storedIds.contains(it.key())) {
+            const ParticipantInfo currentInfo = participantStore_->participantInfo(it.key());
+            if (currentInfo.sid != snapshotInfo.sid
+                || currentInfo.name != snapshotInfo.name
+                || currentInfo.isHost != snapshotInfo.isHost) {
+                ParticipantInfo updated = participantStore_->addParticipant(
+                    it.key(), snapshotInfo.sid, snapshotInfo.name, snapshotInfo.isHost);
+                emit participantUpdated(updated);
+            }
             continue;
         }
 
-        const ParticipantInfo& snapshotInfo = it.value();
-        ParticipantInfo added = participantStore_->addParticipant(it.key(), snapshotInfo.sid, snapshotInfo.name);
+        ParticipantInfo added = participantStore_->addParticipant(
+            it.key(), snapshotInfo.sid, snapshotInfo.name, snapshotInfo.isHost);
         emit participantJoined(added);
         addedIds.append(it.key());
     }

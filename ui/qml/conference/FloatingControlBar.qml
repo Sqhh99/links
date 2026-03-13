@@ -14,7 +14,7 @@ Window {
     id: root
     
     flags: Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool
-    width: 500
+    width: 540
     height: 48
     visible: true
     color: "transparent"
@@ -318,6 +318,17 @@ Window {
                     visible: backend && backend.meetingNo && backend.meetingNo.length > 0
                     onClicked: root.toggleInfoPopup(sharePopup, shareBtn)
                 }
+
+                IconButton {
+                    id: recordingBtn
+                    iconSource: "qrc:/res/icon/disc.png"
+                    enabled: backend ? backend.recordingAvailable : false
+                    toolTipText: backend && !backend.recordingAvailable
+                                 ? "当前构建未启用本地录制"
+                                 : (backend && backend.recording ? "停止录制" : "开始录制")
+                    active: backend ? backend.recording : false
+                    onClicked: if (backend) backend.toggleRecording()
+                }
                 
                 IconButton {
                     iconSource: "qrc:/res/icon/set_up.png"
@@ -351,7 +362,7 @@ Window {
         y: 0
         width: 340
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         onOpened: {
             if (backend && backend.shareMode && sharePopup.window) {
@@ -603,7 +614,7 @@ Window {
         y: 0
         width: 480
         padding: 0
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
 
         onOpened: {
             if (backend && backend.shareMode && networkStatsPopup.window) {
@@ -699,6 +710,7 @@ Window {
         id: iconBtn
         property string iconSource: ""
         property string toolTipText: ""
+        property bool active: false
         
         implicitWidth: 36
         implicitHeight: 36
@@ -709,6 +721,12 @@ Window {
         }
         
         contentItem: Item {
+            Rectangle {
+                anchors.fill: parent
+                radius: 18
+                color: iconBtn.active ? "#FEE2E2" : "transparent"
+            }
+
             Image {
                 anchors.centerIn: parent
                 source: iconBtn.iconSource

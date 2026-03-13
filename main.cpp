@@ -14,6 +14,7 @@
 #include "ui/backend/AuthBackend.h"
 #include "ui/backend/ThemeManager.h"
 #include "ui/backend/AppearanceManager.h"
+#include "ui/backend/LocalRecordingManager.h"
 #include "utils/logger.h"
 #include "livekit/livekit.h"
 
@@ -135,6 +136,10 @@ int main(int argc, char* argv[])
     // Appearance manager singleton
     auto* appearanceManager = new AppearanceManager(&app);
     qmlRegisterSingletonInstance("Links.Backend", 1, 0, "AppearanceManager", appearanceManager);
+
+    // Local recording manager singleton
+    auto* localRecordingManager = &LocalRecordingManager::instance();
+    qmlRegisterSingletonInstance("Links.Backend", 1, 0, "LocalRecordingManager", localRecordingManager);
 
     QQmlApplicationEngine engine;
     g_engine = &engine;

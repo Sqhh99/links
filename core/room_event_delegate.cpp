@@ -1,4 +1,5 @@
 #include "room_event_delegate.h"
+#include "conference/participant_metadata_parser.h"
 #include "../utils/logger.h"
 #include "livekit/participant.h"
 #include "livekit/remote_participant.h"
@@ -20,10 +21,11 @@ void RoomEventDelegate::onParticipantConnected(livekit::Room& room,
     QString identity = QString::fromStdString(event.participant->identity());
     QString sid = QString::fromStdString(event.participant->sid());
     QString name = QString::fromStdString(event.participant->name());
+    const bool isHost = links::conference::parseIsHostFromParticipantMetadata(event.participant->metadata());
     
     Logger::instance().info(QString("RoomEventDelegate: Participant connected: %1").arg(name));
     
-    emit participantConnectedQueued(identity, sid, name);
+    emit participantConnectedQueued(identity, sid, name, isHost);
 }
 
 void RoomEventDelegate::onParticipantDisconnected(livekit::Room& room, 

@@ -19,6 +19,7 @@ VCPKG_DIR="$PROJECT_ROOT/third_party/vcpkg"
 BUILD_DIR="$PROJECT_ROOT/build"
 SDK_ARCH="${LINKS_SDK_ARCH:-x64}"
 VCPKG_TRIPLET="${VCPKG_TARGET_TRIPLET:-}"
+RECORDING_FLAG="${LINKS_ENABLE_LOCAL_RECORDING:-}"
 
 if [ -z "$VCPKG_TRIPLET" ]; then
     case "$(uname -s)" in
@@ -127,7 +128,11 @@ build_release() {
     
     echo ""
     log_info "Configuring Release build..."
-    cmake --preset release -DLINKS_SDK_ARCH="$SDK_ARCH" -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET"
+    CMAKE_ARGS=(--preset release -DLINKS_SDK_ARCH="$SDK_ARCH" -DVCPKG_TARGET_TRIPLET="$VCPKG_TRIPLET")
+    if [ -n "$RECORDING_FLAG" ]; then
+        CMAKE_ARGS+=(-DLINKS_ENABLE_LOCAL_RECORDING="$RECORDING_FLAG")
+    fi
+    cmake "${CMAKE_ARGS[@]}"
     if [ $? -ne 0 ]; then
         log_error "CMake configuration failed"
         exit 1

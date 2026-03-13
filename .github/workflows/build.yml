@@ -19,14 +19,17 @@ jobs:
             qt_version: "6.8.3"
             qt_arch: win64_msvc2022_64
             sdk_arch: x64
+            recording_enabled: "ON"
           - os: ubuntu-latest
             qt_version: "6.8.3"
             qt_arch: linux_gcc_64
             sdk_arch: x64
+            recording_enabled: "OFF"
           - os: macos-latest
             qt_version: "6.8.3"
             qt_arch: clang_64
             sdk_arch: arm64
+            recording_enabled: "OFF"
 
     runs-on: ${{ matrix.os }}
 
@@ -104,6 +107,7 @@ jobs:
       shell: cmd
       env:
         LINKS_SDK_ARCH: ${{ matrix.sdk_arch }}
+        LINKS_ENABLE_LOCAL_RECORDING: ${{ matrix.recording_enabled }}
       run: build.cmd test
 
     - name: Build and Test (Unix)
@@ -111,6 +115,7 @@ jobs:
       shell: bash
       env:
         LINKS_SDK_ARCH: ${{ matrix.sdk_arch }}
+        LINKS_ENABLE_LOCAL_RECORDING: ${{ matrix.recording_enabled }}
       run: |
         chmod +x ./build.sh
         ./build.sh test

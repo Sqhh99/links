@@ -15,7 +15,19 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
 
     const QString cameraId = settings.getSelectedCameraId();
     if (!cameraId.isEmpty()) {
-        cameraCapturer_->setCameraById(cameraId.toUtf8());
+        if (!cameraCapturer_->setCameraById(cameraId.toUtf8())) {
+            const QList<QCameraDevice> cameras = CameraCapturer::availableCameras();
+            QString fallbackId;
+            if (!cameras.isEmpty()) {
+                cameraCapturer_->setCamera(cameras.first());
+                fallbackId = QString::fromUtf8(cameras.first().id());
+            }
+
+            settings.setSelectedCameraId(fallbackId);
+            settings.sync();
+            Logger::instance().info(QString("Recovered stale camera id, fallback camera id: %1")
+                                        .arg(fallbackId.isEmpty() ? QStringLiteral("<none>") : fallbackId));
+        }
     }
 
     const QString micId = settings.getSelectedMicrophoneId();
@@ -326,7 +338,10 @@ void DeviceController::switchCamera(const QString& deviceId)
             }
         }
 
-        cameraCapturer_->setCameraById(deviceId.toUtf8());
+        const bool switched = cameraCapturer_->setCameraById(deviceId.toUtf8());
+        if (!switched) {
+            Logger::instance().warning(QString("Requested camera device not found: %1").arg(deviceId));
+        }
 
         if (wasEnabled) {
             if (cameraCapturer_->start()) {
@@ -349,7 +364,9 @@ void DeviceController::switchCamera(const QString& deviceId)
             }
         }
 
-        Settings::instance().setSelectedCameraId(deviceId);
+        if (switched) {
+            Settings::instance().setSelectedCameraId(deviceId);
+        }
         Settings::instance().sync();
 
     } catch (const std::exception& e) {

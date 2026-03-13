@@ -33,7 +33,7 @@ public:
     
     // Set camera device (must be called before start())
     void setCamera(const QCameraDevice& device);
-    void setCameraById(const QByteArray& deviceId);
+    bool setCameraById(const QByteArray& deviceId);
     
     // Frame rate control
     void setTargetFps(int fps) { targetFps_ = fps; minFrameIntervalMs_ = 1000 / fps; }
