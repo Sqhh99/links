@@ -16,10 +16,26 @@ Button {
     checked: active
 
     background: Rectangle {
-        color: root.checked ? Theme.activeBackground : "transparent"
+        color: "transparent"
         radius: 10
 
-        Behavior on color { ColorAnimation { duration: 150 } }
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: Theme.activeBackground
+            opacity: root.checked ? 1 : 0
+
+            Behavior on opacity { NumberAnimation { duration: 120 } }
+        }
+
+        Rectangle {
+            anchors.fill: parent
+            radius: parent.radius
+            color: Theme.hoverBackground
+            opacity: root.checked ? 0 : (root.hovered ? 1 : 0)
+
+            Behavior on opacity { NumberAnimation { duration: 100 } }
+        }
     }
 
     contentItem: RowLayout {
@@ -31,17 +47,33 @@ Button {
             width: 22
             height: 22
             radius: 6
-            color: root.active ? Theme.accentLight : Theme.hoverBackground
+            color: "transparent"
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Theme.accentLight
+                opacity: root.active ? 1 : 0
+
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Theme.hoverBackground
+                opacity: (!root.active && root.hovered) ? 1 : 0
+
+                Behavior on opacity { NumberAnimation { duration: 100 } }
+            }
 
             Image {
                 source: root.iconSource
                 sourceSize.width: 14
                 sourceSize.height: 14
                 anchors.centerIn: parent
-                opacity: root.active ? 0.9 : 0.6
+                opacity: root.active ? 0.9 : (root.hovered ? 0.75 : 0.6)
             }
-
-            Behavior on color { ColorAnimation { duration: 150 } }
         }
 
         Text {

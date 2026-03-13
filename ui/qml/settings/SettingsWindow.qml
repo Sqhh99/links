@@ -292,12 +292,28 @@ Window {
         implicitHeight: 40
         checkable: true
         checked: active
-        
+
         background: Rectangle {
-            color: navBtn.checked ? Theme.activeBackground : (navBtn.hovered ? Theme.hoverBackground : "transparent")
+            color: "transparent"
             radius: 8
 
-            Behavior on color { ColorAnimation { duration: 150 } }
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Theme.activeBackground
+                opacity: navBtn.checked ? 1 : 0
+
+                Behavior on opacity { NumberAnimation { duration: 120 } }
+            }
+
+            Rectangle {
+                anchors.fill: parent
+                radius: parent.radius
+                color: Theme.hoverBackground
+                opacity: navBtn.checked ? 0 : (navBtn.hovered ? 1 : 0)
+
+                Behavior on opacity { NumberAnimation { duration: 100 } }
+            }
         }
         
         contentItem: RowLayout {
