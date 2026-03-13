@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import QtQuick.Dialogs
 import QtQuick.Layouts
 import Links as Comp
 import Links
@@ -362,7 +363,164 @@ ScrollView {
                 }
             }
         }
-        
+
+        Rectangle {
+            Layout.fillWidth: true
+            height: 1
+            color: Theme.separatorColor
+        }
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 12
+
+            Text {
+                text: "语音转文字预览"
+                color: Theme.textSecondary
+                font.pixelSize: 13
+                font.weight: Font.Medium
+            }
+
+            Text {
+                text: backend && backend.speechPreviewAvailable
+                    ? "使用本地麦克风做实时转写预览，仅显示最终句段。"
+                    : "当前平台未启用本地语音转文字预览。"
+                color: Theme.textHint
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                enabled: backend ? backend.speechPreviewAvailable : false
+
+                Text {
+                    text: "模型文件夹"
+                    color: Theme.textTertiary
+                    font.pixelSize: 12
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Comp.TextField {
+                        Layout.fillWidth: true
+                        readOnly: true
+                        text: backend ? backend.speechModelDirectory : ""
+                        placeholderText: "请选择包含 Whisper 模型的文件夹"
+                    }
+
+                    Comp.SecondaryButton {
+                        text: "选择文件夹"
+                        implicitWidth: 110
+                        onClicked: folderDialog.open()
+                    }
+
+                    Comp.SecondaryButton {
+                        text: "刷新模型"
+                        implicitWidth: 96
+                        onClicked: if (backend) backend.refreshSpeechModels()
+                    }
+                }
+
+                Text {
+                    text: "模型"
+                    color: Theme.textTertiary
+                    font.pixelSize: 12
+                }
+
+                Comp.ComboBox {
+                    Layout.fillWidth: true
+                    model: backend ? backend.speechModels : []
+                    textRole: "name"
+                    valueRole: "path"
+                    enabled: backend ? backend.speechModels.length > 0 : false
+
+                    currentIndex: {
+                        if (!backend) return -1
+                        return backend.findValueIndex(backend.speechModels, "path", backend.selectedSpeechModelPath)
+                    }
+
+                    onActivated: {
+                        if (backend && currentIndex >= 0) {
+                            backend.selectedSpeechModelPath = currentValue
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Comp.PrimaryButton {
+                        text: backend && backend.speechPreviewRunning ? "停止预览" : "开始预览"
+                        implicitWidth: 112
+                        enabled: backend ? backend.speechPreviewAvailable && backend.selectedSpeechModelPath.length > 0 : false
+                        onClicked: {
+                            if (!backend) return
+                            if (backend.speechPreviewRunning) {
+                                backend.stopSpeechPreview()
+                            } else {
+                                backend.startSpeechPreview()
+                            }
+                        }
+                    }
+
+                    Comp.SecondaryButton {
+                        text: "清空文本"
+                        implicitWidth: 96
+                        enabled: backend ? backend.speechPreviewText.length > 0 : false
+                        onClicked: if (backend) backend.clearSpeechPreviewText()
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: backend ? backend.speechPreviewStatus : ""
+                        color: Theme.textHint
+                        font.pixelSize: 11
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 160
+                    radius: 12
+                    color: Theme.inputBackground
+                    border.color: Theme.inputBorder
+
+                    ScrollView {
+                        anchors.fill: parent
+                        anchors.margins: 12
+                        clip: true
+
+                        TextArea {
+                            readOnly: true
+                            wrapMode: TextEdit.Wrap
+                            text: backend ? backend.speechPreviewText : ""
+                            color: Theme.inputText
+                            placeholderText: "预览文本会显示在这里"
+                            background: null
+                            selectByMouse: true
+                        }
+                    }
+                }
+            }
+        }
+
         Item { Layout.fillHeight: true }
+    }
+
+    FolderDialog {
+        id: folderDialog
+        title: "选择 Whisper 模型文件夹"
+        onAccepted: {
+            if (backend) {
+                backend.speechModelDirectory = backend.localPathFromUrl(selectedFolder)
+            }
+        }
     }
 }

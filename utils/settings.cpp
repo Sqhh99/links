@@ -246,6 +246,36 @@ void Settings::setAutoHideConferenceChromeEnabled(bool enabled)
     settings_.sync();
 }
 
+QString Settings::getSpeechModelDirectory() const
+{
+    return settings_.value("speech/model_directory", "").toString();
+}
+
+void Settings::setSpeechModelDirectory(const QString& directory)
+{
+    settings_.setValue("speech/model_directory", directory);
+}
+
+QString Settings::getSelectedSpeechModelPath() const
+{
+    return settings_.value("speech/selected_model_path", "").toString();
+}
+
+void Settings::setSelectedSpeechModelPath(const QString& modelPath)
+{
+    settings_.setValue("speech/selected_model_path", modelPath);
+}
+
+QString Settings::getSpeechBackend() const
+{
+    return settings_.value("speech/backend", "cuda").toString();
+}
+
+void Settings::setSpeechBackend(const QString& backend)
+{
+    settings_.setValue("speech/backend", backend);
+}
+
 void Settings::sync()
 {
     settings_.sync();

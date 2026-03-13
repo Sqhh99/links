@@ -4,7 +4,16 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 #include <QVariantList>
+
+#include <memory>
+
+namespace links::speech {
+class RealtimeTranscriptionSession;
+}
+
+class QtAudioPreviewSource;
 
 class SettingsBackend : public QObject
 {
@@ -30,10 +39,18 @@ class SettingsBackend : public QObject
     Q_PROPERTY(double fixedDigitalGainDb READ fixedDigitalGainDb WRITE setFixedDigitalGainDb NOTIFY fixedDigitalGainDbChanged)
     Q_PROPERTY(double adaptiveDigitalMaxGainDb READ adaptiveDigitalMaxGainDb WRITE setAdaptiveDigitalMaxGainDb NOTIFY adaptiveDigitalMaxGainDbChanged)
     Q_PROPERTY(bool echoEnhancedFilter READ echoEnhancedFilter WRITE setEchoEnhancedFilter NOTIFY echoEnhancedFilterChanged)
+    Q_PROPERTY(QString speechModelDirectory READ speechModelDirectory WRITE setSpeechModelDirectory NOTIFY speechModelDirectoryChanged)
+    Q_PROPERTY(QUrl speechModelDirectoryUrl READ speechModelDirectoryUrl NOTIFY speechModelDirectoryChanged)
+    Q_PROPERTY(QVariantList speechModels READ speechModels NOTIFY speechModelsChanged)
+    Q_PROPERTY(QString selectedSpeechModelPath READ selectedSpeechModelPath WRITE setSelectedSpeechModelPath NOTIFY selectedSpeechModelPathChanged)
+    Q_PROPERTY(QString speechPreviewText READ speechPreviewText NOTIFY speechPreviewTextChanged)
+    Q_PROPERTY(QString speechPreviewStatus READ speechPreviewStatus NOTIFY speechPreviewStatusChanged)
+    Q_PROPERTY(bool speechPreviewRunning READ speechPreviewRunning NOTIFY speechPreviewRunningChanged)
+    Q_PROPERTY(bool speechPreviewAvailable READ speechPreviewAvailable CONSTANT)
 
 public:
     explicit SettingsBackend(QObject* parent = nullptr);
-    ~SettingsBackend() override = default;
+    ~SettingsBackend() override;
 
     QVariantList microphones() const { return microphones_; }
     QVariantList speakers() const { return speakers_; }
@@ -86,11 +103,28 @@ public:
     bool echoEnhancedFilter() const { return echoEnhancedFilter_; }
     void setEchoEnhancedFilter(bool enabled);
 
+    QString speechModelDirectory() const { return speechModelDirectory_; }
+    void setSpeechModelDirectory(const QString& directory);
+    QUrl speechModelDirectoryUrl() const;
+    QVariantList speechModels() const { return speechModels_; }
+    QString selectedSpeechModelPath() const { return selectedSpeechModelPath_; }
+    void setSelectedSpeechModelPath(const QString& modelPath);
+    QString speechPreviewText() const { return speechPreviewText_; }
+    QString speechPreviewStatus() const { return speechPreviewStatus_; }
+    bool speechPreviewRunning() const { return speechPreviewRunning_; }
+    bool speechPreviewAvailable() const;
+
     Q_INVOKABLE void refreshDevices();
+    Q_INVOKABLE void refreshSpeechModels();
+    Q_INVOKABLE void startSpeechPreview();
+    Q_INVOKABLE void stopSpeechPreview();
+    Q_INVOKABLE void clearSpeechPreviewText();
     Q_INVOKABLE void save();
     Q_INVOKABLE void cancel();
     Q_INVOKABLE void loadSettings();
     Q_INVOKABLE int findDeviceIndex(const QVariantList& devices, const QString& id) const;
+    Q_INVOKABLE int findValueIndex(const QVariantList& items, const QString& key, const QString& value) const;
+    Q_INVOKABLE QString localPathFromUrl(const QUrl& url) const;
 
 signals:
     void devicesChanged();
@@ -109,6 +143,12 @@ signals:
     void fixedDigitalGainDbChanged();
     void adaptiveDigitalMaxGainDbChanged();
     void echoEnhancedFilterChanged();
+    void speechModelDirectoryChanged();
+    void speechModelsChanged();
+    void selectedSpeechModelPathChanged();
+    void speechPreviewTextChanged();
+    void speechPreviewStatusChanged();
+    void speechPreviewRunningChanged();
     void accepted();
     void rejected();
 
@@ -116,6 +156,9 @@ private:
     void populateDevices();
     void saveToSettings();
     void loadFromSettings();
+    void restartSpeechPreviewIfRunning();
+    void updateSpeechPreviewStatus(const QString& status);
+    void applySpeechAudioProcessingOptions();
 
     QVariantList microphones_;
     QVariantList speakers_;
@@ -139,6 +182,14 @@ private:
     double fixedDigitalGainDb_{0.0};
     double adaptiveDigitalMaxGainDb_{50.0};
     bool echoEnhancedFilter_{true};
+    QString speechModelDirectory_;
+    QVariantList speechModels_;
+    QString selectedSpeechModelPath_;
+    QString speechPreviewText_;
+    QString speechPreviewStatus_;
+    bool speechPreviewRunning_{false};
+    std::unique_ptr<links::speech::RealtimeTranscriptionSession> speechSession_;
+    std::unique_ptr<QtAudioPreviewSource> speechPreviewSource_;
 };
 
 #endif // SETTINGSBACKEND_H

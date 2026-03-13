@@ -90,7 +90,15 @@ public:
     void setTheme(const QString& theme);
     bool isAutoHideConferenceChromeEnabled() const;
     void setAutoHideConferenceChromeEnabled(bool enabled);
-    
+
+    // Speech-to-text preview
+    QString getSpeechModelDirectory() const;
+    void setSpeechModelDirectory(const QString& directory);
+    QString getSelectedSpeechModelPath() const;
+    void setSelectedSpeechModelPath(const QString& modelPath);
+    QString getSpeechBackend() const;
+    void setSpeechBackend(const QString& backend);
+
     // Force sync to disk
     void sync();
     
