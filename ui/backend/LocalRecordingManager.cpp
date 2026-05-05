@@ -52,6 +52,30 @@ bool shouldSaveDiagnosticFrames()
     return value != "0" && value != "false" && value != "off";
 }
 
+QString recordingBaseDirectory()
+{
+    QString baseDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
+    if (baseDir.isEmpty()) {
+        baseDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    }
+
+    if (baseDir.isEmpty()) {
+        baseDir = QDir::homePath();
+    }
+
+    return baseDir;
+}
+
+QString currentRecordingDirectory()
+{
+    return QDir(recordingBaseDirectory()).filePath(QStringLiteral("Links/Recordings"));
+}
+
+QString legacyRecordingDirectory()
+{
+    return QDir(recordingBaseDirectory()).filePath(QStringLiteral("SQLink/Recordings"));
+}
+
 #ifndef LINKS_ENABLE_LOCAL_RECORDING
 #define LINKS_ENABLE_LOCAL_RECORDING 1
 #endif
@@ -78,16 +102,7 @@ bool LocalRecordingManager::isAvailable() const
 LocalRecordingManager::LocalRecordingManager(QObject* parent)
     : QObject(parent)
 {
-    QString baseDir = QStandardPaths::writableLocation(QStandardPaths::MoviesLocation);
-    if (baseDir.isEmpty()) {
-        baseDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
-    }
-
-    if (baseDir.isEmpty()) {
-        baseDir = QDir::homePath();
-    }
-
-    outputDirectory_ = QDir(baseDir).filePath(QStringLiteral("SQLink/Recordings"));
+    outputDirectory_ = currentRecordingDirectory();
 
     durationTimer_.setInterval(1000);
     durationTimer_.setSingleShot(false);
@@ -712,18 +727,37 @@ QVariantList LocalRecordingManager::scanRecentRecordings() const
 {
     QVariantList records;
 
-    QDir dir(outputDirectory_);
-    if (!dir.exists()) {
+    QStringList scanDirectories;
+    scanDirectories << outputDirectory_;
+
+    const QString legacyDirectory = legacyRecordingDirectory();
+    if (QDir::cleanPath(legacyDirectory) != QDir::cleanPath(outputDirectory_)) {
+        scanDirectories << legacyDirectory;
+    }
+
+    QFileInfoList files;
+    for (const QString& directory : scanDirectories) {
+        QDir dir(directory);
+        if (!dir.exists()) {
+            continue;
+        }
+
+        files.append(dir.entryInfoList(
+            QStringList() << QStringLiteral("*.mp4")
+                          << QStringLiteral("*.mkv")
+                          << QStringLiteral("*.mov")
+                          << QStringLiteral("*.webm"),
+            QDir::Files | QDir::Readable,
+            QDir::Time));
+    }
+
+    if (files.isEmpty()) {
         return records;
     }
 
-    const QFileInfoList files = dir.entryInfoList(
-        QStringList() << QStringLiteral("*.mp4")
-                      << QStringLiteral("*.mkv")
-                      << QStringLiteral("*.mov")
-                      << QStringLiteral("*.webm"),
-        QDir::Files | QDir::Readable,
-        QDir::Time);
+    std::sort(files.begin(), files.end(), [](const QFileInfo& lhs, const QFileInfo& rhs) {
+        return lhs.lastModified() > rhs.lastModified();
+    });
 
     for (const QFileInfo& file : files) {
 
