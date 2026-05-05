@@ -63,12 +63,7 @@ QString getConfigFilePath()
     // prevents Qt from appending the organization/app name automatically.
     const QString configFilePath = linksConfigFilePath();
     migrateLegacyConfigIfNeeded(configFilePath);
-
-    QString configDir = QFileInfo(configFilePath).absolutePath();
-    QDir dir(configDir);
-    if (!dir.exists()) {
-        dir.mkpath(".");
-    }
+    ensureConfigDirExists(configFilePath);
     return configFilePath;
 }
 
