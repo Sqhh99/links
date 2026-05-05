@@ -23,7 +23,10 @@ public:
     std::vector<std::shared_ptr<livekit::RemoteParticipant>> remoteParticipants() const;
 
 private:
+    void ensureRoom();
+
     std::unique_ptr<livekit::Room> room_;
+    livekit::RoomDelegate* delegate_{nullptr};
 };
 
 #endif // CORE_CONFERENCE_ROOM_CONTROLLER_H

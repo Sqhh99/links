@@ -23,6 +23,7 @@ public:
     void stopCapturers();
     void unpublishLocalTracks();
     void resetLocalState();
+    void handleLocalTrackPublished(livekit::TrackSource source, const QString& publicationSid);
 
     void toggleMicrophone();
     void toggleCamera();
@@ -68,6 +69,9 @@ signals:
 
 private:
     void connectScreenSignals();
+    void finalizeMicrophoneDisabled();
+    void finalizeCameraDisabled();
+    void finalizeScreenShareDisabled();
     livekit::Room* room() const { return room_; }
 
     livekit::Room* room_{nullptr};
@@ -77,12 +81,16 @@ private:
     std::shared_ptr<livekit::Track> localVideoTrack_;
     std::shared_ptr<livekit::Track> localAudioTrack_;
     std::shared_ptr<livekit::Track> localScreenTrack_;
+    std::string audioTrackSid_;
     std::string screenTrackSid_;
     std::string cameraTrackSid_;
 
     bool cameraEnabled_{false};
     bool microphoneEnabled_{false};
     bool screenShareEnabled_{false};
+    bool pendingDisableCamera_{false};
+    bool pendingDisableMicrophone_{false};
+    bool pendingDisableScreenShare_{false};
 
     QElapsedTimer screenShareDebounceTimer_;
     static constexpr int kScreenShareDebounceMs = 500;

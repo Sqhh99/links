@@ -191,7 +191,17 @@ void RoomEventDelegate::onLocalTrackPublished(livekit::Room& room,
                                                const livekit::LocalTrackPublishedEvent& event)
 {
     Q_UNUSED(room);
-    Q_UNUSED(event);
-    // Log for debugging, actual handling is done synchronously in publish calls
-    Logger::instance().info("RoomEventDelegate: Local track published");
+    if (!event.publication) {
+        return;
+    }
+
+    const QString publicationSid = QString::fromStdString(event.publication->sid());
+    const int kind = static_cast<int>(event.publication->kind());
+    const int source = static_cast<int>(event.publication->source());
+
+    Logger::instance().info(QString("RoomEventDelegate: Local track published: sid=%1 source=%2")
+        .arg(publicationSid)
+        .arg(source));
+
+    emit localTrackPublishedQueued(publicationSid, kind, source);
 }

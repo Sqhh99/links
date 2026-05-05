@@ -62,8 +62,10 @@ endfunction()
 # =============================================================================
 # Download and Extract SDK if not present
 # =============================================================================
-if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
-    message(STATUS "LiveKit SDK not found at ${LIVEKIT_SDK_ROOT}")
+resolve_livekit_sdk_root(LIVEKIT_SDK_RESOLVED_ROOT)
+
+if(LIVEKIT_SDK_RESOLVED_ROOT STREQUAL "")
+    message(STATUS "LiveKit SDK not found under ${CMAKE_SOURCE_DIR}/third_party")
     message(STATUS "Downloading LiveKit SDK v${LIVEKIT_SDK_VERSION} for ${LIVEKIT_PLATFORM}-${LIVEKIT_ARCH}...")
     
     set(LIVEKIT_DOWNLOAD_PATH "${CMAKE_SOURCE_DIR}/third_party/${LIVEKIT_SDK_ARCHIVE}")
@@ -103,11 +105,7 @@ if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
 
     message(STATUS "LiveKit SDK v${LIVEKIT_SDK_VERSION} installed successfully")
 else()
-    message(STATUS "Found LiveKit SDK at ${LIVEKIT_SDK_ROOT}")
-endif()
-
-if(NOT DEFINED LIVEKIT_SDK_RESOLVED_ROOT OR LIVEKIT_SDK_RESOLVED_ROOT STREQUAL "")
-    resolve_livekit_sdk_root(LIVEKIT_SDK_RESOLVED_ROOT)
+    message(STATUS "Found LiveKit SDK at ${LIVEKIT_SDK_RESOLVED_ROOT}")
 endif()
 
 if(NOT EXISTS "${LIVEKIT_SDK_RESOLVED_ROOT}/include" OR

@@ -84,6 +84,8 @@ ConferenceManager::ConferenceManager(QObject* parent)
                      this, &ConferenceManager::onRoomDisconnectedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::dataReceivedQueued,
                      this, &ConferenceManager::onDataReceivedQueued);
+    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::localTrackPublishedQueued,
+                     this, &ConferenceManager::onLocalTrackPublishedQueued);
 
     QObject::connect(deviceController_.get(), &DeviceController::localMicrophoneChanged,
                      this, &ConferenceManager::localMicrophoneChanged);
@@ -125,6 +127,7 @@ void ConferenceManager::connect(const QString& url, const QString& token)
 {
     Logger::instance().info("Connecting to room: " + url);
     lastDisconnectReason_ = livekit::DisconnectReason::Unknown;
+    deviceController_->setRoom(roomController_->room());
 
     try {
         livekit::RoomOptions options;
@@ -146,6 +149,17 @@ void ConferenceManager::connect(const QString& url, const QString& token)
         Logger::instance().error(error);
         emit connectionError(error);
     }
+}
+
+void ConferenceManager::onLocalTrackPublishedQueued(QString publicationSid, int kind, int source)
+{
+    Q_UNUSED(kind);
+    if (!deviceController_) {
+        return;
+    }
+
+    deviceController_->handleLocalTrackPublished(static_cast<livekit::TrackSource>(source),
+                                                publicationSid);
 }
 
 void ConferenceManager::disconnect()

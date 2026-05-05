@@ -216,9 +216,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/vcpkg_installed
-          key: vcpkg-package-macOS-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-package-macOS-${{ env.LINKS_SDK_ARCH }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-package-macOS-
+            vcpkg-package-macOS-${{ env.LINKS_SDK_ARCH }}-
 
       - name: Build release bundle
         shell: bash
@@ -418,6 +418,8 @@ jobs:
 
           export linuxdeploy_version="1-alpha-20250213-2"
           export linuxdeploy_plugin_qt_version="1-alpha-20250213-1"
+          export linuxdeploy_sha256="4648f278ab3ef31f819e67c30d50f462640e5365a77637d7e6f2ad9fd0b4522a"
+          export linuxdeploy_plugin_qt_sha256="15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724"
 
           python3 <<'PY'
           import hashlib
@@ -431,11 +433,13 @@ jobs:
                   "linuxdeploy/linuxdeploy",
                   os.environ["linuxdeploy_version"],
                   "linuxdeploy-x86_64.AppImage",
+                  os.environ["linuxdeploy_sha256"],
               ),
               (
                   "linuxdeploy/linuxdeploy-plugin-qt",
                   os.environ["linuxdeploy_plugin_qt_version"],
                   "linuxdeploy-plugin-qt-x86_64.AppImage",
+                  os.environ["linuxdeploy_plugin_qt_sha256"],
               ),
           ]
 
@@ -449,7 +453,7 @@ jobs:
                   headers["Authorization"] = f"Bearer {token}"
               return urllib.request.Request(url, headers=headers)
 
-          for repo, tag, asset_name in ASSETS:
+          for repo, tag, asset_name, expected_sha256 in ASSETS:
               api_url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
               with urllib.request.urlopen(request(api_url)) as response:
                   release = json.load(response)
@@ -459,24 +463,16 @@ jobs:
                   print(f"Release asset not found: {repo}@{tag}/{asset_name}", file=sys.stderr)
                   sys.exit(1)
 
-              digest = asset.get("digest") or ""
               url = asset["browser_download_url"]
               with urllib.request.urlopen(request(url)) as response, open(asset_name, "wb") as output:
                   data = response.read()
                   output.write(data)
 
-              if digest.startswith("sha256:"):
-                  actual = hashlib.sha256(data).hexdigest()
-                  expected = digest.removeprefix("sha256:")
-                  if actual.lower() != expected.lower():
-                      print(f"SHA256 mismatch for {asset_name}: expected {expected}, got {actual}", file=sys.stderr)
-                      sys.exit(1)
-                  print(f"Downloaded and verified {asset_name}: sha256:{actual}")
-              else:
-                  print(
-                      f"Warning: release asset has no sha256 digest metadata, skipping verification: {repo}@{tag}/{asset_name}",
-                      file=sys.stderr,
-                  )
+              actual = hashlib.sha256(data).hexdigest()
+              if actual.lower() != expected_sha256.lower():
+                  print(f"SHA256 mismatch for {asset_name}: expected {expected_sha256}, got {actual}", file=sys.stderr)
+                  sys.exit(1)
+              print(f"Downloaded and verified {asset_name}: sha256:{actual}")
           PY
 
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage

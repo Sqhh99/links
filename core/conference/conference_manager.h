@@ -134,6 +134,7 @@ private:
     void onConnectionStateChangedQueued(int state);
     void onRoomDisconnectedQueued(int reason);
     void onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
+    void onLocalTrackPublishedQueued(QString publicationSid, int kind, int source);
     
     void updateParticipantInfo(const QString& identity);
     void reconcileParticipantsInternal(const char* source);
