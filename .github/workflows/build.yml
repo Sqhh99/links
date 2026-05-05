@@ -25,10 +25,10 @@ jobs:
             qt_arch: linux_gcc_64
             sdk_arch: x64
             recording_enabled: "OFF"
-          - os: macos-latest
+          - os: macos-15-intel
             qt_version: "6.8.3"
             qt_arch: clang_64
-            sdk_arch: arm64
+            sdk_arch: x64
             recording_enabled: "OFF"
 
     runs-on: ${{ matrix.os }}
