@@ -1,6 +1,7 @@
 #include "room_event_delegate.h"
 #include "conference/participant_metadata_parser.h"
 #include "../utils/logger.h"
+#include "livekit/local_track_publication.h"
 #include "livekit/participant.h"
 #include "livekit/remote_participant.h"
 #include "livekit/remote_track_publication.h"
