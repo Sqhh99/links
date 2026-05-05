@@ -79,10 +79,6 @@ bool unpublishLocalTrack(livekit::LocalParticipant* localParticipant,
     if (publicationSid.empty()) {
         Logger::instance().warning(QString("Skipping unpublish for %1: publication SID is unavailable")
                                    .arg(label));
-        track->setPublication(nullptr);
-        if (cachedPublicationSid) {
-            cachedPublicationSid->clear();
-        }
         return false;
     }
 

@@ -42,6 +42,23 @@ set(LIVEKIT_SDK_ROOT "${CMAKE_SOURCE_DIR}/third_party/${LIVEKIT_SDK_NAME}")
 set(LIVEKIT_SDK_ARCHIVE "${LIVEKIT_SDK_NAME}.${LIVEKIT_ARCHIVE_EXT}")
 set(LIVEKIT_SDK_URL "https://github.com/livekit/client-sdk-cpp/releases/download/v${LIVEKIT_SDK_VERSION}/${LIVEKIT_SDK_ARCHIVE}")
 
+function(resolve_livekit_sdk_root out_var)
+    set(candidates
+        "${LIVEKIT_SDK_ROOT}"
+        "${LIVEKIT_SDK_ROOT}/${LIVEKIT_SDK_NAME}"
+        "${CMAKE_SOURCE_DIR}/third_party"
+    )
+
+    foreach(candidate IN LISTS candidates)
+        if(EXISTS "${candidate}/include" AND EXISTS "${candidate}/lib")
+            set(${out_var} "${candidate}" PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+
+    set(${out_var} "" PARENT_SCOPE)
+endfunction()
+
 # =============================================================================
 # Download and Extract SDK if not present
 # =============================================================================
@@ -73,26 +90,24 @@ if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
         INPUT "${LIVEKIT_DOWNLOAD_PATH}"
         DESTINATION "${CMAKE_SOURCE_DIR}/third_party"
     )
-    
-    # The archive extracts to a subdirectory with the same name
-    # Check if extraction created the expected directory
-    if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
-        message(FATAL_ERROR "Failed to extract LiveKit SDK to ${LIVEKIT_SDK_ROOT}")
-    endif()
-    
+
     # Clean up the archive
     file(REMOVE "${LIVEKIT_DOWNLOAD_PATH}")
-    
+
+    resolve_livekit_sdk_root(LIVEKIT_SDK_RESOLVED_ROOT)
+    if(LIVEKIT_SDK_RESOLVED_ROOT STREQUAL "")
+        message(FATAL_ERROR
+            "Failed to extract LiveKit SDK from ${LIVEKIT_SDK_ARCHIVE}. "
+            "Could not find a directory containing include/ and lib/ under ${CMAKE_SOURCE_DIR}/third_party.")
+    endif()
+
     message(STATUS "LiveKit SDK v${LIVEKIT_SDK_VERSION} installed successfully")
 else()
     message(STATUS "Found LiveKit SDK at ${LIVEKIT_SDK_ROOT}")
 endif()
 
-# Some manually extracted SDK archives contain an extra top-level directory.
-set(LIVEKIT_SDK_RESOLVED_ROOT "${LIVEKIT_SDK_ROOT}")
-if(NOT EXISTS "${LIVEKIT_SDK_RESOLVED_ROOT}/include" AND
-   EXISTS "${LIVEKIT_SDK_ROOT}/${LIVEKIT_SDK_NAME}/include")
-    set(LIVEKIT_SDK_RESOLVED_ROOT "${LIVEKIT_SDK_ROOT}/${LIVEKIT_SDK_NAME}")
+if(NOT DEFINED LIVEKIT_SDK_RESOLVED_ROOT OR LIVEKIT_SDK_RESOLVED_ROOT STREQUAL "")
+    resolve_livekit_sdk_root(LIVEKIT_SDK_RESOLVED_ROOT)
 endif()
 
 if(NOT EXISTS "${LIVEKIT_SDK_RESOLVED_ROOT}/include" OR
