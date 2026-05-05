@@ -84,6 +84,8 @@ ConferenceManager::ConferenceManager(QObject* parent)
                      this, &ConferenceManager::onRoomDisconnectedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::dataReceivedQueued,
                      this, &ConferenceManager::onDataReceivedQueued);
+    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::localTrackPublishedQueued,
+                     this, &ConferenceManager::onLocalTrackPublishedQueued);
 
     QObject::connect(deviceController_.get(), &DeviceController::localMicrophoneChanged,
                      this, &ConferenceManager::localMicrophoneChanged);
@@ -125,11 +127,13 @@ void ConferenceManager::connect(const QString& url, const QString& token)
 {
     Logger::instance().info("Connecting to room: " + url);
     lastDisconnectReason_ = livekit::DisconnectReason::Unknown;
+    deviceController_->setRoom(roomController_->room());
 
     try {
         livekit::RoomOptions options;
         options.auto_subscribe = true;
         options.dynacast = false;
+        options.single_peer_connection = true;
 
         bool success = roomController_->connectToRoom(url, token, options);
 
@@ -147,32 +151,34 @@ void ConferenceManager::connect(const QString& url, const QString& token)
     }
 }
 
+void ConferenceManager::onLocalTrackPublishedQueued(QString publicationSid, int kind, int source)
+{
+    Q_UNUSED(kind);
+    if (!deviceController_) {
+        return;
+    }
+
+    deviceController_->handleLocalTrackPublished(static_cast<livekit::TrackSource>(source),
+                                                publicationSid);
+}
+
 void ConferenceManager::disconnect()
 {
+    if (disconnecting_) {
+        Logger::instance().warning("Disconnect requested while cleanup is already in progress");
+        return;
+    }
+
+    disconnecting_ = true;
     Logger::instance().info("Disconnecting from room");
     lastDisconnectReason_ = livekit::DisconnectReason::ClientInitiated;
+    const bool wasConnected = connected_;
+    connected_ = false;
 
-    try {
-        deviceController_->stopCapturers();
-        // Clear streams before room reset so FFI listeners are removed safely.
-        mediaPipeline_->stopAll();
-
-        if (roomController_->room()) {
-            roomController_->clearDelegate();
-
-            if (connected_) {
-                deviceController_->unpublishLocalTracks();
-            }
-
-            Logger::instance().info("Resetting room");
-            roomController_->reset();
-            Logger::instance().info("Room disconnected successfully");
-        }
-
+    auto finalizeDisconnect = [this]() {
         deviceController_->resetLocalState();
         deviceController_->setRoom(roomController_->room());
 
-        connected_ = false;
         participantStore_->clear();
         participantIdentity_.clear();
         networkStatsTimer_.stop();
@@ -180,11 +186,54 @@ void ConferenceManager::disconnect()
 
         emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
         emit localNetworkStatsUpdated(localNetworkStats_);
-
         emit disconnected();
+
+        disconnecting_ = false;
+    };
+
+    try {
+        deviceController_->stopCapturers();
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Disconnect error: %1").arg(e.what()));
+        Logger::instance().error(QString("Disconnect cleanup error while stopping capturers: %1")
+                                 .arg(e.what()));
     }
+
+    try {
+        // Clear streams before room reset so FFI listeners are removed safely.
+        mediaPipeline_->stopAll();
+    } catch (const std::exception& e) {
+        Logger::instance().error(QString("Disconnect cleanup error while stopping media pipeline: %1")
+                                 .arg(e.what()));
+    }
+
+    if (roomController_->room()) {
+        try {
+            roomController_->clearDelegate();
+        } catch (const std::exception& e) {
+            Logger::instance().error(QString("Disconnect cleanup error while clearing room delegate: %1")
+                                     .arg(e.what()));
+        }
+
+        if (wasConnected) {
+            try {
+                deviceController_->unpublishLocalTracks();
+            } catch (const std::exception& e) {
+                Logger::instance().error(QString("Disconnect cleanup error while unpublishing local tracks: %1")
+                                         .arg(e.what()));
+            }
+        }
+
+        try {
+            Logger::instance().info("Resetting room");
+            roomController_->reset();
+            Logger::instance().info("Room disconnected successfully");
+        } catch (const std::exception& e) {
+            Logger::instance().error(QString("Disconnect cleanup error while resetting room: %1")
+                                     .arg(e.what()));
+        }
+    }
+
+    finalizeDisconnect();
 }
 
 void ConferenceManager::toggleMicrophone()

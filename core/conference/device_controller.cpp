@@ -2,7 +2,122 @@
 #include "../../utils/logger.h"
 #include "../../utils/settings.h"
 #include "livekit/local_audio_track.h"
+#include "livekit/local_participant.h"
+#include "livekit/local_track_publication.h"
 #include "livekit/local_video_track.h"
+
+namespace {
+
+std::shared_ptr<livekit::LocalTrackPublication>
+resolveTrackPublication(const std::shared_ptr<livekit::Track>& track)
+{
+    if (!track) {
+        return nullptr;
+    }
+
+    if (auto localVideoTrack = std::dynamic_pointer_cast<livekit::LocalVideoTrack>(track)) {
+        return localVideoTrack->publication();
+    }
+
+    if (auto localAudioTrack = std::dynamic_pointer_cast<livekit::LocalAudioTrack>(track)) {
+        return localAudioTrack->publication();
+    }
+
+    return nullptr;
+}
+
+std::string resolvePublishedTrackSid(livekit::LocalParticipant* localParticipant,
+                                     const std::shared_ptr<livekit::Track>& track)
+{
+    if (!track) {
+        return {};
+    }
+
+    if (const auto publication = resolveTrackPublication(track)) {
+        if (!publication->sid().empty()) {
+            return publication->sid();
+        }
+    }
+
+    if (!localParticipant) {
+        return {};
+    }
+
+    const auto publications = localParticipant->trackPublications();
+    for (const auto& entry : publications) {
+        const auto& publication = entry.second;
+        if (!publication) {
+            continue;
+        }
+
+        if (publication->track() == track) {
+            return publication->sid();
+        }
+    }
+
+    return {};
+}
+
+bool isTrackNotFoundError(const std::exception& e)
+{
+    return QString::fromUtf8(e.what()).contains("track not found", Qt::CaseInsensitive);
+}
+
+enum class UnpublishOutcome {
+    Unpublished,
+    PublicationUnavailable,
+    AlreadyGone,
+    NoTrack,
+    NoParticipant,
+};
+
+UnpublishOutcome unpublishLocalTrack(livekit::LocalParticipant* localParticipant,
+                                     const std::shared_ptr<livekit::Track>& track,
+                                     std::string* cachedPublicationSid,
+                                     const QString& label,
+                                     bool suppressTrackNotFound)
+{
+    if (!track) {
+        return UnpublishOutcome::NoTrack;
+    }
+
+    if (!localParticipant) {
+        return UnpublishOutcome::NoParticipant;
+    }
+
+    const std::string publicationSid = (cachedPublicationSid && !cachedPublicationSid->empty())
+        ? *cachedPublicationSid
+        : resolvePublishedTrackSid(localParticipant, track);
+    if (publicationSid.empty()) {
+        Logger::instance().warning(QString("Skipping unpublish for %1: publication SID is unavailable")
+                                   .arg(label));
+        return UnpublishOutcome::PublicationUnavailable;
+    }
+
+    try {
+        Logger::instance().info(QString("Unpublishing %1 (publication SID: %2)")
+                                .arg(label, QString::fromStdString(publicationSid)));
+        localParticipant->unpublishTrack(publicationSid);
+        track->setPublication(nullptr);
+        if (cachedPublicationSid) {
+            cachedPublicationSid->clear();
+        }
+        return UnpublishOutcome::Unpublished;
+    } catch (const std::exception& e) {
+        if (suppressTrackNotFound && isTrackNotFoundError(e)) {
+            Logger::instance().warning(QString("Suppressing missing-publication error while unpublishing %1: %2")
+                                       .arg(label, QString::fromUtf8(e.what())));
+            track->setPublication(nullptr);
+            if (cachedPublicationSid) {
+                cachedPublicationSid->clear();
+            }
+            return UnpublishOutcome::AlreadyGone;
+        }
+        throw;
+    }
+}
+
+} // namespace
 
 DeviceController::DeviceController(livekit::Room* room, QObject* parent)
     : QObject(parent),
@@ -66,13 +181,26 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
         Logger::instance().error(QString("Screen capture error: %1").arg(msg));
         if (screenShareEnabled_) {
             screenCapturer_->stop();
-            auto localParticipant = room_->localParticipant();
+            auto localParticipant = room_ ? room_->localParticipant() : nullptr;
             if (localParticipant && localScreenTrack_) {
-                localParticipant->unpublishTrack(localScreenTrack_->sid());
-                localScreenTrack_ = nullptr;
+                try {
+                    const UnpublishOutcome outcome =
+                        unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
+                                            QStringLiteral("screen share track"), true);
+                    if (outcome == UnpublishOutcome::Unpublished
+                        || outcome == UnpublishOutcome::AlreadyGone
+                        || outcome == UnpublishOutcome::NoParticipant
+                        || outcome == UnpublishOutcome::NoTrack) {
+                        finalizeScreenShareDisabled();
+                        return;
+                    }
+                } catch (const std::exception& e) {
+                    Logger::instance().warning(QString("Failed to unpublish screen share track after capture error: %1")
+                                               .arg(e.what()));
+                }
             }
-            screenShareEnabled_ = false;
-            emit localScreenShareChanged(false);
+            pendingDisableScreenShare_ = true;
+            Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
         }
     });
 }
@@ -106,19 +234,34 @@ void DeviceController::unpublishLocalTracks()
         return;
     }
 
-    if (localAudioTrack_ && !localAudioTrack_->sid().empty()) {
-        Logger::instance().info("Unpublishing audio track");
-        localParticipant->unpublishTrack(localAudioTrack_->sid());
+    if (localAudioTrack_) {
+        try {
+            unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
+                                QStringLiteral("audio track"), true);
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Failed to unpublish audio track during disconnect: %1")
+                                       .arg(e.what()));
+        }
     }
 
-    if (!cameraTrackSid_.empty()) {
-        Logger::instance().info("Unpublishing camera track");
-        localParticipant->unpublishTrack(cameraTrackSid_);
+    if (localVideoTrack_) {
+        try {
+            unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
+                                QStringLiteral("camera track"), true);
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Failed to unpublish camera track during disconnect: %1")
+                                       .arg(e.what()));
+        }
     }
 
-    if (!screenTrackSid_.empty()) {
-        Logger::instance().info("Unpublishing screen share track");
-        localParticipant->unpublishTrack(screenTrackSid_);
+    if (localScreenTrack_) {
+        try {
+            unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
+                                QStringLiteral("screen share track"), true);
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Failed to unpublish screen share track during disconnect: %1")
+                                       .arg(e.what()));
+        }
     }
 }
 
@@ -127,15 +270,117 @@ void DeviceController::resetLocalState()
     localVideoTrack_ = nullptr;
     localAudioTrack_ = nullptr;
     localScreenTrack_ = nullptr;
+    audioTrackSid_.clear();
     cameraTrackSid_.clear();
     screenTrackSid_.clear();
     cameraEnabled_ = false;
     microphoneEnabled_ = false;
     screenShareEnabled_ = false;
+    pendingDisableCamera_ = false;
+    pendingDisableMicrophone_ = false;
+    pendingDisableScreenShare_ = false;
+}
+
+void DeviceController::handleLocalTrackPublished(livekit::TrackSource source, const QString& publicationSid)
+{
+    auto localParticipant = room_ ? room_->localParticipant() : nullptr;
+    if (!localParticipant) {
+        return;
+    }
+
+    const std::string sid = publicationSid.toStdString();
+    UnpublishOutcome outcome = UnpublishOutcome::NoTrack;
+
+    switch (source) {
+    case livekit::TrackSource::SOURCE_MICROPHONE:
+        audioTrackSid_ = sid;
+        if (!pendingDisableMicrophone_ || !localAudioTrack_) {
+            return;
+        }
+        outcome = unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
+                                      QStringLiteral("audio track"), true);
+        if (outcome == UnpublishOutcome::Unpublished
+            || outcome == UnpublishOutcome::AlreadyGone
+            || outcome == UnpublishOutcome::NoParticipant
+            || outcome == UnpublishOutcome::NoTrack) {
+            finalizeMicrophoneDisabled();
+        }
+        return;
+    case livekit::TrackSource::SOURCE_CAMERA:
+        cameraTrackSid_ = sid;
+        if (!pendingDisableCamera_ || !localVideoTrack_) {
+            return;
+        }
+        outcome = unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
+                                      QStringLiteral("camera track"), true);
+        if (outcome == UnpublishOutcome::Unpublished
+            || outcome == UnpublishOutcome::AlreadyGone
+            || outcome == UnpublishOutcome::NoParticipant
+            || outcome == UnpublishOutcome::NoTrack) {
+            finalizeCameraDisabled();
+        }
+        return;
+    case livekit::TrackSource::SOURCE_SCREENSHARE:
+        screenTrackSid_ = sid;
+        if (!pendingDisableScreenShare_ || !localScreenTrack_) {
+            return;
+        }
+        outcome = unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
+                                      QStringLiteral("screen share track"), true);
+        if (outcome == UnpublishOutcome::Unpublished
+            || outcome == UnpublishOutcome::AlreadyGone
+            || outcome == UnpublishOutcome::NoParticipant
+            || outcome == UnpublishOutcome::NoTrack) {
+            finalizeScreenShareDisabled();
+        }
+        return;
+    default:
+        return;
+    }
+}
+
+void DeviceController::finalizeMicrophoneDisabled()
+{
+    localAudioTrack_ = nullptr;
+    audioTrackSid_.clear();
+    pendingDisableMicrophone_ = false;
+    if (microphoneEnabled_) {
+        microphoneEnabled_ = false;
+        emit localMicrophoneChanged(false);
+    }
+}
+
+void DeviceController::finalizeCameraDisabled()
+{
+    localVideoTrack_ = nullptr;
+    cameraTrackSid_.clear();
+    pendingDisableCamera_ = false;
+    if (cameraEnabled_) {
+        cameraEnabled_ = false;
+        emit localCameraChanged(false);
+    }
+}
+
+void DeviceController::finalizeScreenShareDisabled()
+{
+    Logger::instance().info("Screen track unpublished, releasing reference");
+    localScreenTrack_.reset();
+    screenTrackSid_.clear();
+    pendingDisableScreenShare_ = false;
+    Logger::instance().info("Screen track reference released");
+    if (screenShareEnabled_) {
+        screenShareEnabled_ = false;
+        emit localScreenShareChanged(false);
+    }
 }
 
 void DeviceController::toggleMicrophone()
 {
+    if (pendingDisableMicrophone_) {
+        Logger::instance().warning("Ignoring microphone toggle while disable is pending");
+        return;
+    }
+
     microphoneEnabled_ = !microphoneEnabled_;
     Logger::instance().info(QString("Microphone toggled: %1").arg(microphoneEnabled_ ? "ON" : "OFF"));
 
@@ -162,6 +407,7 @@ void DeviceController::toggleMicrophone()
                         Logger::instance().info("Publishing audio track...");
                         livekit::TrackPublishOptions options;
                         options.source = livekit::TrackSource::SOURCE_MICROPHONE;
+                        audioTrackSid_.clear();
                         localParticipant->publishTrack(localAudioTrack_, options);
                         Logger::instance().info("Audio track published successfully");
                     }
@@ -175,8 +421,20 @@ void DeviceController::toggleMicrophone()
 
             auto localParticipant = room_->localParticipant();
             if (localParticipant && localAudioTrack_) {
-                localParticipant->unpublishTrack(localAudioTrack_->sid());
-                localAudioTrack_ = nullptr;
+                const UnpublishOutcome outcome =
+                    unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
+                                        QStringLiteral("audio track"), true);
+                if (outcome == UnpublishOutcome::PublicationUnavailable) {
+                    pendingDisableMicrophone_ = true;
+                    microphoneEnabled_ = true;
+                    Logger::instance().warning("Deferring microphone shutdown until publication SID becomes available");
+                    return;
+                }
+                finalizeMicrophoneDisabled();
+                return;
+            } else {
+                finalizeMicrophoneDisabled();
+                return;
             }
         }
     } catch (const std::exception& e) {
@@ -189,6 +447,11 @@ void DeviceController::toggleMicrophone()
 
 void DeviceController::toggleCamera()
 {
+    if (pendingDisableCamera_) {
+        Logger::instance().warning("Ignoring camera toggle while disable is pending");
+        return;
+    }
+
     cameraEnabled_ = !cameraEnabled_;
     Logger::instance().info(QString("Camera toggled: %1").arg(cameraEnabled_ ? "ON" : "OFF"));
 
@@ -216,11 +479,14 @@ void DeviceController::toggleCamera()
                         Logger::instance().info("Publishing video track...");
                         livekit::TrackPublishOptions options;
                         options.source = livekit::TrackSource::SOURCE_CAMERA;
-                        auto publication = localParticipant->publishTrack(localVideoTrack_, options);
-                        if (publication) {
-                            cameraTrackSid_ = publication->sid();
+                        cameraTrackSid_.clear();
+                        localParticipant->publishTrack(localVideoTrack_, options);
+                        cameraTrackSid_ = resolvePublishedTrackSid(localParticipant, localVideoTrack_);
+                        if (!cameraTrackSid_.empty()) {
                             Logger::instance().info(QString("Video track published with SID: %1")
                                 .arg(QString::fromStdString(cameraTrackSid_)));
+                        } else {
+                            Logger::instance().warning("Video track published but SID is not available yet");
                         }
                     }
                 }
@@ -232,12 +498,21 @@ void DeviceController::toggleCamera()
             cameraCapturer_->stop();
 
             auto localParticipant = room_->localParticipant();
-            if (localParticipant && !cameraTrackSid_.empty()) {
-                Logger::instance().info(QString("Unpublishing camera track: %1")
-                    .arg(QString::fromStdString(cameraTrackSid_)));
-                localParticipant->unpublishTrack(cameraTrackSid_);
-                cameraTrackSid_.clear();
-                localVideoTrack_ = nullptr;
+            if (localParticipant && localVideoTrack_) {
+                const UnpublishOutcome outcome =
+                    unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
+                                        QStringLiteral("camera track"), true);
+                if (outcome == UnpublishOutcome::PublicationUnavailable) {
+                    pendingDisableCamera_ = true;
+                    cameraEnabled_ = true;
+                    Logger::instance().warning("Deferring camera shutdown until publication SID becomes available");
+                    return;
+                }
+                finalizeCameraDisabled();
+                return;
+            } else {
+                finalizeCameraDisabled();
+                return;
             }
         }
     } catch (const std::exception& e) {
@@ -250,6 +525,11 @@ void DeviceController::toggleCamera()
 
 void DeviceController::toggleScreenShare()
 {
+    if (pendingDisableScreenShare_) {
+        Logger::instance().warning("Ignoring screen share toggle while disable is pending");
+        return;
+    }
+
     if (screenShareDebounceTimer_.isValid()
         && screenShareDebounceTimer_.elapsed() < kScreenShareDebounceMs) {
         Logger::instance().warning("Screen share toggle debounced, ignoring rapid toggle");
@@ -275,11 +555,14 @@ void DeviceController::toggleScreenShare()
                 if (localParticipant && localScreenTrack_) {
                     livekit::TrackPublishOptions options;
                     options.source = livekit::TrackSource::SOURCE_SCREENSHARE;
-                    auto publication = localParticipant->publishTrack(localScreenTrack_, options);
-                    if (publication) {
-                        screenTrackSid_ = publication->sid();
+                    screenTrackSid_.clear();
+                    localParticipant->publishTrack(localScreenTrack_, options);
+                    screenTrackSid_ = resolvePublishedTrackSid(localParticipant, localScreenTrack_);
+                    if (!screenTrackSid_.empty()) {
                         Logger::instance().info(QString("Screen share track published with SID: %1")
                             .arg(QString::fromStdString(screenTrackSid_)));
+                    } else {
+                        Logger::instance().warning("Screen share track published but SID is not available yet");
                     }
                 }
             } else {
@@ -290,14 +573,21 @@ void DeviceController::toggleScreenShare()
             screenCapturer_->stop();
 
             auto localParticipant = room_->localParticipant();
-            if (localParticipant && !screenTrackSid_.empty()) {
-                Logger::instance().info(QString("Unpublishing screen track: %1")
-                    .arg(QString::fromStdString(screenTrackSid_)));
-                localParticipant->unpublishTrack(screenTrackSid_);
-                Logger::instance().info("Screen track unpublished, releasing reference");
-                screenTrackSid_.clear();
-                localScreenTrack_.reset();
-                Logger::instance().info("Screen track reference released");
+            if (localParticipant && localScreenTrack_) {
+                const UnpublishOutcome outcome =
+                    unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
+                                        QStringLiteral("screen share track"), true);
+                if (outcome == UnpublishOutcome::PublicationUnavailable) {
+                    pendingDisableScreenShare_ = true;
+                    screenShareEnabled_ = true;
+                    Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
+                    return;
+                }
+                finalizeScreenShareDisabled();
+                return;
+            } else {
+                finalizeScreenShareDisabled();
+                return;
             }
         }
     } catch (const std::exception& e) {
@@ -327,15 +617,18 @@ void DeviceController::switchCamera(const QString& deviceId)
 
     try {
         const bool wasEnabled = cameraEnabled_;
+        auto localParticipant = room_ ? room_->localParticipant() : nullptr;
 
-        if (cameraEnabled_) {
-            cameraCapturer_->stop();
-
-            auto localParticipant = room_->localParticipant();
-            if (localParticipant && localVideoTrack_) {
-                localParticipant->unpublishTrack(localVideoTrack_->sid());
-                localVideoTrack_ = nullptr;
+        if (cameraEnabled_ && localVideoTrack_) {
+            const UnpublishOutcome outcome =
+                unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
+                                    QStringLiteral("camera track"), true);
+            if (outcome == UnpublishOutcome::PublicationUnavailable) {
+                Logger::instance().warning("Deferring camera switch until current publication SID becomes available");
+                return;
             }
+            cameraCapturer_->stop();
+            localVideoTrack_ = nullptr;
         }
 
         const bool switched = cameraCapturer_->setCameraById(deviceId.toUtf8());
@@ -349,12 +642,15 @@ void DeviceController::switchCamera(const QString& deviceId)
                 if (source) {
                     localVideoTrack_ = livekit::LocalVideoTrack::createLocalVideoTrack("camera", source);
 
-                    auto localParticipant = room_->localParticipant();
                     if (localParticipant && localVideoTrack_) {
                         livekit::TrackPublishOptions options;
                         options.source = livekit::TrackSource::SOURCE_CAMERA;
                         localParticipant->publishTrack(localVideoTrack_, options);
-                        Logger::instance().info("Camera switched and republished successfully");
+                        cameraTrackSid_ = resolvePublishedTrackSid(localParticipant, localVideoTrack_);
+                        Logger::instance().info(QString("Camera switched and republished successfully%1")
+                            .arg(cameraTrackSid_.empty()
+                                ? QString()
+                                : QStringLiteral(": ") + QString::fromStdString(cameraTrackSid_)));
                     }
                 }
             } else {
@@ -380,15 +676,18 @@ void DeviceController::switchMicrophone(const QString& deviceId)
 
     try {
         const bool wasEnabled = microphoneEnabled_;
+        auto localParticipant = room_ ? room_->localParticipant() : nullptr;
 
-        if (microphoneEnabled_) {
-            microphoneCapturer_->stop();
-
-            auto localParticipant = room_->localParticipant();
-            if (localParticipant && localAudioTrack_) {
-                localParticipant->unpublishTrack(localAudioTrack_->sid());
-                localAudioTrack_ = nullptr;
+        if (microphoneEnabled_ && localAudioTrack_) {
+            const UnpublishOutcome outcome =
+                unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
+                                    QStringLiteral("audio track"), true);
+            if (outcome == UnpublishOutcome::PublicationUnavailable) {
+                Logger::instance().warning("Deferring microphone switch until current publication SID becomes available");
+                return;
             }
+            microphoneCapturer_->stop();
+            localAudioTrack_ = nullptr;
         }
 
         microphoneCapturer_->setDeviceById(deviceId.toUtf8());
@@ -399,10 +698,10 @@ void DeviceController::switchMicrophone(const QString& deviceId)
                 if (source) {
                     localAudioTrack_ = livekit::LocalAudioTrack::createLocalAudioTrack("mic", source);
 
-                    auto localParticipant = room_->localParticipant();
                     if (localParticipant && localAudioTrack_) {
                         livekit::TrackPublishOptions options;
                         options.source = livekit::TrackSource::SOURCE_MICROPHONE;
+                        audioTrackSid_.clear();
                         localParticipant->publishTrack(localAudioTrack_, options);
                         Logger::instance().info("Microphone switched and republished successfully");
                     }

@@ -5,7 +5,7 @@
 
 # Version configuration (can be overridden before including this module)
 if(NOT DEFINED LIVEKIT_SDK_VERSION)
-    set(LIVEKIT_SDK_VERSION "0.3.1")
+    set(LIVEKIT_SDK_VERSION "0.3.4")
 endif()
 
 # Shared SDK architecture selector across third-party fetch modules.
@@ -42,11 +42,30 @@ set(LIVEKIT_SDK_ROOT "${CMAKE_SOURCE_DIR}/third_party/${LIVEKIT_SDK_NAME}")
 set(LIVEKIT_SDK_ARCHIVE "${LIVEKIT_SDK_NAME}.${LIVEKIT_ARCHIVE_EXT}")
 set(LIVEKIT_SDK_URL "https://github.com/livekit/client-sdk-cpp/releases/download/v${LIVEKIT_SDK_VERSION}/${LIVEKIT_SDK_ARCHIVE}")
 
+function(resolve_livekit_sdk_root out_var)
+    set(candidates
+        "${LIVEKIT_SDK_ROOT}"
+        "${LIVEKIT_SDK_ROOT}/${LIVEKIT_SDK_NAME}"
+        "${CMAKE_SOURCE_DIR}/third_party"
+    )
+
+    foreach(candidate IN LISTS candidates)
+        if(EXISTS "${candidate}/include" AND EXISTS "${candidate}/lib")
+            set(${out_var} "${candidate}" PARENT_SCOPE)
+            return()
+        endif()
+    endforeach()
+
+    set(${out_var} "" PARENT_SCOPE)
+endfunction()
+
 # =============================================================================
 # Download and Extract SDK if not present
 # =============================================================================
-if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
-    message(STATUS "LiveKit SDK not found at ${LIVEKIT_SDK_ROOT}")
+resolve_livekit_sdk_root(LIVEKIT_SDK_RESOLVED_ROOT)
+
+if(LIVEKIT_SDK_RESOLVED_ROOT STREQUAL "")
+    message(STATUS "LiveKit SDK not found under ${CMAKE_SOURCE_DIR}/third_party")
     message(STATUS "Downloading LiveKit SDK v${LIVEKIT_SDK_VERSION} for ${LIVEKIT_PLATFORM}-${LIVEKIT_ARCH}...")
     
     set(LIVEKIT_DOWNLOAD_PATH "${CMAKE_SOURCE_DIR}/third_party/${LIVEKIT_SDK_ARCHIVE}")
@@ -73,42 +92,68 @@ if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
         INPUT "${LIVEKIT_DOWNLOAD_PATH}"
         DESTINATION "${CMAKE_SOURCE_DIR}/third_party"
     )
-    
-    # The archive extracts to a subdirectory with the same name
-    # Check if extraction created the expected directory
-    if(NOT EXISTS "${LIVEKIT_SDK_ROOT}")
-        message(FATAL_ERROR "Failed to extract LiveKit SDK to ${LIVEKIT_SDK_ROOT}")
-    endif()
-    
+
     # Clean up the archive
     file(REMOVE "${LIVEKIT_DOWNLOAD_PATH}")
-    
+
+    resolve_livekit_sdk_root(LIVEKIT_SDK_RESOLVED_ROOT)
+    if(LIVEKIT_SDK_RESOLVED_ROOT STREQUAL "")
+        message(FATAL_ERROR
+            "Failed to extract LiveKit SDK from ${LIVEKIT_SDK_ARCHIVE}. "
+            "Could not find a directory containing include/ and lib/ under ${CMAKE_SOURCE_DIR}/third_party.")
+    endif()
+
     message(STATUS "LiveKit SDK v${LIVEKIT_SDK_VERSION} installed successfully")
 else()
-    message(STATUS "Found LiveKit SDK at ${LIVEKIT_SDK_ROOT}")
+    message(STATUS "Found LiveKit SDK at ${LIVEKIT_SDK_RESOLVED_ROOT}")
+endif()
+
+if(NOT EXISTS "${LIVEKIT_SDK_RESOLVED_ROOT}/include" OR
+   NOT EXISTS "${LIVEKIT_SDK_RESOLVED_ROOT}/lib")
+    message(FATAL_ERROR
+        "Invalid LiveKit SDK layout under ${LIVEKIT_SDK_ROOT}. "
+        "Expected include/ and lib/ either directly under the SDK root or under ${LIVEKIT_SDK_NAME}/.")
 endif()
 
 # =============================================================================
 # Configure SDK paths for find_package
 # =============================================================================
 # Add SDK's CMake config directory to CMAKE_PREFIX_PATH
-list(APPEND CMAKE_PREFIX_PATH "${LIVEKIT_SDK_ROOT}/lib/cmake/LiveKit")
+list(APPEND CMAKE_PREFIX_PATH "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/cmake/LiveKit")
 
 # Export variables for manual configuration (if find_package doesn't work)
-set(LIVEKIT_INCLUDE_DIR "${LIVEKIT_SDK_ROOT}/include")
+set(LIVEKIT_INCLUDE_DIR "${LIVEKIT_SDK_RESOLVED_ROOT}/include")
 
 if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-    set(LIVEKIT_LIBRARY "${LIVEKIT_SDK_ROOT}/lib/livekit.lib")
-    set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_SDK_ROOT}/lib/livekit_ffi.dll.lib")
-    set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_ROOT}/bin")
+    set(LIVEKIT_LIBRARY "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/livekit.lib")
+    set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/livekit_ffi.dll.lib")
+    set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_RESOLVED_ROOT}/bin")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(LIVEKIT_LIBRARY "${LIVEKIT_SDK_ROOT}/lib/liblivekit.so")
-    set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_SDK_ROOT}/lib/liblivekit_ffi.so")
-    set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_ROOT}/lib")
+    set(LIVEKIT_LIBRARY "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/liblivekit.so")
+    set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/liblivekit_ffi.so")
+    set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_RESOLVED_ROOT}/lib")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-    set(LIVEKIT_LIBRARY "${LIVEKIT_SDK_ROOT}/lib/liblivekit.dylib")
-    set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_SDK_ROOT}/lib/liblivekit_ffi.dylib")
-    set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_ROOT}/lib")
+    set(LIVEKIT_LIBRARY "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/liblivekit.dylib")
+    set(LIVEKIT_FFI_LIBRARY "${LIVEKIT_SDK_RESOLVED_ROOT}/lib/liblivekit_ffi.dylib")
+    set(LIVEKIT_BIN_DIR "${LIVEKIT_SDK_RESOLVED_ROOT}/lib")
+endif()
+
+if(NOT EXISTS "${LIVEKIT_INCLUDE_DIR}")
+    message(FATAL_ERROR "LiveKit SDK include directory not found: ${LIVEKIT_INCLUDE_DIR}")
+endif()
+if(NOT EXISTS "${LIVEKIT_LIBRARY}")
+    message(FATAL_ERROR "LiveKit SDK library not found: ${LIVEKIT_LIBRARY}")
+endif()
+if(NOT EXISTS "${LIVEKIT_FFI_LIBRARY}")
+    message(FATAL_ERROR "LiveKit SDK FFI library not found: ${LIVEKIT_FFI_LIBRARY}")
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    if(NOT EXISTS "${LIVEKIT_BIN_DIR}/livekit.dll")
+        message(FATAL_ERROR "LiveKit runtime DLL not found: ${LIVEKIT_BIN_DIR}/livekit.dll")
+    endif()
+    if(NOT EXISTS "${LIVEKIT_BIN_DIR}/livekit_ffi.dll")
+        message(FATAL_ERROR "LiveKit FFI runtime DLL not found: ${LIVEKIT_BIN_DIR}/livekit_ffi.dll")
+    endif()
 endif()
 
 if(APPLE)
@@ -153,7 +198,7 @@ if(APPLE)
 endif()
 
 message(STATUS "LiveKit SDK Configuration:")
-message(STATUS "  Root: ${LIVEKIT_SDK_ROOT}")
+message(STATUS "  Root: ${LIVEKIT_SDK_RESOLVED_ROOT}")
 message(STATUS "  Arch: ${LIVEKIT_ARCH}")
 message(STATUS "  Include: ${LIVEKIT_INCLUDE_DIR}")
 message(STATUS "  Library: ${LIVEKIT_LIBRARY}")

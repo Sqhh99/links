@@ -184,10 +184,10 @@ jobs:
           if-no-files-found: error
 
   package-macos:
-    runs-on: macos-15
+    runs-on: macos-15-intel
     needs: resolve-version
     env:
-      LINKS_SDK_ARCH: arm64
+      LINKS_SDK_ARCH: x64
       LINKS_ENABLE_LOCAL_RECORDING: "OFF"
     steps:
       - name: Checkout repository
@@ -197,7 +197,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          arch: clang_arm64
+          arch: clang_64
           modules: qtmultimedia
           cache: true
 
@@ -216,9 +216,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: third_party/vcpkg_installed
-          key: vcpkg-package-macOS-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-package-macOS-${{ env.LINKS_SDK_ARCH }}-${{ hashFiles('vcpkg.json') }}
           restore-keys: |
-            vcpkg-package-macOS-
+            vcpkg-package-macOS-${{ env.LINKS_SDK_ARCH }}-
 
       - name: Build release bundle
         shell: bash
@@ -248,8 +248,8 @@ jobs:
 
           binary_arch="$(file "$binary_path")"
           echo "$binary_arch"
-          if [[ "$binary_arch" != *"arm64"* ]]; then
-            echo "Expected arm64 app binary, got: $binary_arch" >&2
+          if [[ "$binary_arch" != *"x86_64"* ]]; then
+            echo "Expected x86_64 app binary, got: $binary_arch" >&2
             exit 1
           fi
 
@@ -273,8 +273,8 @@ jobs:
             "$frameworks_dir/libwebrtc-audio-processing-2.1.dylib"; do
             lib_arch="$(file "$copied_lib")"
             echo "$lib_arch"
-            if [[ "$lib_arch" != *"arm64"* ]]; then
-              echo "Expected arm64 dylib, got: $lib_arch" >&2
+            if [[ "$lib_arch" != *"x86_64"* ]]; then
+              echo "Expected x86_64 dylib, got: $lib_arch" >&2
               exit 1
             fi
           done
@@ -298,10 +298,10 @@ jobs:
             exit 1
           fi
 
-          final_dmg="$dist_dir/Links-v${version}-macos-arm64.dmg"
+          final_dmg="$dist_dir/Links-v${version}-macos-x64.dmg"
           mv -f "$dmg_file" "$final_dmg"
 
-          app_zip="$dist_dir/Links-v${version}-macos-arm64-app.zip"
+          app_zip="$dist_dir/Links-v${version}-macos-x64-app.zip"
           ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_zip"
 
           echo "dmg=$final_dmg" >> "$GITHUB_OUTPUT"
@@ -310,14 +310,14 @@ jobs:
       - name: Upload macOS DMG
         uses: actions/upload-artifact@v4
         with:
-          name: Links-macOS-arm64-dmg
+          name: Links-macOS-x64-dmg
           path: ${{ steps.package.outputs.dmg }}
           if-no-files-found: error
 
       - name: Upload macOS app zip
         uses: actions/upload-artifact@v4
         with:
-          name: Links-macOS-arm64-app
+          name: Links-macOS-x64-app
           path: ${{ steps.package.outputs.app_zip }}
           if-no-files-found: error
 
@@ -418,6 +418,8 @@ jobs:
 
           export linuxdeploy_version="1-alpha-20250213-2"
           export linuxdeploy_plugin_qt_version="1-alpha-20250213-1"
+          export linuxdeploy_sha256="4648f278ab3ef31f819e67c30d50f462640e5365a77637d7e6f2ad9fd0b4522a"
+          export linuxdeploy_plugin_qt_sha256="15106be885c1c48a021198e7e1e9a48ce9d02a86dd0a1848f00bdbf3c1c92724"
 
           python3 <<'PY'
           import hashlib
@@ -431,11 +433,13 @@ jobs:
                   "linuxdeploy/linuxdeploy",
                   os.environ["linuxdeploy_version"],
                   "linuxdeploy-x86_64.AppImage",
+                  os.environ["linuxdeploy_sha256"],
               ),
               (
                   "linuxdeploy/linuxdeploy-plugin-qt",
                   os.environ["linuxdeploy_plugin_qt_version"],
                   "linuxdeploy-plugin-qt-x86_64.AppImage",
+                  os.environ["linuxdeploy_plugin_qt_sha256"],
               ),
           ]
 
@@ -449,7 +453,7 @@ jobs:
                   headers["Authorization"] = f"Bearer {token}"
               return urllib.request.Request(url, headers=headers)
 
-          for repo, tag, asset_name in ASSETS:
+          for repo, tag, asset_name, expected_sha256 in ASSETS:
               api_url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
               with urllib.request.urlopen(request(api_url)) as response:
                   release = json.load(response)
@@ -459,22 +463,15 @@ jobs:
                   print(f"Release asset not found: {repo}@{tag}/{asset_name}", file=sys.stderr)
                   sys.exit(1)
 
-              digest = asset.get("digest") or ""
-              if not digest.startswith("sha256:"):
-                  print(f"Release asset has no sha256 digest: {repo}@{tag}/{asset_name}", file=sys.stderr)
-                  sys.exit(1)
-
               url = asset["browser_download_url"]
               with urllib.request.urlopen(request(url)) as response, open(asset_name, "wb") as output:
                   data = response.read()
                   output.write(data)
 
               actual = hashlib.sha256(data).hexdigest()
-              expected = digest.removeprefix("sha256:")
-              if actual.lower() != expected.lower():
-                  print(f"SHA256 mismatch for {asset_name}: expected {expected}, got {actual}", file=sys.stderr)
+              if actual.lower() != expected_sha256.lower():
+                  print(f"SHA256 mismatch for {asset_name}: expected {expected_sha256}, got {actual}", file=sys.stderr)
                   sys.exit(1)
-
               print(f"Downloaded and verified {asset_name}: sha256:{actual}")
           PY
 

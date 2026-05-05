@@ -25,10 +25,10 @@ jobs:
             qt_arch: linux_gcc_64
             sdk_arch: x64
             recording_enabled: "OFF"
-          - os: macos-latest
+          - os: macos-15-intel
             qt_version: "6.8.3"
             qt_arch: clang_64
-            sdk_arch: arm64
+            sdk_arch: x64
             recording_enabled: "OFF"
 
     runs-on: ${{ matrix.os }}
@@ -97,9 +97,9 @@ jobs:
       uses: actions/cache@v4
       with:
         path: third_party/vcpkg_installed
-        key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+        key: vcpkg-${{ runner.os }}-${{ matrix.sdk_arch }}-${{ hashFiles('vcpkg.json') }}
         restore-keys: |
-          vcpkg-${{ runner.os }}-
+          vcpkg-${{ runner.os }}-${{ matrix.sdk_arch }}-
 
     # Build + Test via repo scripts
     - name: Build and Test (Windows)

@@ -57,6 +57,7 @@ signals:
     void connectionStateChangedQueued(int state);
     void roomDisconnectedQueued(int reason);
     void dataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
+    void localTrackPublishedQueued(QString publicationSid, int kind, int source);
 
 };
 

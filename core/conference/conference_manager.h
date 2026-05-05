@@ -134,6 +134,7 @@ private:
     void onConnectionStateChangedQueued(int state);
     void onRoomDisconnectedQueued(int reason);
     void onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
+    void onLocalTrackPublishedQueued(QString publicationSid, int kind, int source);
     
     void updateParticipantInfo(const QString& identity);
     void reconcileParticipantsInternal(const char* source);
@@ -153,6 +154,7 @@ private:
     QString participantName_;
     QString participantIdentity_;
     bool connected_{false};
+    bool disconnecting_{false};
     livekit::DisconnectReason lastDisconnectReason_{livekit::DisconnectReason::Unknown};
     QTimer networkStatsTimer_;
     NetworkQualityLevel localNetworkQuality_{NetworkQualityLevel::Unknown};
