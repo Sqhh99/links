@@ -184,7 +184,7 @@ jobs:
           if-no-files-found: error
 
   package-macos:
-    runs-on: macos-latest
+    runs-on: macos-15
     needs: resolve-version
     env:
       LINKS_SDK_ARCH: arm64
@@ -197,7 +197,7 @@ jobs:
         uses: jurplel/install-qt-action@v4
         with:
           version: ${{ env.QT_VERSION }}
-          arch: clang_64
+          arch: clang_arm64
           modules: qtmultimedia
           cache: true
 
@@ -246,6 +246,13 @@ jobs:
             exit 1
           fi
 
+          binary_arch="$(file "$binary_path")"
+          echo "$binary_arch"
+          if [[ "$binary_arch" != *"arm64"* ]]; then
+            echo "Expected arm64 app binary, got: $binary_arch" >&2
+            exit 1
+          fi
+
           mkdir -p "$frameworks_dir" "$dist_dir"
 
           livekit_lib="$(find "$GITHUB_WORKSPACE/third_party" -name liblivekit.dylib -print -quit)"
@@ -258,6 +265,18 @@ jobs:
               exit 1
             fi
             cp -f "$lib" "$frameworks_dir/"
+          done
+
+          for copied_lib in \
+            "$frameworks_dir/liblivekit.dylib" \
+            "$frameworks_dir/liblivekit_ffi.dylib" \
+            "$frameworks_dir/libwebrtc-audio-processing-2.1.dylib"; do
+            lib_arch="$(file "$copied_lib")"
+            echo "$lib_arch"
+            if [[ "$lib_arch" != *"arm64"* ]]; then
+              echo "Expected arm64 dylib, got: $lib_arch" >&2
+              exit 1
+            fi
           done
 
           install_name_tool -add_rpath "@executable_path/../Frameworks" "$binary_path" 2>/dev/null || true
