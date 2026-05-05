@@ -208,6 +208,7 @@ signals:
 private slots:
     void onConnected();
     void onDisconnected();
+    void onRoomDisconnected(int reason);
     void onConnectionStateChanged(livekit::ConnectionState state);
     void onParticipantJoined(const ParticipantInfo& info);
     void onParticipantLeft(const QString& identity);
@@ -230,6 +231,8 @@ private:
     void setupParticipantReconcileTimer();
     void reconcileParticipantsNow(const char* reason);
     void clearRemoteParticipantState();
+    bool hasKnownRemoteHost() const;
+    bool shouldTreatDisconnectAsMeetingEnded() const;
     void updateParticipantsList();
     void addChatMessage(const ChatMessage& msg);
 
@@ -279,6 +282,7 @@ private:
     qulonglong currentSharedWindowId_{0};
     bool meetingEndedTriggered_{false};
     bool userInitiatedLeave_{false};
+    bool sawReconnectingSinceConnected_{false};
 };
 
 #endif // CONFERENCE_BACKEND_H
