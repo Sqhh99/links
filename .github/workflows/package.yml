@@ -398,8 +398,19 @@ jobs:
 
           patchelf --set-rpath '$ORIGIN/../lib' "$appdir/usr/bin/links"
 
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          linuxdeploy_version="1-alpha-20250213-2"
+          linuxdeploy_plugin_qt_version="1-alpha-20250213-2"
+          linuxdeploy_sha256="<REPLACE_WITH_LINUXDEPLOY_SHA256>"
+          linuxdeploy_plugin_qt_sha256="<REPLACE_WITH_LINUXDEPLOY_PLUGIN_QT_SHA256>"
+
+          curl -fsSLo linuxdeploy-x86_64.AppImage \
+            "https://github.com/linuxdeploy/linuxdeploy/releases/download/${linuxdeploy_version}/linuxdeploy-x86_64.AppImage"
+          curl -fsSLo linuxdeploy-plugin-qt-x86_64.AppImage \
+            "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/${linuxdeploy_plugin_qt_version}/linuxdeploy-plugin-qt-x86_64.AppImage"
+
+          printf '%s  %s\n' "$linuxdeploy_sha256" "linuxdeploy-x86_64.AppImage" | sha256sum -c -
+          printf '%s  %s\n' "$linuxdeploy_plugin_qt_sha256" "linuxdeploy-plugin-qt-x86_64.AppImage" | sha256sum -c -
+
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
 
           export APPIMAGE_EXTRACT_AND_RUN=1
