@@ -71,7 +71,7 @@ begin
   Result := MsgBox(
     'Do you also want to remove Links user data?' + #13#10 +
     'This includes local settings and cache under AppData.' + #13#10 +
-    'Recorded meeting files will NOT be deleted.',
+    'Recorded meeting files stored outside AppData will not be deleted, but any recordings stored under AppData may also be removed.',
     mbConfirmation, MB_YESNO) = IDYES;
 end;
 
