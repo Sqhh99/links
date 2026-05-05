@@ -17,6 +17,7 @@ docs/reference
 docs/deprecated
 third_party
 agents
+models
 
 # Livekit signaling server
 # Root level env files (keep .env.example)
@@ -31,3 +32,5 @@ server/livekit-signaling-server/links-sig-go-server/*.exe
 # Rust server
 server/livekit-signaling-server/links-sig-rust-server/target/
 server/livekit-signaling-server/links-sig-rust-server/.env
+links-server
+examples/

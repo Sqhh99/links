@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(links LANGUAGES CXX)
+include(GNUInstallDirs)
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -10,6 +11,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 set(VCPKG_APPLOCAL_DEPS OFF)
+
+set(LINKS_APP_ICON_PNG_16 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_16x16.png")
+set(LINKS_APP_ICON_PNG_32 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_32x32.png")
+set(LINKS_APP_ICON_PNG_48 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_48x48.png")
+set(LINKS_APP_ICON_PNG_64 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_64x64.png")
+set(LINKS_APP_ICON_PNG_128 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_128x128.png")
+set(LINKS_APP_ICON_PNG_256 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_256x256.png")
+set(LINKS_MAC_ICONSET_DIR "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/macos/AppIcon.iconset")
+set(LINKS_WINDOWS_ICON_ICO "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/windows/icon.ico")
 
 # Testing options
 option(LINKS_BUILD_TESTS "Build test suite" ON)
@@ -95,6 +105,17 @@ set(SOURCES
     ui/backend/AppearanceManager.cpp
     ui/backend/LocalRecordingManager.cpp
 )
+
+if(WIN32)
+    file(TO_NATIVE_PATH "${LINKS_WINDOWS_ICON_ICO}" LINKS_WINDOWS_ICON_ICO_NATIVE)
+    string(REPLACE "\\" "\\\\" LINKS_WINDOWS_ICON_ICO_ESCAPED "${LINKS_WINDOWS_ICON_ICO_NATIVE}")
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/windows/app_icon.rc.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/links_app_icon.rc"
+        @ONLY
+    )
+    list(APPEND SOURCES "${CMAKE_CURRENT_BINARY_DIR}/links_app_icon.rc")
+endif()
 
 # Windows-specific desktop capture sources
 if(WIN32)
@@ -283,6 +304,12 @@ qt_add_qml_module(links
         res/icon/monitor.png
         res/icon/file-chart-column-increasing.png
         res/icon/disc.png
+        res/icon/appIcon/linux/icon_16x16.png
+        res/icon/appIcon/linux/icon_32x32.png
+        res/icon/appIcon/linux/icon_48x48.png
+        res/icon/appIcon/linux/icon_64x64.png
+        res/icon/appIcon/linux/icon_128x128.png
+        res/icon/appIcon/linux/icon_256x256.png
 )
 
 # Link libraries
@@ -308,6 +335,36 @@ endif()
 message(STATUS "Local recording enabled: ${LINKS_ENABLE_LOCAL_RECORDING}")
 
 if(APPLE)
+    set_target_properties(links PROPERTIES
+        MACOSX_BUNDLE TRUE
+    )
+
+    find_program(ICONUTIL_EXECUTABLE iconutil)
+    if(ICONUTIL_EXECUTABLE)
+        file(GLOB LINKS_MAC_ICONSET_FILES CONFIGURE_DEPENDS "${LINKS_MAC_ICONSET_DIR}/*.png")
+        set(LINKS_MAC_ICON "${CMAKE_CURRENT_BINARY_DIR}/AppIcon.icns")
+
+        add_custom_command(
+            OUTPUT "${LINKS_MAC_ICON}"
+            COMMAND "${ICONUTIL_EXECUTABLE}" -c icns "${LINKS_MAC_ICONSET_DIR}" -o "${LINKS_MAC_ICON}"
+            DEPENDS ${LINKS_MAC_ICONSET_FILES}
+            COMMENT "Generating macOS application icon"
+            VERBATIM
+        )
+
+        target_sources(links PRIVATE "${LINKS_MAC_ICON}")
+        set_source_files_properties("${LINKS_MAC_ICON}" PROPERTIES
+            MACOSX_PACKAGE_LOCATION "Resources"
+        )
+        set_target_properties(links PROPERTIES
+            MACOSX_BUNDLE_ICON_FILE "AppIcon.icns"
+        )
+    else()
+        message(WARNING "iconutil not found; macOS bundle icon will not be generated")
+    endif()
+endif()
+
+if(APPLE)
     find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
     find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
     find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
@@ -329,6 +386,27 @@ if(APPLE)
 elseif(UNIX)
     find_package(X11 REQUIRED)
     target_link_libraries(links PRIVATE X11::X11)
+endif()
+
+if(UNIX AND NOT APPLE)
+    configure_file(
+        "${CMAKE_CURRENT_SOURCE_DIR}/res/linux/links.desktop.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/links.desktop"
+        @ONLY
+    )
+
+    install(TARGETS links
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
+    )
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/links.desktop"
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications"
+    )
+    foreach(icon_size IN ITEMS 16 32 48 64 128 256)
+        install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_${icon_size}x${icon_size}.png"
+            DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/${icon_size}x${icon_size}/apps"
+            RENAME links.png
+        )
+    endforeach()
 endif()
 
 # Include directories

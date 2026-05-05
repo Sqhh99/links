@@ -748,9 +748,7 @@ Window {
             onPressed: function(mouse) { mouse.accepted = false }
         }
 
-        ToolTip.visible: toolTipText.length > 0 && hovered
-        ToolTip.text: toolTipText
-        ToolTip.delay: 500
+        ToolTip.visible: false
     }
 
     // --- Split Device Button Component ---

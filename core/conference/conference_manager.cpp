@@ -80,6 +80,8 @@ ConferenceManager::ConferenceManager(QObject* parent)
                      this, &ConferenceManager::onConnectionQualityChangedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::connectionStateChangedQueued,
                      this, &ConferenceManager::onConnectionStateChangedQueued);
+    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::roomDisconnectedQueued,
+                     this, &ConferenceManager::onRoomDisconnectedQueued);
     QObject::connect(roomDelegate_.get(), &RoomEventDelegate::dataReceivedQueued,
                      this, &ConferenceManager::onDataReceivedQueued);
 
@@ -122,6 +124,7 @@ ConferenceManager::~ConferenceManager()
 void ConferenceManager::connect(const QString& url, const QString& token)
 {
     Logger::instance().info("Connecting to room: " + url);
+    lastDisconnectReason_ = livekit::DisconnectReason::Unknown;
 
     try {
         livekit::RoomOptions options;
@@ -147,6 +150,7 @@ void ConferenceManager::connect(const QString& url, const QString& token)
 void ConferenceManager::disconnect()
 {
     Logger::instance().info("Disconnecting from room");
+    lastDisconnectReason_ = livekit::DisconnectReason::ClientInitiated;
 
     try {
         deviceController_->stopCapturers();
@@ -651,6 +655,13 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
     }
 
     emit connectionStateChanged(connState);
+}
+
+void ConferenceManager::onRoomDisconnectedQueued(int reason)
+{
+    lastDisconnectReason_ = static_cast<livekit::DisconnectReason>(reason);
+    Logger::instance().info(QString("Room disconnected reason received: %1").arg(reason));
+    emit roomDisconnected(reason);
 }
 
 void ConferenceManager::onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic)

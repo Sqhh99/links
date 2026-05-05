@@ -32,9 +32,11 @@ public:
                             const livekit::TrackUnpublishedEvent& event) override;
     void onConnectionQualityChanged(livekit::Room& room,
                                     const livekit::ConnectionQualityChangedEvent& event) override;
-    void onConnectionStateChanged(livekit::Room& room, 
+    void onConnectionStateChanged(livekit::Room& room,
                                   const livekit::ConnectionStateChangedEvent& event) override;
-    void onUserPacketReceived(livekit::Room& room, 
+    void onDisconnected(livekit::Room& room,
+                        const livekit::DisconnectedEvent& event) override;
+    void onUserPacketReceived(livekit::Room& room,
                               const livekit::UserDataPacketEvent& event) override;
     void onLocalTrackPublished(livekit::Room& room,
                                const livekit::LocalTrackPublishedEvent& event) override;
@@ -53,6 +55,7 @@ signals:
     void trackUnpublishedQueued(QString trackSid, QString participantIdentity, int kind, int source);
     void connectionQualityChangedQueued(QString participantIdentity, int quality);
     void connectionStateChangedQueued(int state);
+    void roomDisconnectedQueued(int reason);
     void dataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
 
 };

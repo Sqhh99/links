@@ -362,7 +362,7 @@ ScrollView {
                 }
             }
         }
-        
+
         Item { Layout.fillHeight: true }
     }
 }

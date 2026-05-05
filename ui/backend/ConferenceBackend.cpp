@@ -63,6 +63,12 @@ bool networkStatsDifferent(const NetworkStatsSnapshot& lhs,
         || lhs.transportProtocol != rhs.transportProtocol;
 }
 
+bool isRoomEndedDisconnectReason(livekit::DisconnectReason reason)
+{
+    return reason == livekit::DisconnectReason::RoomDeleted
+        || reason == livekit::DisconnectReason::RoomClosed;
+}
+
 } // namespace
 
 ConferenceBackend::ConferenceBackend(QObject* parent)
@@ -129,6 +135,8 @@ void ConferenceBackend::setupConnections()
             this, &ConferenceBackend::onConnected);
     connect(conferenceManager_, &ConferenceManager::disconnected,
             this, &ConferenceBackend::onDisconnected);
+    connect(conferenceManager_, &ConferenceManager::roomDisconnected,
+            this, &ConferenceBackend::onRoomDisconnected);
     connect(conferenceManager_, &ConferenceManager::connectionStateChanged,
             this, &ConferenceBackend::onConnectionStateChanged);
     connect(conferenceManager_, &ConferenceManager::participantJoined,
@@ -264,6 +272,39 @@ void ConferenceBackend::clearRemoteParticipantState()
         pinnedMain_ = false;
         emit mainParticipantChanged();
     }
+}
+
+bool ConferenceBackend::hasKnownRemoteHost() const
+{
+    for (auto it = hostState_.cbegin(); it != hostState_.cend(); ++it) {
+        if (it.value()) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool ConferenceBackend::shouldTreatDisconnectAsMeetingEnded() const
+{
+    const livekit::DisconnectReason reason =
+        conferenceManager_ ? conferenceManager_->lastDisconnectReason()
+                           : livekit::DisconnectReason::Unknown;
+    if (isRoomEndedDisconnectReason(reason)) {
+        return !isHost_
+            && !userInitiatedLeave_
+            && !meetingEndedTriggered_;
+    }
+
+    if (reason != livekit::DisconnectReason::Unknown) {
+        return false;
+    }
+
+    return !isHost_
+        && !userInitiatedLeave_
+        && !meetingEndedTriggered_
+        && !sawReconnectingSinceConnected_
+        && hasKnownRemoteHost();
 }
 
 // Property getters
@@ -810,7 +851,6 @@ void ConferenceBackend::onConnected()
     meetingEndedTriggered_ = false;
     userInitiatedLeave_ = false;
     sawReconnectingSinceConnected_ = false;
-    hadAnyRemoteParticipantInSession_ = false;
     connectionStatus_ = "Connected";
     connectionColor_ = "#4caf50";
     emit connectionStatusChanged();
@@ -855,15 +895,11 @@ void ConferenceBackend::onDisconnected()
         shareModeManager_->exitShareMode();
     }
 
-    const bool shouldTreatAsMeetingEnded =
-        !isHost_
-        && !userInitiatedLeave_
-        && !meetingEndedTriggered_
-        && !sawReconnectingSinceConnected_
-        && hadAnyRemoteParticipantInSession_;
-    if (shouldTreatAsMeetingEnded) {
+    if (shouldTreatDisconnectAsMeetingEnded()) {
         meetingEndedTriggered_ = true;
-        Logger::instance().info("Unexpected disconnect for attendee, treating as meeting ended by host");
+        userInitiatedLeave_ = true;
+        Logger::instance().info(
+            "Attendee disconnect matched meeting-ended conditions, triggering meeting-ended flow");
         emit meetingEndedByHost();
     }
 
@@ -893,15 +929,33 @@ void ConferenceBackend::onDisconnected()
     emit participantCountChanged();
 
     sawReconnectingSinceConnected_ = false;
-    hadAnyRemoteParticipantInSession_ = false;
-    userInitiatedLeave_ = false;
-    meetingEndedTriggered_ = false;
+    if (!meetingEndedTriggered_) {
+        userInitiatedLeave_ = false;
+    }
+}
+
+void ConferenceBackend::onRoomDisconnected(int reason)
+{
+    const auto disconnectReason = static_cast<livekit::DisconnectReason>(reason);
+    if (!isRoomEndedDisconnectReason(disconnectReason)
+        || isHost_
+        || userInitiatedLeave_
+        || meetingEndedTriggered_) {
+        return;
+    }
+
+    meetingEndedTriggered_ = true;
+    userInitiatedLeave_ = true;
+    Logger::instance().info(
+        "Room disconnected with room-ended reason, triggering meeting-ended flow");
+    emit meetingEndedByHost();
 }
 
 void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
 {
     switch (state) {
         case livekit::ConnectionState::Connected:
+            sawReconnectingSinceConnected_ = false;
             connectionStatus_ = "Connected";
             connectionColor_ = "#4caf50";
             break;
@@ -937,7 +991,6 @@ void ConferenceBackend::onParticipantJoined(const ParticipantInfo& info)
 
     const bool isNewParticipant = !nameMap_.contains(info.identity);
     Logger::instance().debug(QString("Participant joined (backend): %1").arg(info.name));
-    hadAnyRemoteParticipantInSession_ = true;
     
     nameMap_[info.identity] = info.name.isEmpty() ? info.identity : info.name;
     micState_[info.identity] = info.isMicrophoneEnabled;
@@ -1249,7 +1302,6 @@ void ConferenceBackend::updateParticipantsList()
             continue;
         }
 
-        hadAnyRemoteParticipantInSession_ = true;
         remoteIds.insert(info.identity);
 
         const QString displayName = info.name.isEmpty() ? info.identity : info.name;

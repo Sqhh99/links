@@ -32,6 +32,7 @@ public:
     void connect(const QString& url, const QString& token);
     void disconnect();
     bool isConnected() const { return connected_; }
+    livekit::DisconnectReason lastDisconnectReason() const { return lastDisconnectReason_; }
     
     // Media controls
     void toggleMicrophone();
@@ -81,6 +82,7 @@ signals:
     // Connection events
     void connected();
     void disconnected();
+    void roomDisconnected(int reason);
     void connectionStateChanged(livekit::ConnectionState state);
     void connectionError(const QString& error);
     
@@ -130,6 +132,7 @@ private:
     void onTrackUnpublishedQueued(QString trackSid, QString participantIdentity, int kind, int source);
     void onConnectionQualityChangedQueued(QString participantIdentity, int quality);
     void onConnectionStateChangedQueued(int state);
+    void onRoomDisconnectedQueued(int reason);
     void onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
     
     void updateParticipantInfo(const QString& identity);
@@ -150,6 +153,7 @@ private:
     QString participantName_;
     QString participantIdentity_;
     bool connected_{false};
+    livekit::DisconnectReason lastDisconnectReason_{livekit::DisconnectReason::Unknown};
     QTimer networkStatsTimer_;
     NetworkQualityLevel localNetworkQuality_{NetworkQualityLevel::Unknown};
     NetworkStatsSnapshot localNetworkStats_;
