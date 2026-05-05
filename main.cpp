@@ -113,9 +113,9 @@ int main(int argc, char* argv[])
     app.setQuitOnLastWindowClosed(false);
     QQuickWindow::setDefaultAlphaBuffer(true);
 
-    app.setApplicationName("SQLink");
+    app.setApplicationName("Links");
     app.setApplicationVersion("1.0.0");
-    app.setOrganizationName("SQLink");
+    app.setOrganizationName("Links");
 
     QIcon appIcon;
     appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_16x16.png"), QSize(16, 16));

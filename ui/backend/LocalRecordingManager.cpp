@@ -87,7 +87,7 @@ LocalRecordingManager::LocalRecordingManager(QObject* parent)
         baseDir = QDir::homePath();
     }
 
-    outputDirectory_ = QDir(baseDir).filePath(QStringLiteral("SQLink/Recordings"));
+    outputDirectory_ = QDir(baseDir).filePath(QStringLiteral("Links/Recordings"));
 
     durationTimer_.setInterval(1000);
     durationTimer_.setSingleShot(false);

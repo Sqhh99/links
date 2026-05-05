@@ -1,0 +1,446 @@
+name: Package
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version without v. Defaults to 0.0.0-dev.<run_number>."
+        required: false
+        type: string
+
+env:
+  QT_VERSION: "6.8.3"
+
+jobs:
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Resolve package version
+        id: version
+        shell: bash
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          elif [[ -n "${INPUT_VERSION}" ]]; then
+            version="${INPUT_VERSION}"
+          else
+            version="0.0.0-dev.${GITHUB_RUN_NUMBER}"
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "Resolved version: ${version}"
+
+  package-windows:
+    runs-on: windows-latest
+    needs: resolve-version
+    env:
+      LINKS_SDK_ARCH: x64
+      LINKS_ENABLE_LOCAL_RECORDING: "ON"
+      VCPKG_TARGET_TRIPLET: x64-windows
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: amd64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: win64_msvc2022_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Install build and packaging tools
+        shell: pwsh
+        run: |
+          choco install ninja --no-progress -y
+          choco install innosetup --no-progress -y
+
+      - name: Setup vcpkg
+        shell: pwsh
+        run: |
+          if (!(Test-Path "third_party\vcpkg")) {
+            git clone https://github.com/microsoft/vcpkg.git third_party/vcpkg
+          }
+          .\third_party\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: third_party/vcpkg_installed
+          key: vcpkg-package-Windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-package-Windows-
+
+      - name: Build release binary
+        shell: cmd
+        run: build.cmd release
+
+      - name: Prepare Qt runtime package
+        id: package
+        shell: pwsh
+        run: |
+          $workspace = $env:GITHUB_WORKSPACE
+          $version = "${{ needs.resolve-version.outputs.version }}"
+          $distRoot = Join-Path $workspace "dist"
+          $appDir = Join-Path $distRoot "Links"
+          $binDir = Join-Path $workspace "build\bin"
+          $exePath = Join-Path $binDir "links.exe"
+          $qmlSourceDir = Join-Path $workspace "ui\qml"
+
+          if (!(Test-Path $exePath)) { throw "Executable not found: $exePath" }
+          if (!(Test-Path $qmlSourceDir)) { throw "QML source dir not found: $qmlSourceDir" }
+
+          New-Item -ItemType Directory -Force -Path $appDir | Out-Null
+          Copy-Item -Path (Join-Path $binDir "*") -Destination $appDir -Recurse -Force
+
+          $appExePath = Join-Path $appDir "links.exe"
+          & windeployqt.exe --release --compiler-runtime --no-translations --no-opengl-sw --qmldir "$qmlSourceDir" --dir "$appDir" "$appExePath"
+          if ($LASTEXITCODE -ne 0) { throw "windeployqt failed with exit code $LASTEXITCODE" }
+
+          @(
+            "[Paths]",
+            "Prefix=.",
+            "Plugins=.",
+            "Qml2Imports=qml",
+            "Imports=qml"
+          ) | Set-Content -Path (Join-Path $appDir "qt.conf") -Encoding Ascii
+
+          $required = @(
+            "links.exe",
+            "Qt6Core.dll",
+            "Qt6Qml.dll",
+            "Qt6Quick.dll",
+            "platforms\qwindows.dll",
+            "livekit.dll",
+            "livekit_ffi.dll",
+            "webrtc-audio-processing-2-1.dll"
+          )
+          foreach ($relativePath in $required) {
+            $path = Join-Path $appDir $relativePath
+            if (!(Test-Path $path)) { throw "Missing packaged runtime file: $path" }
+          }
+
+          Get-ChildItem -Path $appDir -Recurse -File -Include *.pdb,*.ilk,*.exp,*.lib,*.ipdb,*.iobj |
+            Remove-Item -Force -ErrorAction SilentlyContinue
+
+          $portableZip = Join-Path $distRoot ("Links-v{0}-win-x64-portable.zip" -f $version)
+          if (Test-Path $portableZip) { Remove-Item -Force $portableZip }
+          Push-Location $distRoot
+          try {
+            Compress-Archive -Path "Links" -DestinationPath $portableZip -CompressionLevel Optimal
+          } finally {
+            Pop-Location
+          }
+
+          "dist_dir=$appDir" >> $env:GITHUB_OUTPUT
+          "portable_zip=$portableZip" >> $env:GITHUB_OUTPUT
+
+      - name: Build Inno Setup installer
+        id: installer
+        shell: pwsh
+        run: |
+          $workspace = $env:GITHUB_WORKSPACE
+          $scriptPath = Join-Path $workspace "tools\packaging\windows\links-setup.iss"
+          $distDir = "${{ steps.package.outputs.dist_dir }}"
+          $outputDir = Join-Path $workspace "dist\installer"
+          $isccPath = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+
+          if (!(Test-Path $scriptPath)) { throw "Installer script not found: $scriptPath" }
+          if (!(Test-Path $isccPath)) { throw "ISCC not found: $isccPath" }
+
+          New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+          & $isccPath "/DSourceRoot=$workspace" "/DDistDir=$distDir" "/DOutputDir=$outputDir" "/DAppVersion=${{ needs.resolve-version.outputs.version }}" "$scriptPath"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE" }
+
+          $installerFile = Get-ChildItem -Path $outputDir -File -Filter "*.exe" |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First 1
+          if ($null -eq $installerFile) { throw "No installer generated in $outputDir" }
+          "installer_exe=$($installerFile.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload Windows portable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Links-Windows-x64-portable
+          path: ${{ steps.package.outputs.portable_zip }}
+          if-no-files-found: error
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: Links-Windows-x64-setup
+          path: ${{ steps.installer.outputs.installer_exe }}
+          if-no-files-found: error
+
+  package-macos:
+    runs-on: macos-latest
+    needs: resolve-version
+    env:
+      LINKS_SDK_ARCH: arm64
+      LINKS_ENABLE_LOCAL_RECORDING: "OFF"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: clang_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Setup vcpkg
+        shell: bash
+        run: |
+          if [ ! -d third_party/vcpkg ]; then
+            git clone https://github.com/microsoft/vcpkg.git third_party/vcpkg
+          fi
+          ./third_party/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: third_party/vcpkg_installed
+          key: vcpkg-package-macOS-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-package-macOS-
+
+      - name: Build release bundle
+        shell: bash
+        run: |
+          chmod +x ./build.sh
+          ./build.sh release
+
+      - name: Prepare DMG package
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.resolve-version.outputs.version }}"
+          app_path="$GITHUB_WORKSPACE/build/bin/links.app"
+          binary_path="$app_path/Contents/MacOS/links"
+          frameworks_dir="$app_path/Contents/Frameworks"
+          dist_dir="$GITHUB_WORKSPACE/dist"
+
+          if [ ! -d "$app_path" ]; then
+            echo "App bundle not found: $app_path" >&2
+            exit 1
+          fi
+          if [ ! -f "$binary_path" ]; then
+            echo "App binary not found: $binary_path" >&2
+            exit 1
+          fi
+
+          mkdir -p "$frameworks_dir" "$dist_dir"
+
+          livekit_lib="$(find "$GITHUB_WORKSPACE/third_party" -name liblivekit.dylib -print -quit)"
+          livekit_ffi_lib="$(find "$GITHUB_WORKSPACE/third_party" -name liblivekit_ffi.dylib -print -quit)"
+          webrtc_apm_lib="$(find "$GITHUB_WORKSPACE/third_party" -name 'libwebrtc-audio-processing-2.1.dylib' -print -quit)"
+
+          for lib in "$livekit_lib" "$livekit_ffi_lib" "$webrtc_apm_lib"; do
+            if [ -z "$lib" ] || [ ! -f "$lib" ]; then
+              echo "Required dylib not found" >&2
+              exit 1
+            fi
+            cp -f "$lib" "$frameworks_dir/"
+          done
+
+          install_name_tool -add_rpath "@executable_path/../Frameworks" "$binary_path" 2>/dev/null || true
+          while IFS= read -r dep; do
+            base="$(basename "$dep")"
+            install_name_tool -change "$dep" "@executable_path/../Frameworks/$base" "$binary_path" 2>/dev/null || true
+          done < <(otool -L "$binary_path" | awk '/liblivekit|libwebrtc-audio-processing/ {print $1}')
+
+          install_name_tool -id "@rpath/liblivekit.dylib" "$frameworks_dir/liblivekit.dylib" 2>/dev/null || true
+          install_name_tool -id "@rpath/liblivekit_ffi.dylib" "$frameworks_dir/liblivekit_ffi.dylib" 2>/dev/null || true
+          install_name_tool -id "@rpath/libwebrtc-audio-processing-2.1.dylib" "$frameworks_dir/libwebrtc-audio-processing-2.1.dylib" 2>/dev/null || true
+          install_name_tool -change "@rpath/liblivekit.dylib" "@loader_path/liblivekit.dylib" "$frameworks_dir/liblivekit_ffi.dylib" 2>/dev/null || true
+
+          macdeployqt "$app_path" -qmldir="$GITHUB_WORKSPACE/ui/qml" -dmg -verbose=1
+
+          dmg_file="$(find "$GITHUB_WORKSPACE/build/bin" -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$dmg_file" ] || [ ! -f "$dmg_file" ]; then
+            echo "macdeployqt did not generate a dmg" >&2
+            exit 1
+          fi
+
+          final_dmg="$dist_dir/Links-v${version}-macos-arm64.dmg"
+          mv -f "$dmg_file" "$final_dmg"
+
+          app_zip="$dist_dir/Links-v${version}-macos-arm64-app.zip"
+          ditto -c -k --sequesterRsrc --keepParent "$app_path" "$app_zip"
+
+          echo "dmg=$final_dmg" >> "$GITHUB_OUTPUT"
+          echo "app_zip=$app_zip" >> "$GITHUB_OUTPUT"
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v4
+        with:
+          name: Links-macOS-arm64-dmg
+          path: ${{ steps.package.outputs.dmg }}
+          if-no-files-found: error
+
+      - name: Upload macOS app zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: Links-macOS-arm64-app
+          path: ${{ steps.package.outputs.app_zip }}
+          if-no-files-found: error
+
+  package-linux:
+    runs-on: ubuntu-latest
+    needs: resolve-version
+    env:
+      LINKS_SDK_ARCH: x64
+      LINKS_ENABLE_LOCAL_RECORDING: "OFF"
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: ${{ env.QT_VERSION }}
+          arch: linux_gcc_64
+          modules: qtmultimedia
+          cache: true
+
+      - name: Install Linux build and packaging dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            ninja-build \
+            patchelf \
+            wget \
+            file \
+            libgl1-mesa-dev \
+            libxkbcommon-dev \
+            libxkbcommon-x11-dev \
+            libxcb-xinerama0-dev \
+            libxcb-cursor-dev \
+            libpulse-dev \
+            libasound2-dev
+
+      - name: Setup vcpkg
+        shell: bash
+        run: |
+          if [ ! -d third_party/vcpkg ]; then
+            git clone https://github.com/microsoft/vcpkg.git third_party/vcpkg
+          fi
+          ./third_party/vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: third_party/vcpkg_installed
+          key: vcpkg-package-Linux-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-package-Linux-
+
+      - name: Build release binary
+        shell: bash
+        run: |
+          chmod +x ./build.sh
+          ./build.sh release
+
+      - name: Build AppImage
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+          version="${{ needs.resolve-version.outputs.version }}"
+          appdir="$GITHUB_WORKSPACE/AppDir"
+          dist_dir="$GITHUB_WORKSPACE/dist"
+          mkdir -p "$dist_dir"
+
+          cmake --install "$GITHUB_WORKSPACE/build" --prefix "$appdir/usr"
+
+          mkdir -p "$appdir/usr/lib"
+          while IFS= read -r lib; do
+            cp -a "$lib" "$appdir/usr/lib/"
+          done < <(find -L "$GITHUB_WORKSPACE/third_party" -type f \( \
+            -name 'liblivekit.so*' -o \
+            -name 'liblivekit_ffi.so*' -o \
+            -name 'libwebrtc-audio-processing-2.so*' \
+          \))
+
+          for required_lib in liblivekit.so liblivekit_ffi.so libwebrtc-audio-processing-2.so; do
+            if ! find "$appdir/usr/lib" -name "${required_lib}*" -print -quit | grep -q .; then
+              echo "Missing copied runtime library: ${required_lib}" >&2
+              exit 1
+            fi
+          done
+
+          if [ ! -f "$appdir/usr/bin/links" ]; then
+            echo "Installed binary missing: $appdir/usr/bin/links" >&2
+            exit 1
+          fi
+          if [ ! -f "$appdir/usr/share/applications/links.desktop" ]; then
+            echo "Desktop file missing from AppDir" >&2
+            exit 1
+          fi
+
+          patchelf --set-rpath '$ORIGIN/../lib' "$appdir/usr/bin/links"
+
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QML_SOURCES_PATHS="$GITHUB_WORKSPACE/ui/qml"
+          export OUTPUT="$dist_dir/Links-v${version}-linux-x86_64.AppImage"
+          ./linuxdeploy-x86_64.AppImage --appdir "$appdir" --plugin qt --output appimage
+
+          if [ ! -f "$OUTPUT" ]; then
+            echo "AppImage was not generated: $OUTPUT" >&2
+            exit 1
+          fi
+          chmod +x "$OUTPUT"
+          echo "appimage=$OUTPUT" >> "$GITHUB_OUTPUT"
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: Links-Linux-x86_64-AppImage
+          path: ${{ steps.package.outputs.appimage }}
+          if-no-files-found: error
+
+  publish-release:
+    runs-on: ubuntu-latest
+    needs:
+      - resolve-version
+      - package-windows
+      - package-macos
+      - package-linux
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - name: Download package artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish GitHub Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}

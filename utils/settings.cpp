@@ -7,16 +7,16 @@
 // Helper function to get the config file path
 static QString getConfigFilePath()
 {
-    // Use AppData/Local/SQLink directory for config file
+    // Use AppData/Local/Links directory for config file
     // This works even when app is installed in Program Files (which is read-only)
     // Use GenericDataLocation to avoid Qt appending organization/app name automatically
     QString baseDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    QString configDir = baseDir + "/SQLink";
+    QString configDir = baseDir + "/Links";
     QDir dir(configDir);
     if (!dir.exists()) {
         dir.mkpath(".");
     }
-    return configDir + "/sqlink_config.ini";
+    return configDir + "/links_config.ini";
 }
 
 Settings& Settings::instance()
