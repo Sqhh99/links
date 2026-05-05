@@ -190,34 +190,6 @@ target_include_directories(recording_core_tests PRIVATE
 )
 
 # =============================================================================
-# Speech core tests (pure C++, no Qt dependency)
-# =============================================================================
-
-add_executable(speech_core_tests
-    core/test_speech_model_scanner.cpp
-    core/test_utterance_segmenter.cpp
-    ${CMAKE_SOURCE_DIR}/core/speech/model_scanner.cpp
-    ${CMAKE_SOURCE_DIR}/core/speech/utterance_segmenter.cpp
-)
-
-set_target_properties(speech_core_tests PROPERTIES
-    AUTOMOC OFF
-    AUTOUIC OFF
-    AUTORCC OFF
-)
-
-target_link_libraries(speech_core_tests PRIVATE
-    GTest::gtest
-    GTest::gtest_main
-)
-
-target_include_directories(speech_core_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
-    ${CMAKE_SOURCE_DIR}/utils
-)
-
-# =============================================================================
 # Cross-platform capture tests (macOS/Linux only)
 # =============================================================================
 
@@ -332,7 +304,6 @@ gtest_discover_tests(desktop_capture_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(conference_network_stats_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(conference_metadata_parser_tests DISCOVERY_MODE PRE_TEST)
 gtest_discover_tests(recording_core_tests DISCOVERY_MODE PRE_TEST)
-gtest_discover_tests(speech_core_tests DISCOVERY_MODE PRE_TEST)
 
 if(TARGET capture_platform_tests)
     gtest_discover_tests(capture_platform_tests DISCOVERY_MODE PRE_TEST)
@@ -385,7 +356,4 @@ if(WIN32)
 
     copy_runtime_if_exists(recording_core_tests "${GTEST_DLL_DIR}/gtest.dll")
     copy_runtime_if_exists(recording_core_tests "${GTEST_DLL_DIR}/gtest_main.dll")
-
-    copy_runtime_if_exists(speech_core_tests "${GTEST_DLL_DIR}/gtest.dll")
-    copy_runtime_if_exists(speech_core_tests "${GTEST_DLL_DIR}/gtest_main.dll")
 endif()

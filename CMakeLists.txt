@@ -15,10 +15,8 @@ set(VCPKG_APPLOCAL_DEPS OFF)
 option(LINKS_BUILD_TESTS "Build test suite" ON)
 if(WIN32)
     option(LINKS_ENABLE_LOCAL_RECORDING "Enable local recording feature" ON)
-    option(LINKS_ENABLE_SPEECH_TO_TEXT "Enable speech-to-text preview feature" ON)
 else()
     option(LINKS_ENABLE_LOCAL_RECORDING "Enable local recording feature" OFF)
-    option(LINKS_ENABLE_SPEECH_TO_TEXT "Enable speech-to-text preview feature" OFF)
 endif()
 
 # =============================================================================
@@ -55,16 +53,6 @@ include(FetchWebRTCAudioProcessing)
 
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
-if(LINKS_ENABLE_SPEECH_TO_TEXT)
-    find_package(whisper CONFIG QUIET)
-endif()
-
-set(LINKS_SPEECH_TO_TEXT_AVAILABLE OFF)
-if(LINKS_ENABLE_SPEECH_TO_TEXT AND whisper_FOUND)
-    set(LINKS_SPEECH_TO_TEXT_AVAILABLE ON)
-elseif(LINKS_ENABLE_SPEECH_TO_TEXT)
-    message(WARNING "whisper package not found; speech-to-text preview will be disabled")
-endif()
 
 # Source files
 set(SOURCES
@@ -82,9 +70,6 @@ set(SOURCES
     core/camera_capturer.cpp
     core/microphone_capturer.cpp
     core/audio_processing_module.cpp
-    core/speech/model_scanner.cpp
-    core/speech/realtime_transcription_session.cpp
-    core/speech/utterance_segmenter.cpp
     core/screen_capturer.cpp
     core/room_event_delegate.cpp
     core/platform_window_ops.cpp
@@ -92,7 +77,6 @@ set(SOURCES
     core/recording/recording_layout.cpp
     core/recording/frame_clock.cpp
     ui/adapters/qt/qt_capture_adapter.cpp
-    ui/adapters/qt/qt_audio_preview_source.cpp
     # Desktop Capture module
     core/desktop_capture/desktop_frame.cpp
     core/desktop_capture/desktop_capturer.cpp
@@ -148,10 +132,6 @@ set(HEADERS
     core/network_client.h
     core/camera_capturer.h
     core/microphone_capturer.h
-    core/speech/model_scanner.h
-    core/speech/realtime_transcription_session.h
-    core/speech/speech_types.h
-    core/speech/utterance_segmenter.h
     core/screen_capturer.h
     core/room_event_delegate.h
     core/window_types.h
@@ -175,7 +155,6 @@ set(HEADERS
     ui/backend/VideoRenderer.h
     ui/backend/ScreenPickerBackend.h
     ui/adapters/qt/qt_capture_adapter.h
-    ui/adapters/qt/qt_audio_preview_source.h
     ui/backend/ShareModeManager.h
     ui/backend/AuthBackend.h
     ui/backend/ThemeManager.h
@@ -327,14 +306,6 @@ else()
     target_compile_definitions(links PRIVATE LINKS_ENABLE_LOCAL_RECORDING=0)
 endif()
 message(STATUS "Local recording enabled: ${LINKS_ENABLE_LOCAL_RECORDING}")
-
-if(LINKS_SPEECH_TO_TEXT_AVAILABLE)
-    target_compile_definitions(links PRIVATE LINKS_ENABLE_SPEECH_TO_TEXT=1)
-    target_link_libraries(links PRIVATE whisper)
-else()
-    target_compile_definitions(links PRIVATE LINKS_ENABLE_SPEECH_TO_TEXT=0)
-endif()
-message(STATUS "Speech-to-text preview enabled: ${LINKS_SPEECH_TO_TEXT_AVAILABLE}")
 
 if(APPLE)
     find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)

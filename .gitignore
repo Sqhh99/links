@@ -33,3 +33,4 @@ server/livekit-signaling-server/links-sig-go-server/*.exe
 server/livekit-signaling-server/links-sig-rust-server/target/
 server/livekit-signaling-server/links-sig-rust-server/.env
 links-server
+examples/

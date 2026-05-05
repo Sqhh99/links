@@ -4,13 +4,6 @@
   "version-string": "1.0.0",
   "description": "LiveKit C++ Client SDK Application",
   "dependencies": [
-    "gtest",
-    {
-      "name": "whisper-cpp",
-      "platform": "windows",
-      "features": [
-        "cuda"
-      ]
-    }
+    "gtest"
   ]
 }
