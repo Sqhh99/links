@@ -153,6 +153,7 @@ private:
     QString participantName_;
     QString participantIdentity_;
     bool connected_{false};
+    bool disconnecting_{false};
     livekit::DisconnectReason lastDisconnectReason_{livekit::DisconnectReason::Unknown};
     QTimer networkStatsTimer_;
     NetworkQualityLevel localNetworkQuality_{NetworkQualityLevel::Unknown};
