@@ -7,9 +7,10 @@
 // Helper function to get the config file path
 static QString getConfigFilePath()
 {
-    // Use AppData/Local/Links directory for config file
-    // This works even when app is installed in Program Files (which is read-only)
-    // Use GenericDataLocation to avoid Qt appending organization/app name automatically
+    // Store the config file under Qt's cross-platform generic data directory,
+    // using a "Links" subdirectory (for example, under AppData/Local on Windows).
+    // This avoids writing to the installation directory, and GenericDataLocation
+    // prevents Qt from appending the organization/app name automatically.
     QString baseDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
     QString configDir = baseDir + "/Links";
     QDir dir(configDir);
