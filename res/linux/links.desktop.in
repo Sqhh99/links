@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=SQLink
+Comment=Real-time video conferencing client
+Exec=links
+Icon=links
+Terminal=false
+Categories=Network;VideoConference;
+StartupNotify=true

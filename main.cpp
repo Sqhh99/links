@@ -1,9 +1,11 @@
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlComponent>
 #include <QQuickWindow>
 #include <QQuickStyle>
+#include <QSize>
 
 #include "ui/backend/LoginBackend.h"
 #include "ui/backend/SettingsBackend.h"
@@ -114,6 +116,15 @@ int main(int argc, char* argv[])
     app.setApplicationName("SQLink");
     app.setApplicationVersion("1.0.0");
     app.setOrganizationName("SQLink");
+
+    QIcon appIcon;
+    appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_16x16.png"), QSize(16, 16));
+    appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_32x32.png"), QSize(32, 32));
+    appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_48x48.png"), QSize(48, 48));
+    appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_64x64.png"), QSize(64, 64));
+    appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_128x128.png"), QSize(128, 128));
+    appIcon.addFile(QStringLiteral(":/res/icon/appIcon/linux/icon_256x256.png"), QSize(256, 256));
+    app.setWindowIcon(appIcon);
 
     QQuickStyle::setStyle("Basic");
 
