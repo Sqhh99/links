@@ -2,23 +2,77 @@
 #include "logger.h"
 #include <QCoreApplication>
 #include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QStandardPaths>
 
+namespace {
+
+QString genericDataDir()
+{
+    QString baseDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
+    if (baseDir.isEmpty()) {
+        baseDir = QDir::homePath();
+    }
+    return baseDir;
+}
+
+QString linksConfigFilePath()
+{
+    return genericDataDir() + "/Links/links_config.ini";
+}
+
+QString legacyConfigFilePath()
+{
+    return genericDataDir() + "/SQLink/sqlink_config.ini";
+}
+
+void ensureConfigDirExists(const QString& configFilePath)
+{
+    QDir dir(QFileInfo(configFilePath).absolutePath());
+    if (!dir.exists() && !dir.mkpath(".")) {
+        Logger::instance().warning(QString("Failed to create settings directory: %1").arg(dir.absolutePath()));
+    }
+}
+
+void migrateLegacyConfigIfNeeded(const QString& configFilePath)
+{
+    if (QFileInfo::exists(configFilePath)) {
+        return;
+    }
+
+    const QString legacyPath = legacyConfigFilePath();
+    if (!QFileInfo::exists(legacyPath)) {
+        return;
+    }
+
+    ensureConfigDirExists(configFilePath);
+    if (QFile::copy(legacyPath, configFilePath)) {
+        Logger::instance().info(QString("Migrated settings from legacy location: %1").arg(legacyPath));
+    } else {
+        Logger::instance().warning(QString("Failed to migrate legacy settings from: %1").arg(legacyPath));
+    }
+}
+
 // Helper function to get the config file path
-static QString getConfigFilePath()
+QString getConfigFilePath()
 {
     // Store the config file under Qt's cross-platform generic data directory,
     // using a "Links" subdirectory (for example, under AppData/Local on Windows).
     // This avoids writing to the installation directory, and GenericDataLocation
     // prevents Qt from appending the organization/app name automatically.
-    QString baseDir = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation);
-    QString configDir = baseDir + "/Links";
+    const QString configFilePath = linksConfigFilePath();
+    migrateLegacyConfigIfNeeded(configFilePath);
+
+    QString configDir = QFileInfo(configFilePath).absolutePath();
     QDir dir(configDir);
     if (!dir.exists()) {
         dir.mkpath(".");
     }
-    return configDir + "/links_config.ini";
+    return configFilePath;
 }
+
+} // namespace
 
 Settings& Settings::instance()
 {

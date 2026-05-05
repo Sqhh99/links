@@ -346,7 +346,6 @@ jobs:
           sudo apt-get install -y \
             ninja-build \
             patchelf \
-            wget \
             file \
             libgl1-mesa-dev \
             libxkbcommon-dev \
@@ -417,18 +416,67 @@ jobs:
 
           patchelf --set-rpath '$ORIGIN/../lib' "$appdir/usr/bin/links"
 
-          linuxdeploy_version="1-alpha-20250213-2"
-          linuxdeploy_plugin_qt_version="1-alpha-20250213-2"
-          linuxdeploy_sha256="<REPLACE_WITH_LINUXDEPLOY_SHA256>"
-          linuxdeploy_plugin_qt_sha256="<REPLACE_WITH_LINUXDEPLOY_PLUGIN_QT_SHA256>"
+          export linuxdeploy_version="1-alpha-20250213-2"
+          export linuxdeploy_plugin_qt_version="1-alpha-20250213-1"
 
-          curl -fsSLo linuxdeploy-x86_64.AppImage \
-            "https://github.com/linuxdeploy/linuxdeploy/releases/download/${linuxdeploy_version}/linuxdeploy-x86_64.AppImage"
-          curl -fsSLo linuxdeploy-plugin-qt-x86_64.AppImage \
-            "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/${linuxdeploy_plugin_qt_version}/linuxdeploy-plugin-qt-x86_64.AppImage"
+          python3 <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          import urllib.request
 
-          printf '%s  %s\n' "$linuxdeploy_sha256" "linuxdeploy-x86_64.AppImage" | sha256sum -c -
-          printf '%s  %s\n' "$linuxdeploy_plugin_qt_sha256" "linuxdeploy-plugin-qt-x86_64.AppImage" | sha256sum -c -
+          ASSETS = [
+              (
+                  "linuxdeploy/linuxdeploy",
+                  os.environ["linuxdeploy_version"],
+                  "linuxdeploy-x86_64.AppImage",
+              ),
+              (
+                  "linuxdeploy/linuxdeploy-plugin-qt",
+                  os.environ["linuxdeploy_plugin_qt_version"],
+                  "linuxdeploy-plugin-qt-x86_64.AppImage",
+              ),
+          ]
+
+          def request(url):
+              headers = {
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "links-package-workflow",
+              }
+              token = os.environ.get("GITHUB_TOKEN")
+              if token:
+                  headers["Authorization"] = f"Bearer {token}"
+              return urllib.request.Request(url, headers=headers)
+
+          for repo, tag, asset_name in ASSETS:
+              api_url = f"https://api.github.com/repos/{repo}/releases/tags/{tag}"
+              with urllib.request.urlopen(request(api_url)) as response:
+                  release = json.load(response)
+
+              asset = next((item for item in release.get("assets", []) if item.get("name") == asset_name), None)
+              if asset is None:
+                  print(f"Release asset not found: {repo}@{tag}/{asset_name}", file=sys.stderr)
+                  sys.exit(1)
+
+              digest = asset.get("digest") or ""
+              if not digest.startswith("sha256:"):
+                  print(f"Release asset has no sha256 digest: {repo}@{tag}/{asset_name}", file=sys.stderr)
+                  sys.exit(1)
+
+              url = asset["browser_download_url"]
+              with urllib.request.urlopen(request(url)) as response, open(asset_name, "wb") as output:
+                  data = response.read()
+                  output.write(data)
+
+              actual = hashlib.sha256(data).hexdigest()
+              expected = digest.removeprefix("sha256:")
+              if actual.lower() != expected.lower():
+                  print(f"SHA256 mismatch for {asset_name}: expected {expected}, got {actual}", file=sys.stderr)
+                  sys.exit(1)
+
+              print(f"Downloaded and verified {asset_name}: sha256:{actual}")
+          PY
 
           chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
 
