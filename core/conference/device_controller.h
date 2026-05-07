@@ -2,6 +2,7 @@
 #define CORE_CONFERENCE_DEVICE_CONTROLLER_H
 
 #include <QElapsedTimer>
+#include <QTimer>
 #include <QObject>
 #include <QImage>
 #include <QString>
@@ -69,6 +70,8 @@ signals:
 
 private:
     void connectScreenSignals();
+    void schedulePendingUnpublishRetry();
+    void processPendingUnpublish();
     void finalizeMicrophoneDisabled();
     void finalizeCameraDisabled();
     void finalizeScreenShareDisabled();
@@ -91,6 +94,7 @@ private:
     bool pendingDisableCamera_{false};
     bool pendingDisableMicrophone_{false};
     bool pendingDisableScreenShare_{false};
+    QTimer pendingUnpublishRetryTimer_;
 
     QElapsedTimer screenShareDebounceTimer_;
     static constexpr int kScreenShareDebounceMs = 500;

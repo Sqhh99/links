@@ -189,7 +189,7 @@ void ConferenceBackend::setupConnections()
                     }
                     currentSharedScreenIndex_ = -1;
                     currentSharedWindowId_ = 0;
-                    // Note: localScreenShareEnded is emitted from stopScreenShare() method
+                    emit localScreenShareEnded();
                 }
             });
     connect(conferenceManager_, &ConferenceManager::localMicrophoneChanged,
@@ -616,7 +616,6 @@ void ConferenceBackend::startScreenShare(int screenIndex)
         if (!conferenceManager_->isScreenSharing()) {
             conferenceManager_->toggleScreenShare();
         }
-        emit screenSharingChanged();
     }
 }
 
@@ -641,7 +640,6 @@ void ConferenceBackend::startWindowShare(qulonglong windowId)
     if (!conferenceManager_->isScreenSharing()) {
         conferenceManager_->toggleScreenShare();
     }
-    emit screenSharingChanged();
 }
 
 void ConferenceBackend::stopScreenShare()
@@ -657,8 +655,6 @@ void ConferenceBackend::stopScreenShare()
         conferenceManager_->toggleScreenShare();
         currentSharedScreenIndex_ = -1;
         currentSharedWindowId_ = 0;
-        emit screenSharingChanged();
-        emit localScreenShareEnded();  // Notify QML to clear the frame
     }
 }
 

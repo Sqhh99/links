@@ -12,6 +12,7 @@
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>

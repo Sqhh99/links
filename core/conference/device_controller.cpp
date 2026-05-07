@@ -127,6 +127,10 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
       screenCapturer_(new ScreenCapturer(this))
 {
     auto& settings = Settings::instance();
+    pendingUnpublishRetryTimer_.setInterval(100);
+    pendingUnpublishRetryTimer_.setSingleShot(false);
+    QObject::connect(&pendingUnpublishRetryTimer_, &QTimer::timeout,
+                     this, &DeviceController::processPendingUnpublish);
 
     const QString cameraId = settings.getSelectedCameraId();
     if (!cameraId.isEmpty()) {
@@ -200,6 +204,9 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
                 }
             }
             pendingDisableScreenShare_ = true;
+            screenShareEnabled_ = false;
+            emit localScreenShareChanged(false);
+            schedulePendingUnpublishRetry();
             Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
         }
     });
@@ -208,6 +215,9 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
 void DeviceController::setRoom(livekit::Room* room)
 {
     room_ = room;
+    if (!room_) {
+        pendingUnpublishRetryTimer_.stop();
+    }
 }
 
 void DeviceController::stopCapturers()
@@ -267,6 +277,7 @@ void DeviceController::unpublishLocalTracks()
 
 void DeviceController::resetLocalState()
 {
+    pendingUnpublishRetryTimer_.stop();
     localVideoTrack_ = nullptr;
     localAudioTrack_ = nullptr;
     localScreenTrack_ = nullptr;
@@ -283,60 +294,81 @@ void DeviceController::resetLocalState()
 
 void DeviceController::handleLocalTrackPublished(livekit::TrackSource source, const QString& publicationSid)
 {
-    auto localParticipant = room_ ? room_->localParticipant() : nullptr;
-    if (!localParticipant) {
-        return;
-    }
-
     const std::string sid = publicationSid.toStdString();
-    UnpublishOutcome outcome = UnpublishOutcome::NoTrack;
 
     switch (source) {
     case livekit::TrackSource::SOURCE_MICROPHONE:
         audioTrackSid_ = sid;
-        if (!pendingDisableMicrophone_ || !localAudioTrack_) {
-            return;
+        break;
+    case livekit::TrackSource::SOURCE_CAMERA:
+        cameraTrackSid_ = sid;
+        break;
+    case livekit::TrackSource::SOURCE_SCREENSHARE:
+        screenTrackSid_ = sid;
+        break;
+    default:
+        return;
+    }
+
+    processPendingUnpublish();
+}
+
+void DeviceController::schedulePendingUnpublishRetry()
+{
+    if (pendingDisableMicrophone_ || pendingDisableCamera_ || pendingDisableScreenShare_) {
+        if (!pendingUnpublishRetryTimer_.isActive()) {
+            pendingUnpublishRetryTimer_.start();
         }
-        outcome = unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
-                                      QStringLiteral("audio track"), true);
+    } else {
+        pendingUnpublishRetryTimer_.stop();
+    }
+}
+
+void DeviceController::processPendingUnpublish()
+{
+    auto localParticipant = room_ ? room_->localParticipant() : nullptr;
+    if (!localParticipant) {
+        schedulePendingUnpublishRetry();
+        return;
+    }
+
+    if (pendingDisableMicrophone_ && localAudioTrack_) {
+        const UnpublishOutcome outcome =
+            unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
+                                QStringLiteral("audio track"), true);
         if (outcome == UnpublishOutcome::Unpublished
             || outcome == UnpublishOutcome::AlreadyGone
             || outcome == UnpublishOutcome::NoParticipant
             || outcome == UnpublishOutcome::NoTrack) {
             finalizeMicrophoneDisabled();
         }
-        return;
-    case livekit::TrackSource::SOURCE_CAMERA:
-        cameraTrackSid_ = sid;
-        if (!pendingDisableCamera_ || !localVideoTrack_) {
-            return;
-        }
-        outcome = unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
-                                      QStringLiteral("camera track"), true);
+    }
+
+    if (pendingDisableCamera_ && localVideoTrack_) {
+        const UnpublishOutcome outcome =
+            unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
+                                QStringLiteral("camera track"), true);
         if (outcome == UnpublishOutcome::Unpublished
             || outcome == UnpublishOutcome::AlreadyGone
             || outcome == UnpublishOutcome::NoParticipant
             || outcome == UnpublishOutcome::NoTrack) {
             finalizeCameraDisabled();
         }
-        return;
-    case livekit::TrackSource::SOURCE_SCREENSHARE:
-        screenTrackSid_ = sid;
-        if (!pendingDisableScreenShare_ || !localScreenTrack_) {
-            return;
-        }
-        outcome = unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
-                                      QStringLiteral("screen share track"), true);
+    }
+
+    if (pendingDisableScreenShare_ && localScreenTrack_) {
+        const UnpublishOutcome outcome =
+            unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
+                                QStringLiteral("screen share track"), true);
         if (outcome == UnpublishOutcome::Unpublished
             || outcome == UnpublishOutcome::AlreadyGone
             || outcome == UnpublishOutcome::NoParticipant
             || outcome == UnpublishOutcome::NoTrack) {
             finalizeScreenShareDisabled();
         }
-        return;
-    default:
-        return;
     }
+
+    schedulePendingUnpublishRetry();
 }
 
 void DeviceController::finalizeMicrophoneDisabled()
@@ -344,10 +376,7 @@ void DeviceController::finalizeMicrophoneDisabled()
     localAudioTrack_ = nullptr;
     audioTrackSid_.clear();
     pendingDisableMicrophone_ = false;
-    if (microphoneEnabled_) {
-        microphoneEnabled_ = false;
-        emit localMicrophoneChanged(false);
-    }
+    schedulePendingUnpublishRetry();
 }
 
 void DeviceController::finalizeCameraDisabled()
@@ -355,10 +384,7 @@ void DeviceController::finalizeCameraDisabled()
     localVideoTrack_ = nullptr;
     cameraTrackSid_.clear();
     pendingDisableCamera_ = false;
-    if (cameraEnabled_) {
-        cameraEnabled_ = false;
-        emit localCameraChanged(false);
-    }
+    schedulePendingUnpublishRetry();
 }
 
 void DeviceController::finalizeScreenShareDisabled()
@@ -368,10 +394,7 @@ void DeviceController::finalizeScreenShareDisabled()
     screenTrackSid_.clear();
     pendingDisableScreenShare_ = false;
     Logger::instance().info("Screen track reference released");
-    if (screenShareEnabled_) {
-        screenShareEnabled_ = false;
-        emit localScreenShareChanged(false);
-    }
+    schedulePendingUnpublishRetry();
 }
 
 void DeviceController::toggleMicrophone()
@@ -426,16 +449,17 @@ void DeviceController::toggleMicrophone()
                                         QStringLiteral("audio track"), true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableMicrophone_ = true;
-                    microphoneEnabled_ = true;
                     Logger::instance().warning("Deferring microphone shutdown until publication SID becomes available");
-                    return;
+                    schedulePendingUnpublishRetry();
+                } else {
+                    finalizeMicrophoneDisabled();
                 }
-                finalizeMicrophoneDisabled();
-                return;
             } else {
                 finalizeMicrophoneDisabled();
-                return;
             }
+            microphoneEnabled_ = false;
+            emit localMicrophoneChanged(false);
+            return;
         }
     } catch (const std::exception& e) {
         Logger::instance().error(QString("Exception in toggleMicrophone: %1").arg(e.what()));
@@ -504,16 +528,17 @@ void DeviceController::toggleCamera()
                                         QStringLiteral("camera track"), true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableCamera_ = true;
-                    cameraEnabled_ = true;
                     Logger::instance().warning("Deferring camera shutdown until publication SID becomes available");
-                    return;
+                    schedulePendingUnpublishRetry();
+                } else {
+                    finalizeCameraDisabled();
                 }
-                finalizeCameraDisabled();
-                return;
             } else {
                 finalizeCameraDisabled();
-                return;
             }
+            cameraEnabled_ = false;
+            emit localCameraChanged(false);
+            return;
         }
     } catch (const std::exception& e) {
         Logger::instance().error(QString("Exception in toggleCamera: %1").arg(e.what()));
@@ -579,16 +604,17 @@ void DeviceController::toggleScreenShare()
                                         QStringLiteral("screen share track"), true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableScreenShare_ = true;
-                    screenShareEnabled_ = true;
                     Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
-                    return;
+                    schedulePendingUnpublishRetry();
+                } else {
+                    finalizeScreenShareDisabled();
                 }
-                finalizeScreenShareDisabled();
-                return;
             } else {
                 finalizeScreenShareDisabled();
-                return;
             }
+            screenShareEnabled_ = false;
+            emit localScreenShareChanged(false);
+            return;
         }
     } catch (const std::exception& e) {
         Logger::instance().error(QString("Exception in toggleScreenShare: %1").arg(e.what()));
@@ -613,6 +639,11 @@ void DeviceController::setScreenShareMode(ScreenCapturer::Mode mode, QScreen* sc
 
 void DeviceController::switchCamera(const QString& deviceId)
 {
+    if (pendingDisableCamera_) {
+        Logger::instance().warning("Ignoring camera switch while camera shutdown is pending");
+        return;
+    }
+
     Logger::instance().info(QString("Switching camera to device: %1").arg(deviceId));
 
     try {
@@ -672,6 +703,11 @@ void DeviceController::switchCamera(const QString& deviceId)
 
 void DeviceController::switchMicrophone(const QString& deviceId)
 {
+    if (pendingDisableMicrophone_) {
+        Logger::instance().warning("Ignoring microphone switch while microphone shutdown is pending");
+        return;
+    }
+
     Logger::instance().info(QString("Switching microphone to device: %1").arg(deviceId));
 
     try {
