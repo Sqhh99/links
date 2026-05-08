@@ -89,8 +89,6 @@ UnpublishOutcome unpublishLocalTrack(livekit::LocalParticipant* localParticipant
         ? *cachedPublicationSid
         : resolvePublishedTrackSid(localParticipant, track);
     if (publicationSid.empty()) {
-        Logger::instance().warning(QString("Skipping unpublish for %1: publication SID is unavailable")
-                                   .arg(label));
         return UnpublishOutcome::PublicationUnavailable;
     }
 
@@ -127,7 +125,7 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
       screenCapturer_(new ScreenCapturer(this))
 {
     auto& settings = Settings::instance();
-    pendingUnpublishRetryTimer_.setInterval(100);
+    pendingUnpublishRetryTimer_.setInterval(500);
     pendingUnpublishRetryTimer_.setSingleShot(false);
     QObject::connect(&pendingUnpublishRetryTimer_, &QTimer::timeout,
                      this, &DeviceController::processPendingUnpublish);
@@ -204,6 +202,7 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
                 }
             }
             pendingDisableScreenShare_ = true;
+            pendingDisableScreenShareLogged_ = true;
             screenShareEnabled_ = false;
             emit localScreenShareChanged(false);
             schedulePendingUnpublishRetry();
@@ -290,6 +289,9 @@ void DeviceController::resetLocalState()
     pendingDisableCamera_ = false;
     pendingDisableMicrophone_ = false;
     pendingDisableScreenShare_ = false;
+    pendingDisableCameraLogged_ = false;
+    pendingDisableMicrophoneLogged_ = false;
+    pendingDisableScreenShareLogged_ = false;
 }
 
 void DeviceController::handleLocalTrackPublished(livekit::TrackSource source, const QString& publicationSid)
@@ -333,38 +335,53 @@ void DeviceController::processPendingUnpublish()
     }
 
     if (pendingDisableMicrophone_ && localAudioTrack_) {
-        const UnpublishOutcome outcome =
-            unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
-                                QStringLiteral("audio track"), true);
-        if (outcome == UnpublishOutcome::Unpublished
-            || outcome == UnpublishOutcome::AlreadyGone
-            || outcome == UnpublishOutcome::NoParticipant
-            || outcome == UnpublishOutcome::NoTrack) {
-            finalizeMicrophoneDisabled();
+        try {
+            const UnpublishOutcome outcome =
+                unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
+                                    QStringLiteral("audio track"), true);
+            if (outcome == UnpublishOutcome::Unpublished
+                || outcome == UnpublishOutcome::AlreadyGone
+                || outcome == UnpublishOutcome::NoParticipant
+                || outcome == UnpublishOutcome::NoTrack) {
+                finalizeMicrophoneDisabled();
+            }
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Deferred microphone unpublish failed, will retry: %1")
+                                       .arg(e.what()));
         }
     }
 
     if (pendingDisableCamera_ && localVideoTrack_) {
-        const UnpublishOutcome outcome =
-            unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
-                                QStringLiteral("camera track"), true);
-        if (outcome == UnpublishOutcome::Unpublished
-            || outcome == UnpublishOutcome::AlreadyGone
-            || outcome == UnpublishOutcome::NoParticipant
-            || outcome == UnpublishOutcome::NoTrack) {
-            finalizeCameraDisabled();
+        try {
+            const UnpublishOutcome outcome =
+                unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
+                                    QStringLiteral("camera track"), true);
+            if (outcome == UnpublishOutcome::Unpublished
+                || outcome == UnpublishOutcome::AlreadyGone
+                || outcome == UnpublishOutcome::NoParticipant
+                || outcome == UnpublishOutcome::NoTrack) {
+                finalizeCameraDisabled();
+            }
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Deferred camera unpublish failed, will retry: %1")
+                                       .arg(e.what()));
         }
     }
 
     if (pendingDisableScreenShare_ && localScreenTrack_) {
-        const UnpublishOutcome outcome =
-            unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
-                                QStringLiteral("screen share track"), true);
-        if (outcome == UnpublishOutcome::Unpublished
-            || outcome == UnpublishOutcome::AlreadyGone
-            || outcome == UnpublishOutcome::NoParticipant
-            || outcome == UnpublishOutcome::NoTrack) {
-            finalizeScreenShareDisabled();
+        try {
+            const UnpublishOutcome outcome =
+                unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
+                                    QStringLiteral("screen share track"), true);
+            if (outcome == UnpublishOutcome::Unpublished
+                || outcome == UnpublishOutcome::AlreadyGone
+                || outcome == UnpublishOutcome::NoParticipant
+                || outcome == UnpublishOutcome::NoTrack) {
+                finalizeScreenShareDisabled();
+            }
+        } catch (const std::exception& e) {
+            Logger::instance().warning(QString("Deferred screen-share unpublish failed, will retry: %1")
+                                       .arg(e.what()));
         }
     }
 
@@ -376,6 +393,7 @@ void DeviceController::finalizeMicrophoneDisabled()
     localAudioTrack_ = nullptr;
     audioTrackSid_.clear();
     pendingDisableMicrophone_ = false;
+    pendingDisableMicrophoneLogged_ = false;
     schedulePendingUnpublishRetry();
 }
 
@@ -384,6 +402,7 @@ void DeviceController::finalizeCameraDisabled()
     localVideoTrack_ = nullptr;
     cameraTrackSid_.clear();
     pendingDisableCamera_ = false;
+    pendingDisableCameraLogged_ = false;
     schedulePendingUnpublishRetry();
 }
 
@@ -393,6 +412,7 @@ void DeviceController::finalizeScreenShareDisabled()
     localScreenTrack_.reset();
     screenTrackSid_.clear();
     pendingDisableScreenShare_ = false;
+    pendingDisableScreenShareLogged_ = false;
     Logger::instance().info("Screen track reference released");
     schedulePendingUnpublishRetry();
 }
@@ -449,7 +469,10 @@ void DeviceController::toggleMicrophone()
                                         QStringLiteral("audio track"), true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableMicrophone_ = true;
-                    Logger::instance().warning("Deferring microphone shutdown until publication SID becomes available");
+                    if (!pendingDisableMicrophoneLogged_) {
+                        Logger::instance().warning("Deferring microphone shutdown until publication SID becomes available");
+                        pendingDisableMicrophoneLogged_ = true;
+                    }
                     schedulePendingUnpublishRetry();
                 } else {
                     finalizeMicrophoneDisabled();
@@ -528,7 +551,10 @@ void DeviceController::toggleCamera()
                                         QStringLiteral("camera track"), true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableCamera_ = true;
-                    Logger::instance().warning("Deferring camera shutdown until publication SID becomes available");
+                    if (!pendingDisableCameraLogged_) {
+                        Logger::instance().warning("Deferring camera shutdown until publication SID becomes available");
+                        pendingDisableCameraLogged_ = true;
+                    }
                     schedulePendingUnpublishRetry();
                 } else {
                     finalizeCameraDisabled();
@@ -604,7 +630,10 @@ void DeviceController::toggleScreenShare()
                                         QStringLiteral("screen share track"), true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableScreenShare_ = true;
-                    Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
+                    if (!pendingDisableScreenShareLogged_) {
+                        Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
+                        pendingDisableScreenShareLogged_ = true;
+                    }
                     schedulePendingUnpublishRetry();
                 } else {
                     finalizeScreenShareDisabled();

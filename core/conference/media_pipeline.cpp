@@ -126,6 +126,13 @@ QAudioFormat choosePlaybackFormat(const QAudioDevice& device, int sampleRate, in
     return fallback;
 }
 
+bool audioFormatsEqual(const QAudioFormat& lhs, const QAudioFormat& rhs)
+{
+    return lhs.sampleRate() == rhs.sampleRate()
+        && lhs.channelCount() == rhs.channelCount()
+        && lhs.sampleFormat() == rhs.sampleFormat();
+}
+
 } // namespace
 
 MediaPipeline::MediaPipeline(ParticipantStore* participantStore, QObject* parent)
@@ -322,26 +329,28 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     }
 
     AudioPlayback& playback = playbackIt.value();
+    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    const QAudioFormat desiredFormat =
+        choosePlaybackFormat(device, frame.sample_rate(), frame.num_channels());
 
     bool needRecreate = !playback.sink
-        || playback.format.sampleRate() != frame.sample_rate()
-        || playback.format.channelCount() != frame.num_channels();
+        || playback.outputDevice != device
+        || !audioFormatsEqual(playback.format, desiredFormat);
 
     if (needRecreate) {
         if (playback.sink) {
             playback.sink->stop();
         }
 
-        QAudioDevice device = QMediaDevices::defaultAudioOutput();
-        QAudioFormat format = choosePlaybackFormat(device, frame.sample_rate(), frame.num_channels());
-        if (format.sampleRate() != frame.sample_rate()
-            || format.channelCount() != frame.num_channels()
-            || format.sampleFormat() != QAudioFormat::Int16) {
+        if (desiredFormat.sampleRate() != frame.sample_rate()
+            || desiredFormat.channelCount() != frame.num_channels()
+            || desiredFormat.sampleFormat() != QAudioFormat::Int16) {
             Logger::instance().warning("Audio format not supported by output device, using preferred format");
         }
 
-        playback.format = format;
-        playback.sink = QSharedPointer<QAudioSink>::create(device, format);
+        playback.outputDevice = device;
+        playback.format = desiredFormat;
+        playback.sink = QSharedPointer<QAudioSink>::create(device, desiredFormat);
         playback.device = playback.sink ? playback.sink->start() : nullptr;
     }
 

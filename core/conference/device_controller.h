@@ -94,6 +94,9 @@ private:
     bool pendingDisableCamera_{false};
     bool pendingDisableMicrophone_{false};
     bool pendingDisableScreenShare_{false};
+    bool pendingDisableCameraLogged_{false};
+    bool pendingDisableMicrophoneLogged_{false};
+    bool pendingDisableScreenShareLogged_{false};
     QTimer pendingUnpublishRetryTimer_;
 
     QElapsedTimer screenShareDebounceTimer_;

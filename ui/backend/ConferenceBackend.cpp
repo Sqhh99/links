@@ -871,6 +871,7 @@ void ConferenceBackend::onDisconnected()
 {
     Logger::instance().info("Disconnected from conference");
     stopRecordingIfActive();
+    const bool hadLocalScreenShare = shareModeManager_ && shareModeManager_->isActive();
     currentSharedScreenIndex_ = -1;
     currentSharedWindowId_ = 0;
 
@@ -885,8 +886,10 @@ void ConferenceBackend::onDisconnected()
         emit camEnabledChanged();
         emit localCameraEnded();
     }
-    emit localScreenShareEnded();
-    emit screenSharingChanged();
+    if (hadLocalScreenShare) {
+        emit localScreenShareEnded();
+        emit screenSharingChanged();
+    }
     if (shareModeManager_ && shareModeManager_->isActive()) {
         shareModeManager_->exitShareMode();
     }

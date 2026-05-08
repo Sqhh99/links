@@ -67,6 +67,7 @@ private:
     struct AudioPlayback {
         QSharedPointer<QAudioSink> sink;
         QIODevice* device{nullptr};
+        QAudioDevice outputDevice;
         QAudioFormat format;
     };
 
