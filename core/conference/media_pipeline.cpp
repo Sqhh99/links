@@ -3,7 +3,137 @@
 #include "../../utils/logger.h"
 #include <QByteArray>
 #include <QMetaObject>
+#include <algorithm>
 #include <cstdint>
+#include <cstring>
+#include <cmath>
+
+namespace {
+
+float clampSample(float value)
+{
+    return std::max(-1.0f, std::min(1.0f, value));
+}
+
+std::vector<float> mixAndResampleToFloat(const std::vector<int16_t>& input,
+                                         int srcRate,
+                                         int srcChannels,
+                                         int dstRate,
+                                         int dstChannels)
+{
+    if (input.empty() || srcRate <= 0 || dstRate <= 0 || srcChannels <= 0 || dstChannels <= 0) {
+        return {};
+    }
+
+    const int srcFrames = static_cast<int>(input.size()) / srcChannels;
+    if (srcFrames <= 0) {
+        return {};
+    }
+
+    const double ratio = static_cast<double>(dstRate) / static_cast<double>(srcRate);
+    const int dstFrames = std::max(1, static_cast<int>(std::llround(srcFrames * ratio)));
+    std::vector<float> output(static_cast<size_t>(dstFrames * dstChannels), 0.0f);
+
+    for (int dstFrame = 0; dstFrame < dstFrames; ++dstFrame) {
+        const double srcPos = static_cast<double>(dstFrame) / ratio;
+        const int srcIndex = std::min(srcFrames - 1, std::max(0, static_cast<int>(std::llround(srcPos))));
+
+        float left = 0.0f;
+        float right = 0.0f;
+        if (srcChannels == 1) {
+            left = right = static_cast<float>(input[srcIndex]) / 32768.0f;
+        } else {
+            const int base = srcIndex * srcChannels;
+            left = static_cast<float>(input[base]) / 32768.0f;
+            right = static_cast<float>(input[base + 1]) / 32768.0f;
+        }
+
+        for (int dstChannel = 0; dstChannel < dstChannels; ++dstChannel) {
+            float sample = 0.0f;
+            if (dstChannels == 1) {
+                sample = (left + right) * 0.5f;
+            } else {
+                sample = (dstChannel % 2 == 0) ? left : right;
+            }
+            output[static_cast<size_t>(dstFrame * dstChannels + dstChannel)] = clampSample(sample);
+        }
+    }
+
+    return output;
+}
+
+QByteArray convertFloatPcmToOutputBytes(const std::vector<float>& input, const QAudioFormat& format)
+{
+    if (input.empty()) {
+        return {};
+    }
+
+    QByteArray output;
+    const QAudioFormat::SampleFormat sampleFormat = format.sampleFormat();
+    const int bytesPerSample = format.bytesPerSample();
+    if (bytesPerSample <= 0) {
+        return {};
+    }
+
+    output.resize(static_cast<int>(input.size() * static_cast<size_t>(bytesPerSample)));
+    char* dst = output.data();
+
+    for (size_t i = 0; i < input.size(); ++i) {
+        const float sample = clampSample(input[i]);
+        const size_t offset = i * static_cast<size_t>(bytesPerSample);
+        switch (sampleFormat) {
+        case QAudioFormat::UInt8: {
+            const uint8_t value = static_cast<uint8_t>(std::lround((sample * 0.5f + 0.5f) * 255.0f));
+            std::memcpy(dst + offset, &value, sizeof(value));
+            break;
+        }
+        case QAudioFormat::Int16: {
+            const int16_t value = static_cast<int16_t>(std::lround(sample * 32767.0f));
+            std::memcpy(dst + offset, &value, sizeof(value));
+            break;
+        }
+        case QAudioFormat::Int32: {
+            const int32_t value = static_cast<int32_t>(std::lround(sample * 2147483647.0f));
+            std::memcpy(dst + offset, &value, sizeof(value));
+            break;
+        }
+        case QAudioFormat::Float: {
+            std::memcpy(dst + offset, &sample, sizeof(sample));
+            break;
+        }
+        default:
+            return {};
+        }
+    }
+
+    return output;
+}
+
+QAudioFormat choosePlaybackFormat(const QAudioDevice& device, int sampleRate, int channels)
+{
+    QAudioFormat requested;
+    requested.setSampleRate(sampleRate);
+    requested.setChannelCount(channels);
+    requested.setSampleFormat(QAudioFormat::Int16);
+    if (device.isFormatSupported(requested)) {
+        return requested;
+    }
+
+    QAudioFormat fallback = device.preferredFormat();
+    if (!device.isFormatSupported(fallback)) {
+        fallback = requested;
+    }
+    return fallback;
+}
+
+bool audioFormatsEqual(const QAudioFormat& lhs, const QAudioFormat& rhs)
+{
+    return lhs.sampleRate() == rhs.sampleRate()
+        && lhs.channelCount() == rhs.channelCount()
+        && lhs.sampleFormat() == rhs.sampleFormat();
+}
+
+} // namespace
 
 MediaPipeline::MediaPipeline(ParticipantStore* participantStore, QObject* parent)
     : QObject(parent),
@@ -199,30 +329,28 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     }
 
     AudioPlayback& playback = playbackIt.value();
+    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
+    const QAudioFormat desiredFormat =
+        choosePlaybackFormat(device, frame.sample_rate(), frame.num_channels());
 
     bool needRecreate = !playback.sink
-        || playback.format.sampleRate() != frame.sample_rate()
-        || playback.format.channelCount() != frame.num_channels();
+        || playback.outputDevice != device
+        || !audioFormatsEqual(playback.format, desiredFormat);
 
     if (needRecreate) {
         if (playback.sink) {
             playback.sink->stop();
         }
 
-        QAudioFormat format;
-        format.setSampleRate(frame.sample_rate());
-        format.setChannelCount(frame.num_channels());
-        format.setSampleFormat(QAudioFormat::Int16);
-
-        QAudioDevice device = QMediaDevices::defaultAudioOutput();
-        if (!device.isFormatSupported(format)) {
+        if (desiredFormat.sampleRate() != frame.sample_rate()
+            || desiredFormat.channelCount() != frame.num_channels()
+            || desiredFormat.sampleFormat() != QAudioFormat::Int16) {
             Logger::instance().warning("Audio format not supported by output device, using preferred format");
-            format = device.preferredFormat();
-            format.setSampleFormat(QAudioFormat::Int16);
         }
 
-        playback.format = format;
-        playback.sink = QSharedPointer<QAudioSink>::create(device, format);
+        playback.outputDevice = device;
+        playback.format = desiredFormat;
+        playback.sink = QSharedPointer<QAudioSink>::create(device, desiredFormat);
         playback.device = playback.sink ? playback.sink->start() : nullptr;
     }
 
@@ -232,8 +360,17 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     }
 
     const auto& samples = frame.data();
-    QByteArray data(reinterpret_cast<const char*>(samples.data()),
-                    static_cast<int>(samples.size() * sizeof(int16_t)));
+    const std::vector<float> floatPcm =
+        mixAndResampleToFloat(samples,
+                              frame.sample_rate(),
+                              frame.num_channels(),
+                              playback.format.sampleRate(),
+                              playback.format.channelCount());
+    const QByteArray data = convertFloatPcmToOutputBytes(floatPcm, playback.format);
+    if (data.isEmpty()) {
+        Logger::instance().warning("Failed to convert remote audio frame to playback format");
+        return;
+    }
     
     // Feed far-end audio to the AEC so it can learn the echo path.
     // This is essential for echo cancellation to work correctly.

@@ -12,6 +12,7 @@
 #include <QMediaDevices>
 #include <QAudioDevice>
 #include <atomic>
+#include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
@@ -66,6 +67,7 @@ private:
     struct AudioPlayback {
         QSharedPointer<QAudioSink> sink;
         QIODevice* device{nullptr};
+        QAudioDevice outputDevice;
         QAudioFormat format;
     };
 
