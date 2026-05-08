@@ -138,6 +138,7 @@ private:
     
     void updateParticipantInfo(const QString& identity);
     void reconcileParticipantsInternal(const char* source);
+    void markConnected(const char* source, bool emitStateSignal);
     void pollLocalNetworkStats();
     QString resolveLocalParticipantIdentity() const;
     std::vector<std::shared_ptr<livekit::Track>> collectTrackStatsSources() const;
