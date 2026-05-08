@@ -139,6 +139,7 @@ void ConferenceManager::connect(const QString& url, const QString& token)
 
         if (success) {
             Logger::instance().info("Connection initiated successfully");
+            markConnected("connect_success", true);
         } else {
             Logger::instance().error("Connection failed");
             emit connectionError("Failed to connect to room");
@@ -652,24 +653,7 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
     Logger::instance().info(QString("Connection state changed: %1").arg(state));
 
     if (connState == livekit::ConnectionState::Connected) {
-        connected_ = true;
-
-        const auto roomInfo = roomController_->roomInfo();
-        roomName_ = QString::fromStdString(roomInfo.name);
-
-        auto localParticipant = roomController_->localParticipant();
-        if (localParticipant) {
-            participantName_ = QString::fromStdString(localParticipant->name());
-            participantIdentity_ = QString::fromStdString(localParticipant->identity());
-        }
-
-        reconcileParticipantsInternal("connection_connected_state");
-        if (!networkStatsTimer_.isActive()) {
-            networkStatsTimer_.start();
-        }
-        pollLocalNetworkStats();
-
-        emit connected();
+        markConnected("connection_connected_state", false);
     } else if (connState == livekit::ConnectionState::Reconnecting) {
         networkStatsTimer_.stop();
         resetNetworkMetrics();
@@ -704,6 +688,34 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
     }
 
     emit connectionStateChanged(connState);
+}
+
+void ConferenceManager::markConnected(const char* source, bool emitStateSignal)
+{
+    const bool wasConnected = connected_;
+    connected_ = true;
+
+    const auto roomInfo = roomController_->roomInfo();
+    roomName_ = QString::fromStdString(roomInfo.name);
+
+    auto localParticipant = roomController_->localParticipant();
+    if (localParticipant) {
+        participantName_ = QString::fromStdString(localParticipant->name());
+        participantIdentity_ = QString::fromStdString(localParticipant->identity());
+    }
+
+    reconcileParticipantsInternal(source);
+    if (!networkStatsTimer_.isActive()) {
+        networkStatsTimer_.start();
+    }
+    pollLocalNetworkStats();
+
+    if (!wasConnected) {
+        emit connected();
+        if (emitStateSignal) {
+            emit connectionStateChanged(livekit::ConnectionState::Connected);
+        }
+    }
 }
 
 void ConferenceManager::onRoomDisconnectedQueued(int reason)
