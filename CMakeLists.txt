@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
 project(links LANGUAGES CXX)
-include(GNUInstallDirs)
 
 if(APPLE)
     enable_language(OBJCXX)
@@ -8,8 +7,6 @@ endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_AUTOMOC ON)
-set(CMAKE_AUTOUIC ON)
 set(VCPKG_APPLOCAL_DEPS OFF)
 
 set(LINKS_APP_ICON_PNG_16 "${CMAKE_CURRENT_SOURCE_DIR}/res/icon/appIcon/linux/icon_16x16.png")
@@ -63,6 +60,7 @@ include(FetchWebRTCAudioProcessing)
 
 # Find Qt6
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
+qt_standard_project_setup(REQUIRES 6.8)
 
 # Source files
 set(SOURCES
