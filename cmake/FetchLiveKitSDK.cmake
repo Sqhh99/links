@@ -5,7 +5,7 @@
 
 # Version configuration (can be overridden before including this module)
 if(NOT DEFINED LIVEKIT_SDK_VERSION)
-    set(LIVEKIT_SDK_VERSION "0.3.4")
+    set(LIVEKIT_SDK_VERSION "1.10.1")
 endif()
 
 # Shared SDK architecture selector across third-party fetch modules.
@@ -25,7 +25,9 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
     set(LIVEKIT_PLATFORM "windows")
     set(LIVEKIT_ARCHIVE_EXT "zip")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Linux")
-    set(LIVEKIT_PLATFORM "linux")
+    # Upstream deprecated the plain "linux" artifacts in v1.9.0 in favour of
+    # distro-labelled ones. "ubuntu-22.04" is also published if older glibc is needed.
+    set(LIVEKIT_PLATFORM "ubuntu-24.04")
     set(LIVEKIT_ARCHIVE_EXT "tar.gz")
 elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
     set(LIVEKIT_PLATFORM "macos")

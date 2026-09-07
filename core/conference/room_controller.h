@@ -16,10 +16,12 @@ public:
     void clearDelegate();
 
     bool connectToRoom(const QString& url, const QString& token, const livekit::RoomOptions& options);
+    void disconnectFromRoom(livekit::DisconnectReason reason = livekit::DisconnectReason::ClientInitiated);
     void reset();
 
     livekit::RoomInfoData roomInfo() const;
-    livekit::LocalParticipant* localParticipant() const;
+    std::shared_ptr<livekit::LocalParticipant> localParticipant() const;
+    std::shared_ptr<livekit::RemoteParticipant> remoteParticipant(const QString& identity) const;
     std::vector<std::shared_ptr<livekit::RemoteParticipant>> remoteParticipants() const;
 
 private:

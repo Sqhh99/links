@@ -131,7 +131,7 @@ int main(int argc, char* argv[])
     Logger::instance().init();
     Logger::instance().log("Application started");
 
-    livekit::initialize(livekit::LogLevel::Info, livekit::LogSink::kConsole);
+    livekit::initialize(livekit::LogLevel::Info);
 
     qmlRegisterType<LoginBackend>("Links.Backend", 1, 0, "LoginBackend");
     qmlRegisterType<SettingsBackend>("Links.Backend", 1, 0, "SettingsBackend");

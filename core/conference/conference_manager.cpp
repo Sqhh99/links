@@ -225,6 +225,16 @@ void ConferenceManager::disconnect()
         }
 
         try {
+            // Ask the SDK for a graceful disconnect before tearing the room down.
+            // Safe here because this always runs on the main thread, never from
+            // inside a RoomDelegate callback (those arrive via queued connections).
+            roomController_->disconnectFromRoom(livekit::DisconnectReason::ClientInitiated);
+        } catch (const std::exception& e) {
+            Logger::instance().error(QString("Disconnect cleanup error while disconnecting room: %1")
+                                     .arg(e.what()));
+        }
+
+        try {
             Logger::instance().info("Resetting room");
             roomController_->reset();
             Logger::instance().info("Room disconnected successfully");
@@ -767,7 +777,7 @@ void ConferenceManager::updateParticipantInfo(const QString& identity)
         return;
     }
 
-    auto participant = roomController_->room()->remoteParticipant(identity.toStdString());
+    auto participant = roomController_->remoteParticipant(identity);
     if (!participant) {
         emit participantUpdated(participantStore_->participantInfo(identity));
         return;
@@ -1018,11 +1028,16 @@ QString ConferenceManager::resolveLocalParticipantIdentity() const
         return participantIdentity_;
     }
 
-    if (!roomController_ || !roomController_->localParticipant()) {
+    if (!roomController_) {
         return {};
     }
 
-    return QString::fromStdString(roomController_->localParticipant()->identity());
+    const auto localParticipant = roomController_->localParticipant();
+    if (!localParticipant) {
+        return {};
+    }
+
+    return QString::fromStdString(localParticipant->identity());
 }
 
 std::vector<std::shared_ptr<livekit::Track>> ConferenceManager::collectTrackStatsSources() const
@@ -1048,7 +1063,7 @@ std::vector<std::shared_ptr<livekit::Track>> ConferenceManager::collectTrackStat
         }
     };
 
-    if (auto* localParticipant = roomController_->localParticipant()) {
+    if (const auto localParticipant = roomController_->localParticipant()) {
         for (const auto& publicationEntry : localParticipant->trackPublications()) {
             const auto& publication = publicationEntry.second;
             if (!publication) {
