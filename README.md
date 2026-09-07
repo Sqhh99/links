@@ -42,7 +42,7 @@ Key directories:
 Minimum tooling reflected by the current build files:
 
 - CMake 3.21+ for presets
-- C++17 compiler
+- C++20 compiler
 - Ninja
 - Qt 6.8.x or 6.10.x with at least:
   - `Core`

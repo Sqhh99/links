@@ -27,7 +27,7 @@ Windows helper script:
 - `build.cmd clean`: remove `build/`.
 
 ## Coding Style & Naming Conventions
-- C++17 is required (see `CMakeLists.txt`).
+- C++20 is required (see `CMakeLists.txt`).
 - Indentation: 4 spaces, braces on the same line.
 - Classes use `PascalCase` (for example, `DesktopFrame`).
 - Methods use `camelCase` (for example, `copyPixelsFrom`).
