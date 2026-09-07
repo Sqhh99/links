@@ -36,6 +36,26 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # Guards the core/Qt decoupling: files that have been moved into the
+    # links_core_base target must never regain a Qt dependency. links_core_base
+    # links no Qt6::* target, so a Qt include there is already a compile error --
+    # this check just fails faster and with a clearer message.
+    - name: Check Qt-free core files
+      shell: bash
+      run: |
+        set -e
+        hits=$(grep -rnE '#include *[<"]Q[A-Za-z]|Q_OBJECT' \
+                 core/desktop_capture core/recording \
+                 core/platform_window_ops.h core/platform_window_ops.cpp \
+                 core/thumbnail_service.h core/thumbnail_service.cpp \
+                 core/image_types.h core/window_types.h || true)
+        if [ -n "$hits" ]; then
+          echo "Qt dependency found in a file that must stay Qt-free:"
+          echo "$hits"
+          exit 1
+        fi
+        echo "OK: no Qt in the Qt-free core files"
+
     # Install Qt
     - name: Install Qt
       uses: jurplel/install-qt-action@v4

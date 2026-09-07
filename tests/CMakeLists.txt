@@ -87,7 +87,6 @@ endif()
 add_executable(desktop_capture_tests
     core/test_desktop_geometry.cpp
     core/test_desktop_frame.cpp
-    ${CMAKE_SOURCE_DIR}/core/desktop_capture/desktop_frame.cpp
 )
 
 set_target_properties(desktop_capture_tests PROPERTIES
@@ -99,11 +98,10 @@ set_target_properties(desktop_capture_tests PROPERTIES
 target_link_libraries(desktop_capture_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
+    links_core_base
 )
 
 target_include_directories(desktop_capture_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
     ${CMAKE_SOURCE_DIR}/utils
 )
 
@@ -168,8 +166,6 @@ target_include_directories(conference_metadata_parser_tests PRIVATE
 
 add_executable(recording_core_tests
     core/test_recording_core.cpp
-    ${CMAKE_SOURCE_DIR}/core/recording/recording_layout.cpp
-    ${CMAKE_SOURCE_DIR}/core/recording/frame_clock.cpp
 )
 
 set_target_properties(recording_core_tests PROPERTIES
@@ -181,11 +177,10 @@ set_target_properties(recording_core_tests PROPERTIES
 target_link_libraries(recording_core_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
+    links_core_base
 )
 
 target_include_directories(recording_core_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
     ${CMAKE_SOURCE_DIR}/utils
 )
 
@@ -193,56 +188,12 @@ target_include_directories(recording_core_tests PRIVATE
 # Cross-platform capture tests (macOS/Linux only)
 # =============================================================================
 
+# The platform capture sources and their system libraries now come from
+# links_core_base, which these targets link.
 if(APPLE OR (UNIX AND NOT WIN32))
-    set(CAPTURE_PLATFORM_OPS_SOURCES)
-    set(CAPTURE_PLATFORM_CAPTURER_SOURCES)
-    set(CAPTURE_PLATFORM_LIBS)
-
-    if(APPLE)
-        list(APPEND CAPTURE_PLATFORM_OPS_SOURCES
-            ${CMAKE_SOURCE_DIR}/core/desktop_capture/mac/platform_window_ops_mac.cpp
-            ${CMAKE_SOURCE_DIR}/core/desktop_capture/mac/screen_capture_kit_adapter.mm
-        )
-        list(APPEND CAPTURE_PLATFORM_CAPTURER_SOURCES
-            ${CMAKE_SOURCE_DIR}/core/desktop_capture/mac/mac_capturer.cpp
-        )
-
-        find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
-        find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
-        find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-        find_library(CORE_MEDIA_FRAMEWORK CoreMedia REQUIRED)
-        find_library(CORE_VIDEO_FRAMEWORK CoreVideo REQUIRED)
-        find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
-        find_library(SCREEN_CAPTURE_KIT_FRAMEWORK ScreenCaptureKit)
-        list(APPEND CAPTURE_PLATFORM_LIBS
-            ${CORE_GRAPHICS_FRAMEWORK}
-            ${CORE_FOUNDATION_FRAMEWORK}
-            ${FOUNDATION_FRAMEWORK}
-            ${CORE_MEDIA_FRAMEWORK}
-            ${CORE_VIDEO_FRAMEWORK}
-            ${AVFOUNDATION_FRAMEWORK}
-        )
-        if(SCREEN_CAPTURE_KIT_FRAMEWORK)
-            list(APPEND CAPTURE_PLATFORM_LIBS ${SCREEN_CAPTURE_KIT_FRAMEWORK})
-        endif()
-    elseif(UNIX)
-        list(APPEND CAPTURE_PLATFORM_OPS_SOURCES
-            ${CMAKE_SOURCE_DIR}/core/desktop_capture/linux/x11/platform_window_ops_linux_x11.cpp
-        )
-        list(APPEND CAPTURE_PLATFORM_CAPTURER_SOURCES
-            ${CMAKE_SOURCE_DIR}/core/desktop_capture/linux/x11/x11_capturer.cpp
-        )
-
-        find_package(X11 REQUIRED)
-        list(APPEND CAPTURE_PLATFORM_LIBS X11::X11)
-    endif()
-
     add_executable(capture_platform_tests
         core/test_platform_window_ops_capability.cpp
         core/test_thumbnail_service.cpp
-        ${CMAKE_SOURCE_DIR}/core/platform_window_ops.cpp
-        ${CMAKE_SOURCE_DIR}/core/thumbnail_service.cpp
-        ${CAPTURE_PLATFORM_OPS_SOURCES}
     )
 
     set_target_properties(capture_platform_tests PROPERTIES
@@ -254,12 +205,10 @@ if(APPLE OR (UNIX AND NOT WIN32))
     target_link_libraries(capture_platform_tests PRIVATE
         GTest::gtest
         GTest::gtest_main
-        ${CAPTURE_PLATFORM_LIBS}
+        links_core_base
     )
 
     target_include_directories(capture_platform_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/core
         ${CMAKE_SOURCE_DIR}/utils
     )
 
@@ -267,11 +216,6 @@ if(APPLE OR (UNIX AND NOT WIN32))
         integration/test_screen_capture_smoke.cpp
         integration/test_window_capture_smoke.cpp
         integration/test_capture_backend_benchmark.cpp
-        ${CMAKE_SOURCE_DIR}/core/desktop_capture/desktop_frame.cpp
-        ${CMAKE_SOURCE_DIR}/core/desktop_capture/desktop_capturer.cpp
-        ${CMAKE_SOURCE_DIR}/core/platform_window_ops.cpp
-        ${CAPTURE_PLATFORM_OPS_SOURCES}
-        ${CAPTURE_PLATFORM_CAPTURER_SOURCES}
     )
 
     set_target_properties(desktop_capture_integration_tests PROPERTIES
@@ -283,12 +227,10 @@ if(APPLE OR (UNIX AND NOT WIN32))
     target_link_libraries(desktop_capture_integration_tests PRIVATE
         GTest::gtest
         GTest::gtest_main
-        ${CAPTURE_PLATFORM_LIBS}
+        links_core_base
     )
 
     target_include_directories(desktop_capture_integration_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}
-        ${CMAKE_SOURCE_DIR}/core
         ${CMAKE_SOURCE_DIR}/utils
     )
 endif()

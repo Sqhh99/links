@@ -62,6 +62,137 @@ include(FetchWebRTCAudioProcessing)
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
 qt_standard_project_setup(REQUIRES 6.8)
 
+# =============================================================================
+# links_core_base - Qt-free core
+#
+# This target deliberately links NO Qt6::* target. Qt headers reach the compiler
+# only through Qt6::* usage requirements, so an accidental #include <QString> in
+# one of these files is a hard compile error rather than a silent regression.
+# AUTOMOC is off for the same reason: a stray Q_OBJECT fails at link time.
+#
+# Files graduate into this target as they are decoupled from Qt. It currently
+# holds only the parts of core/ that were already Qt-free.
+# =============================================================================
+
+# Platform libraries for the desktop capture backends. Declared here, above the
+# target that needs them; `links` picks them up transitively.
+if(APPLE)
+    find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
+    find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
+    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
+    find_library(CORE_MEDIA_FRAMEWORK CoreMedia REQUIRED)
+    find_library(CORE_VIDEO_FRAMEWORK CoreVideo REQUIRED)
+    find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
+    find_library(SCREEN_CAPTURE_KIT_FRAMEWORK ScreenCaptureKit)
+elseif(UNIX)
+    find_package(X11 REQUIRED)
+endif()
+
+set(LINKS_CORE_BASE_SOURCES
+    core/platform_window_ops.cpp
+    core/thumbnail_service.cpp
+    core/desktop_capture/desktop_frame.cpp
+    core/desktop_capture/desktop_capturer.cpp
+    core/recording/recording_layout.cpp
+    core/recording/frame_clock.cpp
+)
+
+set(LINKS_CORE_BASE_HEADERS
+    core/image_types.h
+    core/window_types.h
+    core/platform_window_ops.h
+    core/thumbnail_service.h
+    core/desktop_capture/capture_options.h
+    core/desktop_capture/desktop_geometry.h
+    core/desktop_capture/desktop_frame.h
+    core/desktop_capture/desktop_capturer.h
+    core/recording/recording_layout.h
+    core/recording/frame_clock.h
+)
+
+if(WIN32)
+    list(APPEND LINKS_CORE_BASE_SOURCES
+        core/desktop_capture/win/window_utils.cpp
+        core/desktop_capture/win/platform_window_ops_win.cpp
+        core/desktop_capture/win/wgc_capturer.cpp
+        core/desktop_capture/win/dxgi_duplicator.cpp
+        core/desktop_capture/win/gdi_capturer.cpp
+    )
+    list(APPEND LINKS_CORE_BASE_HEADERS
+        core/desktop_capture/win/window_utils.h
+        core/desktop_capture/win/platform_window_ops_win.h
+        core/desktop_capture/win/wgc_capturer.h
+        core/desktop_capture/win/dxgi_duplicator.h
+        core/desktop_capture/win/gdi_capturer.h
+    )
+elseif(APPLE)
+    list(APPEND LINKS_CORE_BASE_SOURCES
+        core/desktop_capture/mac/platform_window_ops_mac.cpp
+        core/desktop_capture/mac/screen_capture_kit_adapter.mm
+        core/desktop_capture/mac/mac_capturer.cpp
+    )
+    list(APPEND LINKS_CORE_BASE_HEADERS
+        core/desktop_capture/mac/platform_window_ops_mac.h
+        core/desktop_capture/mac/screen_capture_kit_adapter.h
+        core/desktop_capture/mac/mac_capturer.h
+    )
+elseif(UNIX)
+    list(APPEND LINKS_CORE_BASE_SOURCES
+        core/desktop_capture/linux/x11/platform_window_ops_linux_x11.cpp
+        core/desktop_capture/linux/x11/x11_capturer.cpp
+    )
+    list(APPEND LINKS_CORE_BASE_HEADERS
+        core/desktop_capture/linux/x11/platform_window_ops_linux_x11.h
+        core/desktop_capture/linux/x11/x11_capturer.h
+    )
+endif()
+
+add_library(links_core_base STATIC
+    ${LINKS_CORE_BASE_SOURCES}
+    ${LINKS_CORE_BASE_HEADERS}
+)
+
+# qt_standard_project_setup() turns CMAKE_AUTOMOC on globally; this target has no
+# Q_OBJECT and must never be moc'd.
+set_target_properties(links_core_base PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_compile_features(links_core_base PUBLIC cxx_std_20)
+
+# core/screen_capturer.cpp holds a BOM-less CJK string literal. It survives today
+# only because QString(const char*) is fromUtf8(); pin UTF-8 narrow literals now,
+# before that file moves to std::string and loses the safety net.
+if(MSVC)
+    target_compile_options(links_core_base PUBLIC /utf-8)
+endif()
+
+target_include_directories(links_core_base PUBLIC
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/core
+)
+
+if(WIN32)
+    target_link_libraries(links_core_base PUBLIC d3d11 dxgi windowsapp dwmapi Shcore)
+elseif(APPLE)
+    target_link_libraries(links_core_base PUBLIC
+        ${CORE_GRAPHICS_FRAMEWORK}
+        ${CORE_FOUNDATION_FRAMEWORK}
+        ${FOUNDATION_FRAMEWORK}
+        ${CORE_MEDIA_FRAMEWORK}
+        ${CORE_VIDEO_FRAMEWORK}
+        ${AVFOUNDATION_FRAMEWORK}
+    )
+    if(SCREEN_CAPTURE_KIT_FRAMEWORK)
+        target_link_libraries(links_core_base PUBLIC ${SCREEN_CAPTURE_KIT_FRAMEWORK})
+    endif()
+elseif(UNIX)
+    target_link_libraries(links_core_base PUBLIC X11::X11)
+endif()
+
 # Source files
 set(SOURCES
     main.cpp
@@ -78,13 +209,6 @@ set(SOURCES
     core/audio_processing_module.cpp
     core/screen_capturer.cpp
     core/room_event_delegate.cpp
-    core/platform_window_ops.cpp
-    core/thumbnail_service.cpp
-    core/recording/recording_layout.cpp
-    core/recording/frame_clock.cpp
-    # Desktop Capture module
-    core/desktop_capture/desktop_frame.cpp
-    core/desktop_capture/desktop_capturer.cpp
     # Utils
     utils/logger.cpp
     utils/settings.cpp
@@ -115,28 +239,6 @@ if(WIN32)
     list(APPEND SOURCES "${CMAKE_CURRENT_BINARY_DIR}/links_app_icon.rc")
 endif()
 
-# Windows-specific desktop capture sources
-if(WIN32)
-    list(APPEND SOURCES
-        core/desktop_capture/win/window_utils.cpp
-        core/desktop_capture/win/platform_window_ops_win.cpp
-        core/desktop_capture/win/wgc_capturer.cpp
-        core/desktop_capture/win/dxgi_duplicator.cpp
-        core/desktop_capture/win/gdi_capturer.cpp
-    )
-elseif(APPLE)
-    list(APPEND SOURCES
-        core/desktop_capture/mac/platform_window_ops_mac.cpp
-        core/desktop_capture/mac/screen_capture_kit_adapter.mm
-        core/desktop_capture/mac/mac_capturer.cpp
-    )
-elseif(UNIX)
-    list(APPEND SOURCES
-        core/desktop_capture/linux/x11/platform_window_ops_linux_x11.cpp
-        core/desktop_capture/linux/x11/x11_capturer.cpp
-    )
-endif()
-
 set(HEADERS
     # Core modules
     core/conference/conference_manager.h
@@ -151,17 +253,6 @@ set(HEADERS
     core/microphone_capturer.h
     core/screen_capturer.h
     core/room_event_delegate.h
-    core/window_types.h
-    core/image_types.h
-    core/platform_window_ops.h
-    core/thumbnail_service.h
-    core/recording/recording_layout.h
-    core/recording/frame_clock.h
-    core/desktop_capture/mac/platform_window_ops_mac.h
-    core/desktop_capture/mac/screen_capture_kit_adapter.h
-    core/desktop_capture/mac/mac_capturer.h
-    core/desktop_capture/linux/x11/platform_window_ops_linux_x11.h
-    core/desktop_capture/linux/x11/x11_capturer.h
     # Utils
     utils/logger.h
     utils/settings.h
@@ -312,6 +403,7 @@ qt_add_qml_module(links
 
 # Link libraries
 target_link_libraries(links PRIVATE
+    links_core_base
     ${LIVEKIT_LIBRARY}
     ${LIVEKIT_FFI_LIBRARY}
     ${WEBRTC_APM_LIBRARY}
@@ -362,30 +454,6 @@ if(APPLE)
     endif()
 endif()
 
-if(APPLE)
-    find_library(CORE_GRAPHICS_FRAMEWORK CoreGraphics REQUIRED)
-    find_library(CORE_FOUNDATION_FRAMEWORK CoreFoundation REQUIRED)
-    find_library(FOUNDATION_FRAMEWORK Foundation REQUIRED)
-    find_library(CORE_MEDIA_FRAMEWORK CoreMedia REQUIRED)
-    find_library(CORE_VIDEO_FRAMEWORK CoreVideo REQUIRED)
-    find_library(AVFOUNDATION_FRAMEWORK AVFoundation REQUIRED)
-    find_library(SCREEN_CAPTURE_KIT_FRAMEWORK ScreenCaptureKit)
-    target_link_libraries(links PRIVATE
-        ${CORE_GRAPHICS_FRAMEWORK}
-        ${CORE_FOUNDATION_FRAMEWORK}
-        ${FOUNDATION_FRAMEWORK}
-        ${CORE_MEDIA_FRAMEWORK}
-        ${CORE_VIDEO_FRAMEWORK}
-        ${AVFOUNDATION_FRAMEWORK}
-    )
-    if(SCREEN_CAPTURE_KIT_FRAMEWORK)
-        target_link_libraries(links PRIVATE ${SCREEN_CAPTURE_KIT_FRAMEWORK})
-    endif()
-elseif(UNIX)
-    find_package(X11 REQUIRED)
-    target_link_libraries(links PRIVATE X11::X11)
-endif()
-
 if(UNIX AND NOT APPLE)
     configure_file(
         "${CMAKE_CURRENT_SOURCE_DIR}/res/linux/links.desktop.in"
@@ -426,9 +494,8 @@ set_target_properties(links PROPERTIES
 # Windows specific settings
 if(WIN32)
     target_link_libraries(links PRIVATE 
-        d3d11 dxgi windowsapp
-        dwmapi Shcore
         # Windows system libraries required by livekit_ffi
+        # (d3d11/dxgi/windowsapp/dwmapi/Shcore arrive via links_core_base)
         ntdll            # NT kernel functions (NtReadFile, NtWriteFile, etc.)
         winmm            # Multimedia timer functions (timeSetEvent, timeKillEvent)
         msdmo            # DirectX Media Objects
