@@ -89,6 +89,9 @@ elseif(UNIX)
 endif()
 
 set(LINKS_CORE_BASE_SOURCES
+    core/base/log.cpp
+    core/base/strings.cpp
+    core/media/video_frame.cpp
     core/platform_window_ops.cpp
     core/thumbnail_service.cpp
     core/desktop_capture/desktop_frame.cpp
@@ -98,6 +101,13 @@ set(LINKS_CORE_BASE_SOURCES
 )
 
 set(LINKS_CORE_BASE_HEADERS
+    core/base/log.h
+    core/base/signal.h
+    core/base/strings.h
+    core/base/executor.h
+    core/base/timer.h
+    core/base/time.h
+    core/media/video_frame.h
     core/image_types.h
     core/window_types.h
     core/platform_window_ops.h
@@ -175,6 +185,9 @@ target_include_directories(links_core_base PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/core
 )
 
+find_package(nlohmann_json CONFIG REQUIRED)
+target_link_libraries(links_core_base PUBLIC nlohmann_json::nlohmann_json)
+
 if(WIN32)
     target_link_libraries(links_core_base PUBLIC d3d11 dxgi windowsapp dwmapi Shcore)
 elseif(APPLE)
@@ -214,6 +227,9 @@ set(SOURCES
     utils/settings.cpp
     # Qt adapters
     ui/adapters/qt/qt_capture_adapter.cpp
+    ui/adapters/qt/qt_task_runner.cpp
+    ui/adapters/qt/qt_timer_factory.cpp
+    ui/adapters/qt/qt_log_sink.cpp
     # QML backends
     ui/backend/network_client.cpp
     ui/backend/LoginBackend.cpp
@@ -258,6 +274,9 @@ set(HEADERS
     utils/settings.h
     # Qt adapters
     ui/adapters/qt/qt_capture_adapter.h
+    ui/adapters/qt/qt_task_runner.h
+    ui/adapters/qt/qt_timer_factory.h
+    ui/adapters/qt/qt_log_sink.h
     # QML backends
     ui/backend/network_client.h
     ui/backend/LoginBackend.h
