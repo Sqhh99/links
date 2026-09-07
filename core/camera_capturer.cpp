@@ -4,6 +4,7 @@
 #include "base/strings.h"
 #include "base/time.h"
 #include "livekit/video_frame.h"
+#include <string>
 
 namespace core = links::core;
 

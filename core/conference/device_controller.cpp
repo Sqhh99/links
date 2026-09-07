@@ -6,6 +6,9 @@
 #include "livekit/local_participant.h"
 #include "livekit/local_track_publication.h"
 #include "livekit/local_video_track.h"
+#include <chrono>
+#include <string>
+#include <memory>
 
 namespace core = links::core;
 
@@ -96,7 +99,7 @@ UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalPartici
     }
 
     try {
-        core::logInfo(core::str::cat("Unpublishing ", label, " (publication SID: %2)"));
+        core::logInfo(core::str::cat("Unpublishing ", label, " (publication SID: ", publicationSid, ")"));
         localParticipant->unpublishTrack(publicationSid);
         track->setPublication(nullptr);
         if (cachedPublicationSid) {
@@ -105,7 +108,8 @@ UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalPartici
         return UnpublishOutcome::Unpublished;
     } catch (const std::exception& e) {
         if (suppressTrackNotFound && isTrackNotFoundError(e)) {
-            core::logWarning(core::str::cat("Suppressing missing-publication error while unpublishing ", label, ": %2"));
+            core::logWarning(core::str::cat("Suppressing missing-publication error while unpublishing ",
+                                            label, ": ", e.what() ? e.what() : ""));
             track->setPublication(nullptr);
             if (cachedPublicationSid) {
                 cachedPublicationSid->clear();

@@ -2,6 +2,8 @@
 
 #include "base/log.h"
 #include "base/strings.h"
+#include <string>
+#include <vector>
 
 namespace core = links::core;
 

@@ -12,6 +12,8 @@
 #include "base/time.h"
 #include "livekit/video_frame.h"
 #include "platform_window_ops.h"
+#include <string>
+#include <vector>
 
 using namespace links::desktop_capture;
 namespace core = links::core;

@@ -6,6 +6,8 @@
 #include "../base/strings.h"
 #include "../media/audio_resampler.h"
 #include "participant_store.h"
+#include <cstdint>
+#include <vector>
 
 namespace core = links::core;
 

@@ -15,6 +15,12 @@
 #include "livekit/remote_participant.h"
 #include "livekit/track.h"
 #include "livekit/video_stream.h"
+#include <map>
+#include <set>
+#include <string>
+#include <memory>
+#include <cstdint>
+#include <chrono>
 
 namespace core = links::core;
 
@@ -338,10 +344,10 @@ bool ConferenceManager::isScreenSharing() const
 // Audio processing settings (runtime-applicable during conference)
 // =============================================================================
 
-void ConferenceManager::applyAudioSettings()
+void ConferenceManager::applyAudioSettings(const core::AudioProcessingConfig& config)
 {
     if (deviceController_) {
-        deviceController_->applyAudioSettings();
+        deviceController_->applyAudioSettings(config);
     }
 }
 
@@ -547,7 +553,7 @@ void ConferenceManager::onTrackSubscribed(std::string trackSid, std::string part
                               == livekit::TrackSource::SOURCE_SCREENSHARE_AUDIO);
 
     std::string kindStr = (info.kind == livekit::TrackKind::KIND_AUDIO) ? "audio" : "video";
-    core::logInfo(core::str::cat("Track subscribed: ", kindStr, " from %2"));
+    core::logInfo(core::str::cat("Track subscribed: ", kindStr, " from ", participantIdentity));
 
     if (info.kind == livekit::TrackKind::KIND_VIDEO && track) {
         try {
@@ -592,7 +598,7 @@ void ConferenceManager::onTrackSubscribed(std::string trackSid, std::string part
 
 void ConferenceManager::onTrackUnsubscribed(std::string trackSid, std::string participantIdentity)
 {
-    core::logInfo(core::str::cat("Track unsubscribed: ", trackSid, " from %2"));
+    core::logInfo(core::str::cat("Track unsubscribed: ", trackSid, " from ", participantIdentity));
 
     mediaPipeline_->stopTrack(trackSid);
 
@@ -632,7 +638,8 @@ void ConferenceManager::onTrackUnpublished(std::string trackSid, std::string par
     livekit::TrackKind trackKind = static_cast<livekit::TrackKind>(kind);
     livekit::TrackSource trackSource = static_cast<livekit::TrackSource>(source);
 
-    core::logInfo(core::str::cat("Track unpublished: sid=", trackSid, ", identity=", kind, ", kind=", source, ", source=%4"));
+    core::logInfo(core::str::cat("Track unpublished: sid=", trackSid, ", identity=", participantIdentity,
+                                 ", kind=", kind, ", source=", source));
 
     trackUnpublished.notify(trackSid, participantIdentity, trackKind, trackSource);
 
