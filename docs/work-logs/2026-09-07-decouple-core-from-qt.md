@@ -2,7 +2,7 @@
 
 - **日期：** 2026-09-07
 - **分支：** `refactor/decouple-core-from-qt`（基于 `main` 的 `9a30f88`）
-- **关联文档：** PR 记录待补（全部阶段完成后再写）
+- **关联文档：** [PR 记录](../pull-requests/2026-09-07-decouple-core-from-qt.md)
 
 ## 一、用户的请求
 
@@ -197,3 +197,165 @@ MSVC 在没有 BOM 时按当前代码页解释窄字符串字面量——一旦�
 
 本阶段由 Claude Code 完成：CMake 目标拆分、测试目标改写、CI 检查、UTF-8 隐患定位、本记录撰写。
 第四节列出的静态检查均为实际执行的命令输出；构建与测试**未执行**。
+
+---
+
+# 阶段 2–4：core 彻底去 Qt（端口 + 适配器）
+
+- **日期：** 2026-09-07
+- **提交：** `88865f3`（基础设施）、`e4e2de4`（主体改造）、`1a5a039`（修复脚本转换引入的缺陷）
+
+## 一、用户中途调整的要求
+
+> Next, go ahead and write the code for all the stages directly; there's no need to wait for me to
+> perform a build. I'll run the build once you've finished writing the code for every stage.
+
+原计划是「每阶段结束后由用户在 Windows 上构建、回报错误，再进入下一阶段」。用户改为
+一次性写完全部阶段、最后统一构建。**因此从阶段 2 起，所有代码都没有经过任何编译验证**，
+这一点在第四节如实展开。
+
+## 二、阶段 2：无 Qt 基础设施（`88865f3`）
+
+纯新增，core 里没有任何文件引用它们，因此不改变行为。
+
+| 新文件 | 作用 | 关键设计取舍 |
+| --- | --- | --- |
+| `core/base/log.{h,cpp}` | 日志门面 + 可安装 sink | 刻意做成进程级全局而不是注入引用：core 里有约 190 个调用点，其中若干在匿名命名空间的自由函数里，为一个横切关注点把 logger 引用穿过所有签名不值得。测试装一个捕获用的 sink 即可 |
+| `core/base/signal.h` | 类型化多播 + RAII `Connection`/`ConnectionBag` | **发射方法必须叫 `notify()` 而不是 `emit()`**——这个头文件会被同时包含 Qt 的翻译单元（每个 `ui/backend/*.cpp`）引用，而 `emit`/`signals`/`slots`/`foreach`/`forever` 都是 Qt 宏。`Connection`/`ConnectionBag` 复刻 Qt 的「接收者 QObject 析构即自动断开」，这是丢掉 QObject 之后最大的安全网缺口 |
+| `core/base/executor.h` | `TaskRunner`、`BackgroundExecutor`、`LifetimeToken`、`postGuarded` | `post()` 注释里写明**必须始终异步**，即使已经在主线程也不能直接调用：`room_controller.cpp:41-43` 记录了一个死锁，靠的正是 SDK 线程的调用栈先展开 |
+| `core/base/timer.h` | `Timer`/`TimerFactory` | 让 core 的定时器仍然跑在 Qt 事件循环上，保持现有时序 |
+| `core/base/strings.{h,cpp}` | `QString::arg` 的替代 | `cat()` 故意**不提供 float/double 重载**，强制调用方通过 `num(value, decimals)` 指定精度——`QString::arg(d, 0, 'f', 1)` 本来就要求指定，`std::to_string(double)` 固定 6 位小数会静默改变输出。大小写函数一律 ASCII-only 并注释说明原因：字符串是 UTF-8，对 UTF-8 字节跑 `std::toupper` 会破坏多字节序列；现有调用方处理的都是 RTP/ICE 协议标识符。`trimWhitespace` 额外剥离 U+00A0 与 U+3000，因为 `QString::trimmed()` 是 Unicode-aware 的，聊天消息的空串判断依赖这一点 |
+| `core/media/video_frame.{h,cpp}` | `shared_ptr<const RawImage>` 句柄 | 见第三节「视频通路」 |
+| `ui/adapters/qt/qt_{task_runner,timer_factory,log_sink}.*` | Qt 侧实现 | `QtTaskRunner` 用 `QMetaObject::invokeMethod(..., Qt::QueuedConnection)`，`QtBackgroundExecutor` 用 `QtConcurrent::run` 同一个全局线程池 |
+
+`vcpkg.json` 增加 `nlohmann-json`（header-only），供 core 仅剩的两处 JSON 使用。
+
+## 三、阶段 3–4：core 主体改造（`e4e2de4`）
+
+### 值类型与字符串
+
+`conference_types.h`、`participant_store`、`room_controller`、`network_stats_aggregator`
+全部改为 `std::string` / `std::vector` / `std::map` / `std::int64_t`。
+
+**编码是安全的，而且实际上更好**：LiveKit SDK 本来就是 UTF-8 的 `std::string`，
+`room_event_delegate.cpp` 过去要做约 40 次 `QString::fromStdString`，出去时再 `.toStdString()`。
+改成 `std::string` 是**去掉**了一次 UTF-8↔UTF-16 往返，而不是增加。边界契约：
+core 内部一律 UTF-8，适配器层用 `QString::fromStdString`/`toStdString`（Qt 定义这两个就是 UTF-8）。
+
+`Q_DECLARE_METATYPE` 与三处 `qRegisterMetaType` 全部删除。核对过：`ConferenceBackend`
+自己发给 QML 的信号只携带 `QString`/`QImage`/基本类型，core 的结构体从不穿越队列连接。
+
+一处**行为差异**如实记录：`std::map` 按 UTF-8 字节序排序，`QMap` 按 UTF-16 码元排序，
+两者仅在 U+FFFF 以上的字符处不同。participant identity 由服务端下发且是 ASCII，实际不受影响。
+
+### 事件机制
+
+9 个 `QObject` 子类、约 60 个信号全部改成 `links::core::Signal`。每个订阅方持有
+`ConnectionBag`，并在析构函数**第一行**调用 `clear()`。这是丢掉 QObject 之后必须靠纪律维持的不变式。
+
+### 线程
+
+`RoomEventDelegate` 契约不变：在 SDK 线程上就地把值读出来，然后 `postGuarded` 到主线程。
+`LifetimeToken` 声明为**最后一个成员**，保证它最先析构、使在途的 post 全部失效。
+`MediaPipeline` 的 reader 线程同样处理。`QTimer`→`core::Timer`（仍是 Qt 事件循环，
+500ms / 1s 周期不变），`QElapsedTimer`→`steady_clock`，
+`QtConcurrent`+`QFutureWatcher`→`BackgroundExecutor` + guarded post，
+并保留原有的 `networkStatsPollSeq_` 陈旧结果判别。
+
+### 视频通路
+
+`QImage` → `core::VideoFrame`。**不能**用 `RawImage` 传值：`QImage` 是隐式共享的，
+今天的成本是「创建时一次深拷贝，之后每一跳免费」；改成传值会在
+`MediaPipeline → DeviceController → ConferenceManager → ConferenceBackend → VideoRenderer`
+（外加 `LocalRecordingManager`）每一跳都做一次整帧 memcpy，每个参会者、每秒 15–30 帧。
+`toQImage()` 对 RGBA 是零拷贝（QImage 借用缓冲区，用 cleanup 函数持有 `shared_ptr`）。
+`ScreenCapturer` 现在从 `DesktopFrame` 直接生成 `VideoFrame`，比原来
+`DesktopFrame → QImage → std::vector` 少一次整帧拷贝。
+
+`copyFrom`/`toPackedRgba` 会把带 padding 的行重新紧凑排列——这是 `QImage::copy()` 原本
+默默做掉的事，DXGI 返回的 stride 可能大于 `width*4`，漏掉这一步屏幕共享会撕裂/错切。
+
+### 设备后端
+
+新增端口 `VideoInput`、`AudioInput`、`AudioPlayer(+Factory)`、`MediaDeviceRegistry`。
+**刻意只把设备管道搬到 Qt 侧**：APM、10ms 分帧、重采样、推送给 LiveKit 全部留在 core。
+AEC 反向参考信号的位置与内容**一字未改**——仍然喂**未重采样**的源采样率数据，
+且仍然在 `write()` **之前**调用。这一点改错了不会崩，只会让回声消除悄悄变差。
+
+### 屏幕目标
+
+`QScreen*`/`WId` → `core::MonitorId`/`WindowId`。`QScreen` → `HMONITOR` 的匹配逻辑
+搬到 `qt_capture_adapter::resolveMonitorId()`，core 新增 `enumerateMonitors()`。
+这一步才真正去掉了 `QGuiApplication::primaryScreen()`，也就去掉了 core 对 `Qt::Gui` 的依赖。
+
+### 设置
+
+`DeviceController` 不再读 `QSettings`，改为构造时接收 `AudioProcessingConfig` +
+`DeviceSelection`；设备切换后通过 `preferredCamera/MicrophoneChanged` 向上报告，
+由 `ConferenceBackend` 负责持久化。
+
+### 顺带修掉的两个既有缺陷
+
+1. `DeviceController::connectScreenSignals()` 里的
+   `static QMetaObject::Connection screenConn` 是函数级 static，意味着第二个
+   `DeviceController` 实例会把第一个实例的处理器断开。改为每实例持有。
+2. `MediaPipeline` 用裸 `new std::atomic<bool>` 管理 stop flag，`stopTrack` 路径上会泄漏。
+   改为 `shared_ptr`，reader 线程持强引用。
+
+## 四、验证情况
+
+**完全没有构建，没有跑测试。** 本会话的 WSL 环境没有 cmake / ninja / 任何 C++ 编译器 / Qt6，
+用户也已确认改为最后统一构建。这是一次约 6600 行、涉及线程与音视频通路的重构，
+**在没有编译反馈的前提下写成，必然存在编译错误**，请以第一次构建的报错为准。
+
+实际执行的静态检查（全部通过）：
+
+1. `core/` 中不存在 `#include <Q...>`、`Q_OBJECT`、`Q_DECLARE_METATYPE`，
+   不存在被当作标识符使用的 `emit`/`signals`/`slots`，也不再包含 `utils/`。
+2. 每个在 `.cpp` 里 `notify()` 的信号都在对应头文件中有声明（脚本比对，9 个类）。
+3. 每个在 `.cpp` 里定义的成员函数都在头文件中有声明（脚本比对，9 个类）。
+4. 两个 `CMakeLists.txt` 列出的路径都存在；`core`/`ui`/`utils` 下每个 `.cpp`/`.mm` 都被列到。
+5. 搬进 `links_core_base` 的文件的 `#include` 全部可在收窄后的 include 路径下解析。
+6. **逐条比对了脚本转换前后的格式化字符串**：把原始 `QString(...).arg(...)` 的占位符数量
+   与转换结果对照，发现并修复了 6 处参数丢失（见下）。
+
+### 脚本转换引入、随后被发现并修复的缺陷（`1a5a039`）
+
+日志改写用脚本完成（189 处），复查时发现两类错误：
+
+- **`QString::arg` 的多参数重载**：`.arg(a, b)` 一次填 `%1` 和 `%2`，脚本当成单参数只取了第一个，
+  导致 5 处消息里残留字面量 `"%2"` 且第二个值被丢弃。
+- **两位数占位符**：网络统计那行用了 `%10`/`%11`/`%12`，`%1` 先匹配，展开成「参数 1 + 字面数字 0」。
+  按原文手工重写。
+
+另外发现 `ConferenceManager::applyAudioSettings()` 在设置反转过程中丢了参数，无法把配置传下去。
+以及脚本遗留的 `Qt::CaseInsensitive` 版 `contains`、`.toLower()`、`QStringList::join`，一并替换。
+
+**这说明脚本化改写必须逐条复查**——如果只看「是否还有 Qt 符号」，这 6 处都能通过检查。
+
+**合并前必须由能跑构建的人补跑**：`build.cmd release`、`build.cmd tests`，
+以及第五节列出的手工联调项。
+
+## 五、遗留事项 / 必须人工验证的点
+
+1. **编译错误**：见第四节，预期存在，需要按报错逐个修。
+2. **macOS / Linux 分支完全未验证**：CMake 的三平台条件分支、`enumerateMonitors()`
+   目前只在 Windows 下有实现（mac/X11 返回空，因为那两个后端本来就按 index/display id 选屏），
+   需要在对应平台上确认屏幕共享仍能选中正确的显示器。
+3. **音频回归风险最高**：`QtAudioPlayer` 必须复刻原来的重建条件与缓冲行为
+   （刻意没有设置 buffer size，保持 Qt 默认值）。需要**用扬声器而不是耳机**做 10 分钟
+   3 人通话，听是否有回声（AEC 参考信号）和爆音（sink 重建抖动）。
+4. **回调晚于析构**：这是本次改造引入的唯一新增安全风险。建议在 Linux 上跑一次
+   ASan 构建，重复「通话中断开」20 次。
+5. **时序**：屏幕共享 500ms 去抖、待发布重试 500ms、网络统计 1s 轮询、
+   订阅后两处 100ms singleShot——都改成了 `core::Timer`，需要实际验证。
+6. **非 ASCII 往返**：用中文昵称 + 含 emoji 的聊天消息，与一个**未改动的旧版本**互通，
+   确认双向都正常（聊天走 JSON 线格式，`nlohmann` 与 `QJsonDocument` 的输出需要互相兼容）。
+7. `docs/` 与 `CLAUDE.md` 已同步更新架构描述；`docs/README.md` 本来就过时，未处理。
+
+## AI 使用披露
+
+阶段 2–4 全部由 Claude Code 完成：接口设计、代码改写（含一个自写的日志转换脚本）、
+CMake 与测试调整、CI 检查、`CLAUDE.md` 更新、本记录撰写。
+第四节列出的静态检查是实际执行的命令输出；**构建与测试未执行**，
+且本阶段代码从未经过编译器检验。
