@@ -29,7 +29,19 @@ bool RoomController::connectToRoom(const QString& url,
                                    const livekit::RoomOptions& options)
 {
     ensureRoom();
-    return room_->Connect(url.toStdString(), token.toStdString(), options);
+    return room_->connect(url.toStdString(), token.toStdString(), options);
+}
+
+void RoomController::disconnectFromRoom(livekit::DisconnectReason reason)
+{
+    if (!room_) {
+        return;
+    }
+
+    // Must never be called from inside a RoomDelegate callback: the SDK documents
+    // that as a deadlock of its event listener. All delegate events reach us through
+    // queued connections, so callers are always on the main thread.
+    room_->disconnect(reason);
 }
 
 void RoomController::reset()
@@ -43,17 +55,34 @@ livekit::RoomInfoData RoomController::roomInfo() const
     if (!room_) {
         return livekit::RoomInfoData{};
     }
-    return room_->room_info();
+    return room_->roomInfo();
 }
 
-livekit::LocalParticipant* RoomController::localParticipant() const
+std::shared_ptr<livekit::LocalParticipant> RoomController::localParticipant() const
 {
-    return room_ ? room_->localParticipant() : nullptr;
+    return room_ ? room_->localParticipant().lock() : nullptr;
+}
+
+std::shared_ptr<livekit::RemoteParticipant> RoomController::remoteParticipant(const QString& identity) const
+{
+    return room_ ? room_->remoteParticipant(identity.toStdString()).lock() : nullptr;
 }
 
 std::vector<std::shared_ptr<livekit::RemoteParticipant>> RoomController::remoteParticipants() const
 {
-    return room_ ? room_->remoteParticipants() : std::vector<std::shared_ptr<livekit::RemoteParticipant>>{};
+    std::vector<std::shared_ptr<livekit::RemoteParticipant>> participants;
+    if (!room_) {
+        return participants;
+    }
+
+    const auto handles = room_->remoteParticipants();
+    participants.reserve(handles.size());
+    for (const auto& handle : handles) {
+        if (auto participant = handle.lock()) {
+            participants.push_back(std::move(participant));
+        }
+    }
+    return participants;
 }
 
 void RoomController::ensureRoom()

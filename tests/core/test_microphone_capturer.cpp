@@ -4,6 +4,30 @@
 #include <QAudioDevice>
 #include <QMediaDevices>
 #include "core/microphone_capturer.h"
+#include "livekit/livekit.h"
+
+// =============================================================================
+// LiveKit SDK initialisation
+//
+// Since SDK 1.x, livekit::initialize() must be the first LiveKit API called in
+// the process; creating an AudioSource before it fails with "LiveKit is not
+// initialized". The application does this in main.cpp, so the test binary needs
+// its own global environment to match.
+// =============================================================================
+
+namespace {
+
+class LiveKitEnvironment : public ::testing::Environment {
+public:
+    void SetUp() override {
+        livekit::initialize(livekit::LogLevel::Warn);
+    }
+};
+
+const ::testing::Environment* const kLiveKitEnvironment =
+    ::testing::AddGlobalTestEnvironment(new LiveKitEnvironment);
+
+} // namespace
 
 // =============================================================================
 // MicrophoneCapturer Unit Tests

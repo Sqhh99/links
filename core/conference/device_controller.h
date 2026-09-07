@@ -77,6 +77,12 @@ private:
     void finalizeScreenShareDisabled();
     livekit::Room* room() const { return room_; }
 
+    /**
+     * Promote the room's weak local-participant handle to a strong one.
+     * Empty before connect and once the room has been torn down.
+     */
+    std::shared_ptr<livekit::LocalParticipant> localParticipant() const;
+
     livekit::Room* room_{nullptr};
     CameraCapturer* cameraCapturer_{nullptr};
     MicrophoneCapturer* microphoneCapturer_{nullptr};

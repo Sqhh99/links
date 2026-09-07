@@ -26,7 +26,7 @@ resolveTrackPublication(const std::shared_ptr<livekit::Track>& track)
     return nullptr;
 }
 
-std::string resolvePublishedTrackSid(livekit::LocalParticipant* localParticipant,
+std::string resolvePublishedTrackSid(const std::shared_ptr<livekit::LocalParticipant>& localParticipant,
                                      const std::shared_ptr<livekit::Track>& track)
 {
     if (!track) {
@@ -71,7 +71,7 @@ enum class UnpublishOutcome {
     NoParticipant,
 };
 
-UnpublishOutcome unpublishLocalTrack(livekit::LocalParticipant* localParticipant,
+UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalParticipant>& localParticipant,
                                      const std::shared_ptr<livekit::Track>& track,
                                      std::string* cachedPublicationSid,
                                      const QString& label,
@@ -183,7 +183,7 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
         Logger::instance().error(QString("Screen capture error: %1").arg(msg));
         if (screenShareEnabled_) {
             screenCapturer_->stop();
-            auto localParticipant = room_ ? room_->localParticipant() : nullptr;
+            auto localParticipant = this->localParticipant();
             if (localParticipant && localScreenTrack_) {
                 try {
                     const UnpublishOutcome outcome =
@@ -209,6 +209,11 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
             Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
         }
     });
+}
+
+std::shared_ptr<livekit::LocalParticipant> DeviceController::localParticipant() const
+{
+    return room_ ? room_->localParticipant().lock() : nullptr;
 }
 
 void DeviceController::setRoom(livekit::Room* room)
@@ -238,7 +243,7 @@ void DeviceController::unpublishLocalTracks()
         return;
     }
 
-    auto localParticipant = room_->localParticipant();
+    auto localParticipant = this->localParticipant();
     if (!localParticipant) {
         return;
     }
@@ -328,7 +333,7 @@ void DeviceController::schedulePendingUnpublishRetry()
 
 void DeviceController::processPendingUnpublish()
 {
-    auto localParticipant = room_ ? room_->localParticipant() : nullptr;
+    auto localParticipant = this->localParticipant();
     if (!localParticipant) {
         schedulePendingUnpublishRetry();
         return;
@@ -442,7 +447,7 @@ void DeviceController::toggleMicrophone()
                     Logger::instance().info(QString("Audio track created: %1")
                         .arg(localAudioTrack_ ? "valid" : "null"));
 
-                    auto localParticipant = room_->localParticipant();
+                    auto localParticipant = this->localParticipant();
                     Logger::instance().info(QString("Got local participant: %1")
                         .arg(localParticipant ? "valid" : "null"));
 
@@ -462,7 +467,7 @@ void DeviceController::toggleMicrophone()
         } else {
             microphoneCapturer_->stop();
 
-            auto localParticipant = room_->localParticipant();
+            auto localParticipant = this->localParticipant();
             if (localParticipant && localAudioTrack_) {
                 const UnpublishOutcome outcome =
                     unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
@@ -518,7 +523,7 @@ void DeviceController::toggleCamera()
                             .arg(localVideoTrack_ ? "valid" : "null"));
                     }
 
-                    auto localParticipant = room_->localParticipant();
+                    auto localParticipant = this->localParticipant();
                     Logger::instance().info(QString("Got local participant: %1")
                         .arg(localParticipant ? "valid" : "null"));
 
@@ -544,7 +549,7 @@ void DeviceController::toggleCamera()
         } else {
             cameraCapturer_->stop();
 
-            auto localParticipant = room_->localParticipant();
+            auto localParticipant = this->localParticipant();
             if (localParticipant && localVideoTrack_) {
                 const UnpublishOutcome outcome =
                     unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
@@ -602,7 +607,7 @@ void DeviceController::toggleScreenShare()
                     localScreenTrack_ = livekit::LocalVideoTrack::createLocalVideoTrack("screen", source);
                 }
 
-                auto localParticipant = room_->localParticipant();
+                auto localParticipant = this->localParticipant();
                 if (localParticipant && localScreenTrack_) {
                     livekit::TrackPublishOptions options;
                     options.source = livekit::TrackSource::SOURCE_SCREENSHARE;
@@ -623,7 +628,7 @@ void DeviceController::toggleScreenShare()
         } else {
             screenCapturer_->stop();
 
-            auto localParticipant = room_->localParticipant();
+            auto localParticipant = this->localParticipant();
             if (localParticipant && localScreenTrack_) {
                 const UnpublishOutcome outcome =
                     unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
@@ -677,7 +682,7 @@ void DeviceController::switchCamera(const QString& deviceId)
 
     try {
         const bool wasEnabled = cameraEnabled_;
-        auto localParticipant = room_ ? room_->localParticipant() : nullptr;
+        auto localParticipant = this->localParticipant();
 
         if (cameraEnabled_ && localVideoTrack_) {
             const UnpublishOutcome outcome =
@@ -741,7 +746,7 @@ void DeviceController::switchMicrophone(const QString& deviceId)
 
     try {
         const bool wasEnabled = microphoneEnabled_;
-        auto localParticipant = room_ ? room_->localParticipant() : nullptr;
+        auto localParticipant = this->localParticipant();
 
         if (microphoneEnabled_ && localAudioTrack_) {
             const UnpublishOutcome outcome =

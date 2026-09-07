@@ -331,7 +331,7 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     AudioPlayback& playback = playbackIt.value();
     const QAudioDevice device = QMediaDevices::defaultAudioOutput();
     const QAudioFormat desiredFormat =
-        choosePlaybackFormat(device, frame.sample_rate(), frame.num_channels());
+        choosePlaybackFormat(device, frame.sampleRate(), frame.numChannels());
 
     bool needRecreate = !playback.sink
         || playback.outputDevice != device
@@ -342,8 +342,8 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
             playback.sink->stop();
         }
 
-        if (desiredFormat.sampleRate() != frame.sample_rate()
-            || desiredFormat.channelCount() != frame.num_channels()
+        if (desiredFormat.sampleRate() != frame.sampleRate()
+            || desiredFormat.channelCount() != frame.numChannels()
             || desiredFormat.sampleFormat() != QAudioFormat::Int16) {
             Logger::instance().warning("Audio format not supported by output device, using preferred format");
         }
@@ -362,8 +362,8 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     const auto& samples = frame.data();
     const std::vector<float> floatPcm =
         mixAndResampleToFloat(samples,
-                              frame.sample_rate(),
-                              frame.num_channels(),
+                              frame.sampleRate(),
+                              frame.numChannels(),
                               playback.format.sampleRate(),
                               playback.format.channelCount());
     const QByteArray data = convertFloatPcmToOutputBytes(floatPcm, playback.format);
@@ -375,9 +375,9 @@ void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
     // Feed far-end audio to the AEC so it can learn the echo path.
     // This is essential for echo cancellation to work correctly.
     if (reverseAudioCallback_ && !samples.empty()) {
-        int numSamples = static_cast<int>(samples.size()) / frame.num_channels();
+        int numSamples = static_cast<int>(samples.size()) / frame.numChannels();
         reverseAudioCallback_(samples.data(), numSamples,
-                              frame.sample_rate(), frame.num_channels());
+                              frame.sampleRate(), frame.numChannels());
     }
     
     playback.device->write(data);
