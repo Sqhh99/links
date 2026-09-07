@@ -1,55 +1,61 @@
 #ifndef CORE_CONFERENCE_CONFERENCE_MANAGER_H
 #define CORE_CONFERENCE_CONFERENCE_MANAGER_H
 
-#include <QObject>
-#include <QString>
-#include <QByteArray>
-#include <QImage>
-#include <QList>
-#include <QSet>
+#include <cstdint>
 #include <memory>
+#include <set>
+#include <string>
 #include <vector>
-#include "conference_types.h"
-#include "network_stats_aggregator.h"
-#include "room_controller.h"
-#include "participant_store.h"
-#include "media_pipeline.h"
-#include "device_controller.h"
-#include "../screen_capturer.h"
+
 #include "../audio_processing_module.h"
+#include "../base/executor.h"
+#include "../base/signal.h"
+#include "../base/timer.h"
+#include "../media/video_frame.h"
+#include "../platform_services.h"
+#include "../screen_capturer.h"
+#include "conference_types.h"
+#include "device_config.h"
+#include "device_controller.h"
+#include "media_pipeline.h"
+#include "network_stats_aggregator.h"
+#include "participant_store.h"
+#include "room_controller.h"
 #include "livekit/livekit.h"
 
 class RoomEventDelegate;
 
-class ConferenceManager : public QObject {
-    Q_OBJECT
-    
+class ConferenceManager {
 public:
-    explicit ConferenceManager(QObject* parent = nullptr);
-    ~ConferenceManager() override;
-    
+    ConferenceManager(const links::core::PlatformServices& services,
+                      const links::core::DeviceSelection& devices,
+                      const links::core::AudioProcessingConfig& audio);
+    ~ConferenceManager();
+
     // Connection
-    void connect(const QString& url, const QString& token);
-    void disconnect();
+    void connectToRoom(const std::string& url, const std::string& token);
+    void disconnectFromRoom();
     bool isConnected() const { return connected_; }
     livekit::DisconnectReason lastDisconnectReason() const { return lastDisconnectReason_; }
-    
+
     // Media controls
     void toggleMicrophone();
     void toggleCamera();
     void toggleScreenShare();
-    void setScreenShareMode(ScreenCapturer::Mode mode, QScreen* screen, WId windowId);
-    
+    void setScreenShareMode(ScreenCapturer::Mode mode,
+                            links::core::MonitorId monitorId,
+                            links::core::WindowId windowId);
+
     // Device switching (while conference is active)
-    void switchCamera(const QString& deviceId);
-    void switchMicrophone(const QString& deviceId);
-    
+    void switchCamera(const std::string& deviceId);
+    void switchMicrophone(const std::string& deviceId);
+
     bool isMicrophoneEnabled() const;
     bool isCameraEnabled() const;
     bool isScreenSharing() const;
-    
+
     // Audio processing settings (runtime-applicable during conference)
-    void applyAudioSettings();  // Re-read from persistent Settings
+    void applyAudioSettings(const links::core::AudioProcessingConfig& config);
     void setEchoCancellationEnabled(bool enabled);
     void setNoiseSuppressionEnabled(bool enabled);
     void setAutoGainControlEnabled(bool enabled);
@@ -64,86 +70,92 @@ public:
      * Feed far-end audio to the AEC. Called by MediaPipeline.
      */
     void feedReverseAudio(const int16_t* data, int samples, int sampleRate, int channels);
-    
+
     // Chat
-    void sendChatMessage(const QString& message);
-    
+    void sendChatMessage(const std::string& message);
+
     // Participants
-    QList<ParticipantInfo> getParticipants() const;
+    std::vector<ParticipantInfo> getParticipants() const;
     int getParticipantCount() const;
     void reconcileParticipants();
-    
+
     // Room info
-    QString getRoomName() const { return roomName_; }
-    QString getLocalParticipantName() const { return participantName_; }
-    QString getLocalParticipantIdentity() const { return participantIdentity_; }
-    
-signals:
-    // Connection events
-    void connected();
-    void disconnected();
-    void roomDisconnected(int reason);
-    void connectionStateChanged(livekit::ConnectionState state);
-    void connectionError(const QString& error);
-    
-    // Participant events
-    void participantJoined(const ParticipantInfo& info);
-    void participantLeft(const QString& identity);
-    void participantUpdated(const ParticipantInfo& info);
-    
-    // Track events
-    void trackSubscribed(const TrackInfo& track);
-    void trackUnsubscribed(const QString& trackSid, const QString& participantIdentity);
-    void trackUnpublished(const QString& trackSid, const QString& participantIdentity,
-                          livekit::TrackKind kind, livekit::TrackSource source);
-    void trackMutedStateChanged(const QString& trackSid,
-                               const QString& participantIdentity,
-                               livekit::TrackKind kind,
-                               bool muted);
-    
-    // Media events
-    void localMicrophoneChanged(bool enabled);
-    void localCameraChanged(bool enabled);
-    void localScreenShareChanged(bool enabled);
-    void localScreenFrameReady(const QImage& frame);
-    
-    // Chat events
-    void chatMessageReceived(const ChatMessage& message);
-    void localVideoFrameReady(const QImage& frame);
-    void videoFrameReceived(const QString& participantIdentity,
-                            const QString& trackSid,
-                            const QImage& frame,
-                            livekit::TrackSource source);
-    void audioActivity(const QString& participantIdentity, bool hasAudio);
-    void localConnectionQualityChanged(int quality);
-    void localNetworkStatsUpdated(const NetworkStatsSnapshot& stats);
-    
+    std::string getRoomName() const { return roomName_; }
+    std::string getLocalParticipantName() const { return participantName_; }
+    std::string getLocalParticipantIdentity() const { return participantIdentity_; }
+
+    // -------------------------------------------------------------------
+    // Events. All notified on the main thread -- RoomEventDelegate and
+    // MediaPipeline have already hopped through the TaskRunner by this point,
+    // which is the guarantee Qt::QueuedConnection used to provide.
+    // -------------------------------------------------------------------
+    template <typename... A> using Signal = links::core::Signal<A...>;
+
+    Signal<> connected;
+    Signal<> disconnected;
+    Signal<int> roomDisconnected;
+    Signal<livekit::ConnectionState> connectionStateChanged;
+
+    Signal<const ParticipantInfo&> participantJoined;
+    Signal<const std::string&> participantLeft;
+
+    // Still emitted by core, but nothing in ui/ subscribes to these two --
+    // ConferenceBackend never connected the Qt signals they replace either.
+    Signal<const ParticipantInfo&> participantUpdated;
+    Signal<const std::string&> connectionError;
+
+    Signal<const TrackInfo&> trackSubscribed;
+    Signal<const std::string&, const std::string&> trackUnsubscribed;
+    Signal<const std::string&, const std::string&,
+           livekit::TrackKind, livekit::TrackSource> trackUnpublished;
+    Signal<const std::string&, const std::string&, livekit::TrackKind, bool> trackMutedStateChanged;
+
+    Signal<bool> localMicrophoneChanged;
+    Signal<bool> localCameraChanged;
+    Signal<bool> localScreenShareChanged;
+    Signal<const links::core::VideoFrame&> localScreenFrameReady;
+    Signal<const links::core::VideoFrame&> localVideoFrameReady;
+    Signal<const std::string&, const std::string&,
+           const links::core::VideoFrame&, livekit::TrackSource> videoFrameReceived;
+
+    Signal<const ChatMessage&> chatMessageReceived;
+    Signal<int> localConnectionQualityChanged;
+    Signal<const NetworkStatsSnapshot&> localNetworkStatsUpdated;
+
+    /// Forwarded from DeviceController so ui/ can persist the correction.
+    Signal<const std::string&> preferredCameraChanged;
+    Signal<const std::string&> preferredMicrophoneChanged;
+
 private:
-    // Queued slots for RoomEventDelegate signals (thread-safe event handling)
-    void onParticipantConnectedQueued(QString identity, QString sid, QString name, bool isHost);
-    void onParticipantDisconnectedQueued(QString identity, int reason);
-    void onTrackSubscribedQueued(QString trackSid, QString participantIdentity,
-                                 int kind, int source, bool muted,
-                                 std::shared_ptr<livekit::Track> track,
-                                 std::shared_ptr<livekit::RemoteTrackPublication> publication);
-    void onTrackUnsubscribedQueued(QString trackSid, QString participantIdentity);
-    void onTrackMutedQueued(QString trackSid, QString participantIdentity, int kind);
-    void onTrackUnmutedQueued(QString trackSid, QString participantIdentity, int kind);
-    void onTrackUnpublishedQueued(QString trackSid, QString participantIdentity, int kind, int source);
-    void onConnectionQualityChangedQueued(QString participantIdentity, int quality);
-    void onConnectionStateChangedQueued(int state);
-    void onRoomDisconnectedQueued(int reason);
-    void onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic);
-    void onLocalTrackPublishedQueued(QString publicationSid, int kind, int source);
-    
-    void updateParticipantInfo(const QString& identity);
+    // Handlers for RoomEventDelegate events (already on the main thread).
+    void onParticipantConnected(std::string identity, std::string sid, std::string name, bool isHost);
+    void onParticipantDisconnected(std::string identity, int reason);
+    void onTrackSubscribed(std::string trackSid, std::string participantIdentity,
+                           int kind, int source, bool muted,
+                           std::shared_ptr<livekit::Track> track,
+                           std::shared_ptr<livekit::RemoteTrackPublication> publication);
+    void onTrackUnsubscribed(std::string trackSid, std::string participantIdentity);
+    void onTrackMuted(std::string trackSid, std::string participantIdentity, int kind);
+    void onTrackUnmuted(std::string trackSid, std::string participantIdentity, int kind);
+    void onTrackUnpublished(std::string trackSid, std::string participantIdentity, int kind, int source);
+    void onConnectionQualityChanged(std::string participantIdentity, int quality);
+    void onConnectionStateChanged(int state);
+    void onRoomDisconnected(int reason);
+    void onDataReceived(std::vector<std::uint8_t> data, std::string participantIdentity, std::string topic);
+    void onLocalTrackPublished(std::string publicationSid, int kind, int source);
+
+    void updateParticipantInfo(const std::string& identity);
     void reconcileParticipantsInternal(const char* source);
     void markConnected(const char* source, bool emitStateSignal);
     void pollLocalNetworkStats();
-    QString resolveLocalParticipantIdentity() const;
+    void applyNetworkPollResult(AsyncNetworkPollResult result, std::uint64_t pollSeq);
+    std::string resolveLocalParticipantIdentity() const;
     std::vector<std::shared_ptr<livekit::Track>> collectTrackStatsSources() const;
-    NetworkStatsSnapshot buildEstimatedNetworkSnapshot(NetworkQualityLevel quality, qint64 nowMs) const;
+    NetworkStatsSnapshot buildEstimatedNetworkSnapshot(NetworkQualityLevel quality,
+                                                       std::int64_t nowMs) const;
     void resetNetworkMetrics();
+
+    const links::core::PlatformServices& services_;
 
     std::unique_ptr<RoomController> roomController_;
     std::unique_ptr<RoomEventDelegate> roomDelegate_;
@@ -151,20 +163,26 @@ private:
     std::unique_ptr<MediaPipeline> mediaPipeline_;
     std::unique_ptr<DeviceController> deviceController_;
 
-    QString roomName_;
-    QString participantName_;
-    QString participantIdentity_;
+    std::string roomName_;
+    std::string participantName_;
+    std::string participantIdentity_;
     bool connected_{false};
     bool disconnecting_{false};
     livekit::DisconnectReason lastDisconnectReason_{livekit::DisconnectReason::Unknown};
-    QTimer networkStatsTimer_;
+    std::unique_ptr<links::core::Timer> networkStatsTimer_;
     NetworkQualityLevel localNetworkQuality_{NetworkQualityLevel::Unknown};
     NetworkStatsSnapshot localNetworkStats_;
     NetworkByteCounters previousNetworkByteCounters_;
     bool usingEstimatedNetworkStats_{false};
     bool networkStatsPollInFlight_{false};
-    quint64 networkStatsPollSeq_{0};
-    QSet<QString> lastPolledTrackSids_;
+    std::uint64_t networkStatsPollSeq_{0};
+    std::set<std::string> lastPolledTrackSids_;
+
+    // Subscriptions to the collaborators; cleared first in the destructor.
+    links::core::ConnectionBag collaboratorConnections_;
+
+    // Must stay last: cancels background-poll results still in flight.
+    links::core::LifetimeToken lifetime_;
 };
 
 #endif // CORE_CONFERENCE_CONFERENCE_MANAGER_H

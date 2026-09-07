@@ -1,24 +1,23 @@
 /*
  * Copyright (c) 2026 Links Project
- * Screen Capturer - Qt Integration Layer Implementation
+ * Screen Capturer implementation.
  */
 
 #include "screen_capturer.h"
-#include "../utils/logger.h"
-#include "livekit/video_frame.h"
-#include "platform_window_ops.h"
-#include <QGuiApplication>
-#include <QDateTime>
+
 #include <algorithm>
 
-#ifdef Q_OS_WIN
-#include "desktop_capture/win/window_utils.h"
-#endif
+#include "base/log.h"
+#include "base/strings.h"
+#include "base/time.h"
+#include "livekit/video_frame.h"
+#include "platform_window_ops.h"
 
 using namespace links::desktop_capture;
+namespace core = links::core;
 
-ScreenCapturer::ScreenCapturer(QObject* parent)
-    : QObject(parent),
+ScreenCapturer::ScreenCapturer(core::TimerFactory& timers)
+    : timers_(timers),
       videoSource_(std::make_shared<livekit::VideoSource>(1280, 720))
 {
     lastFrameTime_ = std::chrono::steady_clock::now();
@@ -29,16 +28,16 @@ ScreenCapturer::~ScreenCapturer()
     stop();
 }
 
-void ScreenCapturer::setScreen(QScreen* screen)
+void ScreenCapturer::setScreen(core::MonitorId monitorId)
 {
-    screen_ = screen;
+    monitorId_ = monitorId;
     windowId_ = 0;
 }
 
-void ScreenCapturer::setWindow(WId windowId)
+void ScreenCapturer::setWindow(core::WindowId windowId)
 {
     windowId_ = windowId;
-    screen_ = nullptr;
+    monitorId_ = 0;
 }
 
 bool ScreenCapturer::initCapturer()
@@ -56,8 +55,8 @@ bool ScreenCapturer::initCapturer()
         capturer_ = DesktopCapturer::createScreenCapturer(options);
         if (capturer_) {
             auto sourceId = screenSourceId();
-            if (sourceId == 0 && screen_) {
-                Logger::instance().warning("Selected screen not found, falling back to primary");
+            if (sourceId == 0 && monitorId_ != 0) {
+                core::logWarning("Selected screen not found, falling back to primary");
             }
             // Source 0 means primary screen when no specific monitor is resolved
             capturer_->selectSource(sourceId);
@@ -65,7 +64,7 @@ bool ScreenCapturer::initCapturer()
     }
 
     if (!capturer_) {
-        Logger::instance().error("Failed to create desktop capturer");
+        core::logError("Failed to create desktop capturer");
         return false;
     }
 
@@ -80,13 +79,13 @@ bool ScreenCapturer::start()
     }
 
     if (mode_ == Mode::Window && !validateWindowHandle()) {
-        emit error("No valid window selected for capture");
+        error.notify("No valid window selected for capture");
         return false;
     }
 
-    if (mode_ == Mode::Screen && !screen_) {
-        screen_ = QGuiApplication::primaryScreen();
-    }
+    // A monitorId_ of 0 already means "primary" to the capture backends, so
+    // there is nothing to resolve here -- the caller in ui/ picks the default
+    // screen. That is what removed QGuiApplication from core.
 
     if (!initCapturer()) {
         return false;
@@ -95,14 +94,12 @@ bool ScreenCapturer::start()
     consecutiveFailures_ = 0;
     lastFrameTime_ = std::chrono::steady_clock::now();
 
-    timer_ = std::make_unique<QTimer>(this);
-    timer_->setInterval(1000 / fps_);
-    connect(timer_.get(), &QTimer::timeout, this, &ScreenCapturer::captureOnce);
-    timer_->start();
+    timer_ = timers_.createTimer([this]() { captureOnce(); });
+    timer_->start(std::chrono::milliseconds(1000 / fps_), /*repeat=*/true);
 
     isActive_ = true;
     const char* modeName = mode_ == Mode::Window ? "window" : "screen";
-    Logger::instance().info(QString("Screen capture started (%1)").arg(modeName));
+    core::logInfo(core::str::cat("Screen capture started (", modeName, ")"));
     return true;
 }
 
@@ -112,9 +109,7 @@ void ScreenCapturer::stop()
         return;
     }
 
-    if (timer_) {
-        timer_->stop();
-    }
+    // Destroying the timer cancels it; no queued tick can arrive afterwards.
     timer_.reset();
 
     if (capturer_) {
@@ -124,7 +119,7 @@ void ScreenCapturer::stop()
 
     consecutiveFailures_ = 0;
     isActive_ = false;
-    Logger::instance().info("Screen capture stopped");
+    core::logInfo("Screen capture stopped");
 }
 
 void ScreenCapturer::captureOnce()
@@ -135,16 +130,14 @@ void ScreenCapturer::captureOnce()
 
     // Handle minimized windows
     if (mode_ == Mode::Window && isWindowMinimized()) {
-        if (!lastValidFrame_.isNull()) {
-            emit frameCaptured(lastValidFrame_);
+        if (lastValidFrame_.isValid()) {
+            frameCaptured.notify(lastValidFrame_);
             try {
-                std::vector<uint8_t> frameData(lastValidFrame_.constBits(),
-                    lastValidFrame_.constBits() + lastValidFrame_.sizeInBytes());
                 livekit::VideoFrame frame(lastValidFrame_.width(), lastValidFrame_.height(),
-                    livekit::VideoBufferType::RGBA, std::move(frameData));
-                videoSource_->captureFrame(frame, QDateTime::currentMSecsSinceEpoch() * 1000);
+                    livekit::VideoBufferType::RGBA, lastValidFrame_.toPackedRgba());
+                videoSource_->captureFrame(frame, core::nowMsSinceEpoch() * 1000);
             } catch (const std::exception& e) {
-                Logger::instance().error(QString("Failed to emit cached frame: %1").arg(e.what()));
+                core::logError(core::str::cat("Failed to emit cached frame: ", e.what()));
             }
         }
         return;
@@ -156,7 +149,7 @@ void ScreenCapturer::captureOnce()
         now - lastFrameTime_).count();
 
     if (elapsedMs > stallRecoverMs_) {
-        Logger::instance().warning(QString("Capture stalled for %1 ms, reinitializing").arg(elapsedMs));
+        core::logWarning(core::str::cat("Capture stalled for ", elapsedMs, " ms, reinitializing"));
         capturer_->stop();
         initCapturer();
         lastFrameTime_ = std::chrono::steady_clock::now();
@@ -174,39 +167,41 @@ void ScreenCapturer::onCaptureResult(DesktopCapturer::Result result,
         consecutiveFailures_ = 0;
         lastFrameTime_ = std::chrono::steady_clock::now();
 
-        QImage image = frameToQImage(*frame);
-        if (image.isNull()) {
-            Logger::instance().warning("Failed to convert frame to QImage");
+        // Straight from the capture buffer into a shared frame. The previous
+        // code went DesktopFrame -> QImage -> std::vector, i.e. one copy more.
+        const core::VideoFrame image = core::VideoFrame::copyFrom(
+            frame->data(), frame->width(), frame->height(),
+            frame->stride(), core::PixelFormat::RGBA8888);
+        if (!image.isValid()) {
+            core::logWarning("Failed to convert captured frame");
             return;
         }
 
         lastValidFrame_ = image;
-        emit frameCaptured(image);
+        frameCaptured.notify(image);
 
         try {
-            std::vector<uint8_t> frameData(image.constBits(),
-                image.constBits() + image.sizeInBytes());
             livekit::VideoFrame lkFrame(image.width(), image.height(),
-                livekit::VideoBufferType::RGBA, std::move(frameData));
-            videoSource_->captureFrame(lkFrame, QDateTime::currentMSecsSinceEpoch() * 1000);
+                livekit::VideoBufferType::RGBA, image.toPackedRgba());
+            videoSource_->captureFrame(lkFrame, core::nowMsSinceEpoch() * 1000);
         } catch (const std::exception& e) {
-            Logger::instance().error(QString("Failed to submit frame to video source: %1").arg(e.what()));
+            core::logError(core::str::cat("Failed to submit frame to video source: ", e.what()));
         }
     } else if (result == DesktopCapturer::Result::ERROR_PERMANENT) {
-        Logger::instance().error("Permanent capture error");
+        core::logError("Permanent capture error");
         if (mode_ == Mode::Window && !validateWindowHandle()) {
-            emit error("窗口已关闭，停止共享");
+            error.notify("窗口已关闭，停止共享");
             stop();
         }
     } else {
         // Temporary error
         consecutiveFailures_++;
         if (consecutiveFailures_ >= 10) {
-            Logger::instance().warning("Too many consecutive capture failures");
+            core::logWarning("Too many consecutive capture failures");
             // Try to reinitialize
             capturer_->stop();
             if (!initCapturer()) {
-                emit error("Failed to reinitialize capture");
+                error.notify("Failed to reinitialize capture");
                 stop();
             }
             consecutiveFailures_ = 0;
@@ -214,24 +209,12 @@ void ScreenCapturer::onCaptureResult(DesktopCapturer::Result result,
     }
 }
 
-QImage ScreenCapturer::frameToQImage(const DesktopFrame& frame)
-{
-    if (frame.width() <= 0 || frame.height() <= 0 || !frame.data()) {
-        return {};
-    }
-
-    // The frame data is already in RGBA format
-    QImage image(frame.data(), frame.width(), frame.height(),
-                 frame.stride(), QImage::Format_RGBA8888);
-
-    // Make a deep copy since the frame data will be deallocated
-    return image.copy();
-}
-
 bool ScreenCapturer::validateWindowHandle() const
 {
-    return windowId_ != 0
-        && links::core::isWindowValid(static_cast<links::core::WindowId>(windowId_));
+    if (windowId_ == 0) {
+        return false;
+    }
+    return links::core::isWindowValid(static_cast<links::core::WindowId>(windowId_));
 }
 
 bool ScreenCapturer::isWindowMinimized() const
@@ -244,39 +227,7 @@ bool ScreenCapturer::isWindowMinimized() const
 
 DesktopCapturer::SourceId ScreenCapturer::screenSourceId() const
 {
-#ifdef Q_OS_WIN
-    if (!screen_) {
-        return 0;
-    }
-
-    auto normalizeName = [](const QString& name) {
-        QString normalized = name.trimmed().toUpper();
-        if (normalized.startsWith("\\\\.\\") || normalized.startsWith("//./")) {
-            normalized = normalized.mid(4);
-        }
-        return normalized;
-    };
-
-    const QString screenName = normalizeName(screen_->name());
-    const QRect screenGeometry = screen_->geometry();
-    const auto monitors = win::enumerateMonitors();
-
-    for (const auto& monitor : monitors) {
-        const QString monitorName =
-            normalizeName(QString::fromWCharArray(monitor.deviceName.c_str()));
-        if (!monitorName.isEmpty() && monitorName == screenName) {
-            return reinterpret_cast<DesktopCapturer::SourceId>(monitor.handle);
-        }
-    }
-
-    for (const auto& monitor : monitors) {
-        QRect bounds(monitor.bounds.left(), monitor.bounds.top(),
-                     monitor.bounds.width(), monitor.bounds.height());
-        if (bounds == screenGeometry) {
-            return reinterpret_cast<DesktopCapturer::SourceId>(monitor.handle);
-        }
-    }
-#endif
-
-    return 0;
+    // monitorId_ is already the backend-native handle (HMONITOR on Windows),
+    // resolved by ui/ from the QScreen the user picked.
+    return static_cast<DesktopCapturer::SourceId>(monitorId_);
 }

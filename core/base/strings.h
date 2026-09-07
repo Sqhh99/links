@@ -34,6 +34,8 @@ inline std::string boolText(bool value) { return value ? "true" : "false"; }
 // ASCII by specification.
 // ---------------------------------------------------------------------------
 bool startsWithIgnoreCase(std::string_view text, std::string_view prefix);
+bool containsIgnoreCase(std::string_view text, std::string_view needle);
+bool contains(std::string_view text, std::string_view needle);
 bool equalsIgnoreCase(std::string_view a, std::string_view b);
 std::string toUpperAscii(std::string_view text);
 std::string toLowerAscii(std::string_view text);

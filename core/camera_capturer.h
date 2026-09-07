@@ -1,74 +1,57 @@
 #ifndef CAMERA_CAPTURER_H
 #define CAMERA_CAPTURER_H
 
-#include <QObject>
-#include <QCamera>
-#include <QVideoSink>
-#include <QMediaCaptureSession>
-#include <QVideoFrame>
-#include <QImage>
-#include <QElapsedTimer>
+#include <chrono>
+#include <cstdint>
 #include <memory>
-#include <atomic>
-#include "livekit/video_source.h"
+#include <string>
 
-class CameraCapturer : public QObject
+#include "base/signal.h"
+#include "livekit/video_source.h"
+#include "media/video_input.h"
+
+/**
+ * Drives a VideoInput and publishes its frames to LiveKit.
+ *
+ * The Qt Multimedia machinery that used to live here (QCamera,
+ * QMediaCaptureSession, QVideoSink) is now behind links::core::VideoInput,
+ * implemented in ui/adapters/qt. Frame pacing, the frame counter and the
+ * LiveKit push stayed put.
+ */
+class CameraCapturer
 {
-    Q_OBJECT
-    
 public:
-    explicit CameraCapturer(QObject* parent = nullptr);
-    ~CameraCapturer() override;
-    
-    // Start/stop capture
+    explicit CameraCapturer(links::core::VideoInput& input);
+    ~CameraCapturer();
+
     bool start();
     void stop();
     bool isActive() const { return isActive_; }
-    
-    // Get the LiveKit video source
+
     std::shared_ptr<livekit::VideoSource> getVideoSource() const { return videoSource_; }
-    
-    // Get available cameras
-    static QList<QCameraDevice> availableCameras();
-    
-    // Set camera device (must be called before start())
-    void setCamera(const QCameraDevice& device);
-    bool setCameraById(const QByteArray& deviceId);
-    
-    // Frame rate control
+
+    /// Must be called before start(). Empty id selects the system default.
+    bool setCameraById(const std::string& deviceId);
+
     void setTargetFps(int fps) { targetFps_ = fps; minFrameIntervalMs_ = 1000 / fps; }
     int getTargetFps() const { return targetFps_; }
-    
-signals:
-    void frameReady(const QVideoFrame& frame);
-    void frameCaptured(const QImage& image);
-    void error(const QString& message);
-    
-private slots:
-    void onVideoFrameChanged(const QVideoFrame& frame);
-    
+
+    links::core::Signal<const links::core::VideoFrame&> frameCaptured;
+    links::core::Signal<const std::string&> error;
+
 private:
-    void processFrame(const QVideoFrame& frame);
-    
-    std::unique_ptr<QCamera> camera_;
-    std::unique_ptr<QMediaCaptureSession> captureSession_;
-    std::unique_ptr<QVideoSink> videoSink_;
+    void onFrame(const links::core::VideoFrame& frame);
+
+    links::core::VideoInput& input_;
     std::shared_ptr<livekit::VideoSource> videoSource_;
-    
-    bool isActive_;
-    int frameCount_;
-    
-    // Frame rate control
+
+    bool isActive_{false};
+    int frameCount_{0};
+
     int targetFps_{30};
-    int minFrameIntervalMs_{33}; // ~30fps
-    QElapsedTimer frameTimer_;
-    qint64 lastFrameTime_{0};
-    
-    // Cached converted image to avoid repeated allocations
-    QImage cachedRgbaImage_;
-    
-    // Selected camera device
-    QCameraDevice selectedDevice_;
+    int minFrameIntervalMs_{33};  // ~30fps
+    std::chrono::steady_clock::time_point startTime_;
+    std::int64_t lastFrameTime_{0};
 };
 
 #endif // CAMERA_CAPTURER_H

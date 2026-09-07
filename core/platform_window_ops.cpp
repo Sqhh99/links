@@ -2,6 +2,7 @@
 
 #ifdef _WIN32
 #include "desktop_capture/win/platform_window_ops_win.h"
+#include "desktop_capture/win/window_utils.h"
 #elif defined(__APPLE__)
 #include "desktop_capture/mac/platform_window_ops_mac.h"
 #elif defined(__linux__)
@@ -20,6 +21,28 @@ std::vector<WindowInfo> enumerateWindows()
 #elif defined(__linux__)
     return linux_x11::enumerateWindows();
 #else
+    return {};
+#endif
+}
+
+std::vector<MonitorInfo> enumerateMonitors()
+{
+#ifdef _WIN32
+    std::vector<MonitorInfo> out;
+    for (const auto& monitor : win::enumerateMonitors()) {
+        MonitorInfo info;
+        info.id = reinterpret_cast<MonitorId>(monitor.handle);
+        // Device names are ASCII ("\\.\DISPLAY1"), so a narrowing copy is safe.
+        info.name.assign(monitor.deviceName.begin(), monitor.deviceName.end());
+        info.geometry = WindowRect{monitor.bounds.left(), monitor.bounds.top(),
+                                   monitor.bounds.width(), monitor.bounds.height()};
+        info.isPrimary = monitor.isPrimary;
+        out.push_back(std::move(info));
+    }
+    return out;
+#else
+    // The macOS and X11 capturers select screens by index/display id supplied
+    // by the caller, so there is nothing to enumerate here yet.
     return {};
 #endif
 }

@@ -1,16 +1,19 @@
 #ifndef CORE_CONFERENCE_CONFERENCE_TYPES_H
 #define CORE_CONFERENCE_CONFERENCE_TYPES_H
 
-#include <QString>
-#include <QMetaType>
 #include <cstdint>
 #include <memory>
+#include <string>
 #include "livekit/livekit.h"
 
+// All strings here are UTF-8. The LiveKit SDK already speaks UTF-8 std::string,
+// so this is the natural representation; the Qt boundary in ui/backend converts
+// with QString::fromStdString / toStdString, both of which are UTF-8.
+
 struct ParticipantInfo {
-    QString identity;
-    QString sid;
-    QString name;
+    std::string identity;
+    std::string sid;
+    std::string name;
     bool isMicrophoneEnabled;
     bool isCameraEnabled;
     bool isScreenSharing;
@@ -18,10 +21,10 @@ struct ParticipantInfo {
 };
 
 struct ChatMessage {
-    QString sender;
-    QString senderIdentity;
-    QString message;
-    qint64 timestamp;
+    std::string sender;
+    std::string senderIdentity;
+    std::string message;
+    std::int64_t timestamp;
     bool isLocal;
 };
 
@@ -45,21 +48,19 @@ struct NetworkStatsSnapshot {
     int videoWidth{0};
     int videoHeight{0};
     double videoFps{-1.0};
-    QString audioCodec;
-    QString videoCodec;
+    std::string audioCodec;
+    std::string videoCodec;
     int availableSendBandwidthKbps{-1};
-    QString transportProtocol;
+    std::string transportProtocol;
 };
 
 struct TrackInfo {
-    QString trackSid;
-    QString participantIdentity;
+    std::string trackSid;
+    std::string participantIdentity;
     livekit::TrackKind kind;
     livekit::TrackSource source;
     bool isLocal;
     std::shared_ptr<livekit::Track> track;
 };
-
-Q_DECLARE_METATYPE(NetworkStatsSnapshot)
 
 #endif // CORE_CONFERENCE_CONFERENCE_TYPES_H

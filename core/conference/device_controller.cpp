@@ -1,10 +1,13 @@
 #include "device_controller.h"
-#include "../../utils/logger.h"
-#include "../../utils/settings.h"
+
+#include "../base/log.h"
+#include "../base/strings.h"
 #include "livekit/local_audio_track.h"
 #include "livekit/local_participant.h"
 #include "livekit/local_track_publication.h"
 #include "livekit/local_video_track.h"
+
+namespace core = links::core;
 
 namespace {
 
@@ -60,7 +63,7 @@ std::string resolvePublishedTrackSid(const std::shared_ptr<livekit::LocalPartici
 
 bool isTrackNotFoundError(const std::exception& e)
 {
-    return QString::fromUtf8(e.what()).contains("track not found", Qt::CaseInsensitive);
+    return core::str::containsIgnoreCase(e.what() ? e.what() : "", "track not found");
 }
 
 enum class UnpublishOutcome {
@@ -74,7 +77,7 @@ enum class UnpublishOutcome {
 UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalParticipant>& localParticipant,
                                      const std::shared_ptr<livekit::Track>& track,
                                      std::string* cachedPublicationSid,
-                                     const QString& label,
+                                     const std::string& label,
                                      bool suppressTrackNotFound)
 {
     if (!track) {
@@ -93,8 +96,7 @@ UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalPartici
     }
 
     try {
-        Logger::instance().info(QString("Unpublishing %1 (publication SID: %2)")
-                                .arg(label, QString::fromStdString(publicationSid)));
+        core::logInfo(core::str::cat("Unpublishing ", label, " (publication SID: %2)"));
         localParticipant->unpublishTrack(publicationSid);
         track->setPublication(nullptr);
         if (cachedPublicationSid) {
@@ -103,8 +105,7 @@ UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalPartici
         return UnpublishOutcome::Unpublished;
     } catch (const std::exception& e) {
         if (suppressTrackNotFound && isTrackNotFoundError(e)) {
-            Logger::instance().warning(QString("Suppressing missing-publication error while unpublishing %1: %2")
-                                       .arg(label, QString::fromUtf8(e.what())));
+            core::logWarning(core::str::cat("Suppressing missing-publication error while unpublishing ", label, ": %2"));
             track->setPublication(nullptr);
             if (cachedPublicationSid) {
                 cachedPublicationSid->clear();
@@ -117,70 +118,57 @@ UnpublishOutcome unpublishLocalTrack(const std::shared_ptr<livekit::LocalPartici
 
 } // namespace
 
-DeviceController::DeviceController(livekit::Room* room, QObject* parent)
-    : QObject(parent),
+DeviceController::DeviceController(livekit::Room* room,
+                                   const core::PlatformServices& services,
+                                   const core::DeviceSelection& devices,
+                                   const core::AudioProcessingConfig& audio)
+    : services_(services),
       room_(room),
-      cameraCapturer_(new CameraCapturer(this)),
-      microphoneCapturer_(new MicrophoneCapturer(this)),
-      screenCapturer_(new ScreenCapturer(this))
+      cameraCapturer_(std::make_unique<CameraCapturer>(*services.camera)),
+      microphoneCapturer_(std::make_unique<MicrophoneCapturer>(*services.microphone)),
+      screenCapturer_(std::make_unique<ScreenCapturer>(*services.timers))
 {
-    auto& settings = Settings::instance();
-    pendingUnpublishRetryTimer_.setInterval(500);
-    pendingUnpublishRetryTimer_.setSingleShot(false);
-    QObject::connect(&pendingUnpublishRetryTimer_, &QTimer::timeout,
-                     this, &DeviceController::processPendingUnpublish);
+    pendingUnpublishRetryTimer_ =
+        services_.timers->createTimer([this]() { processPendingUnpublish(); });
 
-    const QString cameraId = settings.getSelectedCameraId();
-    if (!cameraId.isEmpty()) {
-        if (!cameraCapturer_->setCameraById(cameraId.toUtf8())) {
-            const QList<QCameraDevice> cameras = CameraCapturer::availableCameras();
-            QString fallbackId;
-            if (!cameras.isEmpty()) {
-                cameraCapturer_->setCamera(cameras.first());
-                fallbackId = QString::fromUtf8(cameras.first().id());
+    if (!devices.cameraId.empty()) {
+        if (!cameraCapturer_->setCameraById(devices.cameraId)) {
+            // The persisted id is stale. Fall back to the first camera and tell
+            // the caller to persist the correction (core no longer writes
+            // settings itself).
+            std::string fallbackId;
+            const auto cameras = services_.devices->cameras();
+            if (!cameras.empty()) {
+                fallbackId = cameras.front().id;
+                cameraCapturer_->setCameraById(fallbackId);
             }
 
-            settings.setSelectedCameraId(fallbackId);
-            settings.sync();
-            Logger::instance().info(QString("Recovered stale camera id, fallback camera id: %1")
-                                        .arg(fallbackId.isEmpty() ? QStringLiteral("<none>") : fallbackId));
+            preferredCameraChanged.notify(fallbackId);
+            core::logInfo(core::str::cat("Recovered stale camera id, fallback camera id: ",
+                                         fallbackId.empty() ? "<none>" : fallbackId.c_str()));
         }
     }
 
-    const QString micId = settings.getSelectedMicrophoneId();
-    if (!micId.isEmpty()) {
-        microphoneCapturer_->setDeviceById(micId.toUtf8());
+    if (!devices.microphoneId.empty()) {
+        microphoneCapturer_->setDeviceById(devices.microphoneId);
     }
-    
-    // Apply audio processing options from settings
-    microphoneCapturer_->setEchoCancellationEnabled(settings.isEchoCancellationEnabled());
-    microphoneCapturer_->setNoiseSuppressionEnabled(settings.isNoiseSuppressionEnabled());
-    microphoneCapturer_->setAutoGainControlEnabled(settings.isAutoGainControlEnabled());
-    microphoneCapturer_->setHighPassFilterEnabled(settings.isHighPassFilterEnabled());
-    
-    // Apply advanced audio processing settings
-    microphoneCapturer_->setNoiseSuppressionLevel(
-        static_cast<AudioProcessingModule::NoiseSuppressionLevel>(settings.noiseSuppressionLevel()));
-    microphoneCapturer_->setGainControlMode(
-        static_cast<AudioProcessingModule::GainControlMode>(settings.gainControlMode()));
-    microphoneCapturer_->setFixedDigitalGainDb(settings.fixedDigitalGainDb());
-    microphoneCapturer_->setAdaptiveDigitalMaxGainDb(settings.adaptiveDigitalMaxGainDb());
-    microphoneCapturer_->setEchoEnhancedFilterEnabled(settings.isEchoEnhancedFilterEnabled());
 
-    QObject::connect(cameraCapturer_, &CameraCapturer::error, this, [](const QString& msg) {
-        Logger::instance().error(QString("Camera error: %1").arg(msg));
+    applyAudioSettings(audio);
+
+    capturerConnections_ += cameraCapturer_->error.connect([](const std::string& msg) {
+        core::logError(core::str::cat("Camera error: ", msg));
     });
-    QObject::connect(cameraCapturer_, &CameraCapturer::frameCaptured, this,
-                     [this](const QImage& frame) {
-                         emit localVideoFrameReady(frame);
-                     });
+    capturerConnections_ += cameraCapturer_->frameCaptured.connect(
+        [this](const core::VideoFrame& frame) {
+            localVideoFrameReady.notify(frame);
+        });
 
-    QObject::connect(microphoneCapturer_, &MicrophoneCapturer::error, this, [](const QString& msg) {
-        Logger::instance().error(QString("Microphone error: %1").arg(msg));
+    capturerConnections_ += microphoneCapturer_->error.connect([](const std::string& msg) {
+        core::logError(core::str::cat("Microphone error: ", msg));
     });
 
-    QObject::connect(screenCapturer_, &ScreenCapturer::error, this, [this](const QString& msg) {
-        Logger::instance().error(QString("Screen capture error: %1").arg(msg));
+    capturerConnections_ += screenCapturer_->error.connect([this](const std::string& msg) {
+        core::logError(core::str::cat("Screen capture error: ", msg));
         if (screenShareEnabled_) {
             screenCapturer_->stop();
             auto localParticipant = this->localParticipant();
@@ -188,7 +176,7 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
                 try {
                     const UnpublishOutcome outcome =
                         unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
-                                            QStringLiteral("screen share track"), true);
+                                            "screen share track", true);
                     if (outcome == UnpublishOutcome::Unpublished
                         || outcome == UnpublishOutcome::AlreadyGone
                         || outcome == UnpublishOutcome::NoParticipant
@@ -197,18 +185,24 @@ DeviceController::DeviceController(livekit::Room* room, QObject* parent)
                         return;
                     }
                 } catch (const std::exception& e) {
-                    Logger::instance().warning(QString("Failed to unpublish screen share track after capture error: %1")
-                                               .arg(e.what()));
+                    core::logWarning(core::str::cat(
+                        "Failed to unpublish screen share track after capture error: ", e.what()));
                 }
             }
             pendingDisableScreenShare_ = true;
             pendingDisableScreenShareLogged_ = true;
             screenShareEnabled_ = false;
-            emit localScreenShareChanged(false);
+            localScreenShareChanged.notify(false);
             schedulePendingUnpublishRetry();
-            Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
+            core::logWarning("Deferring screen share shutdown until publication SID becomes available");
         }
     });
+}
+
+DeviceController::~DeviceController()
+{
+    // First, so no capturer callback can run against half-destroyed members.
+    capturerConnections_.clear();
 }
 
 std::shared_ptr<livekit::LocalParticipant> DeviceController::localParticipant() const
@@ -220,7 +214,7 @@ void DeviceController::setRoom(livekit::Room* room)
 {
     room_ = room;
     if (!room_) {
-        pendingUnpublishRetryTimer_.stop();
+        pendingUnpublishRetryTimer_->stop();
     }
 }
 
@@ -251,37 +245,34 @@ void DeviceController::unpublishLocalTracks()
     if (localAudioTrack_) {
         try {
             unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
-                                QStringLiteral("audio track"), true);
+                                "audio track", true);
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Failed to unpublish audio track during disconnect: %1")
-                                       .arg(e.what()));
+            core::logWarning(core::str::cat("Failed to unpublish audio track during disconnect: ", e.what()));
         }
     }
 
     if (localVideoTrack_) {
         try {
             unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
-                                QStringLiteral("camera track"), true);
+                                "camera track", true);
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Failed to unpublish camera track during disconnect: %1")
-                                       .arg(e.what()));
+            core::logWarning(core::str::cat("Failed to unpublish camera track during disconnect: ", e.what()));
         }
     }
 
     if (localScreenTrack_) {
         try {
             unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
-                                QStringLiteral("screen share track"), true);
+                                "screen share track", true);
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Failed to unpublish screen share track during disconnect: %1")
-                                       .arg(e.what()));
+            core::logWarning(core::str::cat("Failed to unpublish screen share track during disconnect: ", e.what()));
         }
     }
 }
 
 void DeviceController::resetLocalState()
 {
-    pendingUnpublishRetryTimer_.stop();
+    pendingUnpublishRetryTimer_->stop();
     localVideoTrack_ = nullptr;
     localAudioTrack_ = nullptr;
     localScreenTrack_ = nullptr;
@@ -299,9 +290,9 @@ void DeviceController::resetLocalState()
     pendingDisableScreenShareLogged_ = false;
 }
 
-void DeviceController::handleLocalTrackPublished(livekit::TrackSource source, const QString& publicationSid)
+void DeviceController::handleLocalTrackPublished(livekit::TrackSource source, const std::string& publicationSid)
 {
-    const std::string sid = publicationSid.toStdString();
+    const std::string sid = publicationSid;
 
     switch (source) {
     case livekit::TrackSource::SOURCE_MICROPHONE:
@@ -323,11 +314,12 @@ void DeviceController::handleLocalTrackPublished(livekit::TrackSource source, co
 void DeviceController::schedulePendingUnpublishRetry()
 {
     if (pendingDisableMicrophone_ || pendingDisableCamera_ || pendingDisableScreenShare_) {
-        if (!pendingUnpublishRetryTimer_.isActive()) {
-            pendingUnpublishRetryTimer_.start();
+        if (!pendingUnpublishRetryTimer_->isActive()) {
+            // 500 ms repeating, same cadence as the QTimer it replaces.
+            pendingUnpublishRetryTimer_->start(std::chrono::milliseconds(500), /*repeat=*/true);
         }
     } else {
-        pendingUnpublishRetryTimer_.stop();
+        pendingUnpublishRetryTimer_->stop();
     }
 }
 
@@ -343,7 +335,7 @@ void DeviceController::processPendingUnpublish()
         try {
             const UnpublishOutcome outcome =
                 unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
-                                    QStringLiteral("audio track"), true);
+                                    "audio track", true);
             if (outcome == UnpublishOutcome::Unpublished
                 || outcome == UnpublishOutcome::AlreadyGone
                 || outcome == UnpublishOutcome::NoParticipant
@@ -351,8 +343,7 @@ void DeviceController::processPendingUnpublish()
                 finalizeMicrophoneDisabled();
             }
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Deferred microphone unpublish failed, will retry: %1")
-                                       .arg(e.what()));
+            core::logWarning(core::str::cat("Deferred microphone unpublish failed, will retry: ", e.what()));
         }
     }
 
@@ -360,7 +351,7 @@ void DeviceController::processPendingUnpublish()
         try {
             const UnpublishOutcome outcome =
                 unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
-                                    QStringLiteral("camera track"), true);
+                                    "camera track", true);
             if (outcome == UnpublishOutcome::Unpublished
                 || outcome == UnpublishOutcome::AlreadyGone
                 || outcome == UnpublishOutcome::NoParticipant
@@ -368,8 +359,7 @@ void DeviceController::processPendingUnpublish()
                 finalizeCameraDisabled();
             }
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Deferred camera unpublish failed, will retry: %1")
-                                       .arg(e.what()));
+            core::logWarning(core::str::cat("Deferred camera unpublish failed, will retry: ", e.what()));
         }
     }
 
@@ -377,7 +367,7 @@ void DeviceController::processPendingUnpublish()
         try {
             const UnpublishOutcome outcome =
                 unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
-                                    QStringLiteral("screen share track"), true);
+                                    "screen share track", true);
             if (outcome == UnpublishOutcome::Unpublished
                 || outcome == UnpublishOutcome::AlreadyGone
                 || outcome == UnpublishOutcome::NoParticipant
@@ -385,8 +375,7 @@ void DeviceController::processPendingUnpublish()
                 finalizeScreenShareDisabled();
             }
         } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Deferred screen-share unpublish failed, will retry: %1")
-                                       .arg(e.what()));
+            core::logWarning(core::str::cat("Deferred screen-share unpublish failed, will retry: ", e.what()));
         }
     }
 
@@ -413,55 +402,53 @@ void DeviceController::finalizeCameraDisabled()
 
 void DeviceController::finalizeScreenShareDisabled()
 {
-    Logger::instance().info("Screen track unpublished, releasing reference");
+    core::logInfo("Screen track unpublished, releasing reference");
     localScreenTrack_.reset();
     screenTrackSid_.clear();
     pendingDisableScreenShare_ = false;
     pendingDisableScreenShareLogged_ = false;
-    Logger::instance().info("Screen track reference released");
+    core::logInfo("Screen track reference released");
     schedulePendingUnpublishRetry();
 }
 
 void DeviceController::toggleMicrophone()
 {
     if (pendingDisableMicrophone_) {
-        Logger::instance().warning("Ignoring microphone toggle while disable is pending");
+        core::logWarning("Ignoring microphone toggle while disable is pending");
         return;
     }
 
     microphoneEnabled_ = !microphoneEnabled_;
-    Logger::instance().info(QString("Microphone toggled: %1").arg(microphoneEnabled_ ? "ON" : "OFF"));
+    core::logInfo(core::str::cat("Microphone toggled: ", microphoneEnabled_ ? "ON" : "OFF"));
 
     try {
         if (microphoneEnabled_) {
-            Logger::instance().info("Starting microphone capturer...");
+            core::logInfo("Starting microphone capturer...");
             if (microphoneCapturer_->start()) {
-                Logger::instance().info("Microphone capturer started successfully");
+                core::logInfo("Microphone capturer started successfully");
                 auto source = microphoneCapturer_->getAudioSource();
-                Logger::instance().info(QString("Got audio source: %1").arg(source ? "valid" : "null"));
+                core::logInfo(core::str::cat("Got audio source: ", source ? "valid" : "null"));
 
                 if (source) {
                     // Always create a new audio track since AudioSource is recreated each time
-                    Logger::instance().info("Creating audio track...");
+                    core::logInfo("Creating audio track...");
                     localAudioTrack_ = livekit::LocalAudioTrack::createLocalAudioTrack("mic", source);
-                    Logger::instance().info(QString("Audio track created: %1")
-                        .arg(localAudioTrack_ ? "valid" : "null"));
+                    core::logInfo(core::str::cat("Audio track created: ", localAudioTrack_ ? "valid" : "null"));
 
                     auto localParticipant = this->localParticipant();
-                    Logger::instance().info(QString("Got local participant: %1")
-                        .arg(localParticipant ? "valid" : "null"));
+                    core::logInfo(core::str::cat("Got local participant: ", localParticipant ? "valid" : "null"));
 
                     if (localParticipant && localAudioTrack_) {
-                        Logger::instance().info("Publishing audio track...");
+                        core::logInfo("Publishing audio track...");
                         livekit::TrackPublishOptions options;
                         options.source = livekit::TrackSource::SOURCE_MICROPHONE;
                         audioTrackSid_.clear();
                         localParticipant->publishTrack(localAudioTrack_, options);
-                        Logger::instance().info("Audio track published successfully");
+                        core::logInfo("Audio track published successfully");
                     }
                 }
             } else {
-                Logger::instance().error("Failed to start microphone");
+                core::logError("Failed to start microphone");
                 microphoneEnabled_ = false;
             }
         } else {
@@ -471,11 +458,11 @@ void DeviceController::toggleMicrophone()
             if (localParticipant && localAudioTrack_) {
                 const UnpublishOutcome outcome =
                     unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
-                                        QStringLiteral("audio track"), true);
+                                        "audio track", true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableMicrophone_ = true;
                     if (!pendingDisableMicrophoneLogged_) {
-                        Logger::instance().warning("Deferring microphone shutdown until publication SID becomes available");
+                        core::logWarning("Deferring microphone shutdown until publication SID becomes available");
                         pendingDisableMicrophoneLogged_ = true;
                     }
                     schedulePendingUnpublishRetry();
@@ -486,64 +473,61 @@ void DeviceController::toggleMicrophone()
                 finalizeMicrophoneDisabled();
             }
             microphoneEnabled_ = false;
-            emit localMicrophoneChanged(false);
+            localMicrophoneChanged.notify(false);
             return;
         }
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Exception in toggleMicrophone: %1").arg(e.what()));
+        core::logError(core::str::cat("Exception in toggleMicrophone: ", e.what()));
         microphoneEnabled_ = false;
     }
 
-    emit localMicrophoneChanged(microphoneEnabled_);
+    localMicrophoneChanged.notify(microphoneEnabled_);
 }
 
 void DeviceController::toggleCamera()
 {
     if (pendingDisableCamera_) {
-        Logger::instance().warning("Ignoring camera toggle while disable is pending");
+        core::logWarning("Ignoring camera toggle while disable is pending");
         return;
     }
 
     cameraEnabled_ = !cameraEnabled_;
-    Logger::instance().info(QString("Camera toggled: %1").arg(cameraEnabled_ ? "ON" : "OFF"));
+    core::logInfo(core::str::cat("Camera toggled: ", cameraEnabled_ ? "ON" : "OFF"));
 
     try {
         if (cameraEnabled_) {
-            Logger::instance().info("Starting camera capturer...");
+            core::logInfo("Starting camera capturer...");
             if (cameraCapturer_->start()) {
-                Logger::instance().info("Camera capturer started successfully");
+                core::logInfo("Camera capturer started successfully");
                 auto source = cameraCapturer_->getVideoSource();
-                Logger::instance().info(QString("Got video source: %1").arg(source ? "valid" : "null"));
+                core::logInfo(core::str::cat("Got video source: ", source ? "valid" : "null"));
 
                 if (source) {
                     if (!localVideoTrack_) {
-                        Logger::instance().info("Creating video track...");
+                        core::logInfo("Creating video track...");
                         localVideoTrack_ = livekit::LocalVideoTrack::createLocalVideoTrack("camera", source);
-                        Logger::instance().info(QString("Video track created: %1")
-                            .arg(localVideoTrack_ ? "valid" : "null"));
+                        core::logInfo(core::str::cat("Video track created: ", localVideoTrack_ ? "valid" : "null"));
                     }
 
                     auto localParticipant = this->localParticipant();
-                    Logger::instance().info(QString("Got local participant: %1")
-                        .arg(localParticipant ? "valid" : "null"));
+                    core::logInfo(core::str::cat("Got local participant: ", localParticipant ? "valid" : "null"));
 
                     if (localParticipant && localVideoTrack_) {
-                        Logger::instance().info("Publishing video track...");
+                        core::logInfo("Publishing video track...");
                         livekit::TrackPublishOptions options;
                         options.source = livekit::TrackSource::SOURCE_CAMERA;
                         cameraTrackSid_.clear();
                         localParticipant->publishTrack(localVideoTrack_, options);
                         cameraTrackSid_ = resolvePublishedTrackSid(localParticipant, localVideoTrack_);
                         if (!cameraTrackSid_.empty()) {
-                            Logger::instance().info(QString("Video track published with SID: %1")
-                                .arg(QString::fromStdString(cameraTrackSid_)));
+                            core::logInfo(core::str::cat("Video track published with SID: ", cameraTrackSid_));
                         } else {
-                            Logger::instance().warning("Video track published but SID is not available yet");
+                            core::logWarning("Video track published but SID is not available yet");
                         }
                     }
                 }
             } else {
-                Logger::instance().error("Failed to start camera");
+                core::logError("Failed to start camera");
                 cameraEnabled_ = false;
             }
         } else {
@@ -553,11 +537,11 @@ void DeviceController::toggleCamera()
             if (localParticipant && localVideoTrack_) {
                 const UnpublishOutcome outcome =
                     unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
-                                        QStringLiteral("camera track"), true);
+                                        "camera track", true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableCamera_ = true;
                     if (!pendingDisableCameraLogged_) {
-                        Logger::instance().warning("Deferring camera shutdown until publication SID becomes available");
+                        core::logWarning("Deferring camera shutdown until publication SID becomes available");
                         pendingDisableCameraLogged_ = true;
                     }
                     schedulePendingUnpublishRetry();
@@ -568,38 +552,37 @@ void DeviceController::toggleCamera()
                 finalizeCameraDisabled();
             }
             cameraEnabled_ = false;
-            emit localCameraChanged(false);
+            localCameraChanged.notify(false);
             return;
         }
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Exception in toggleCamera: %1").arg(e.what()));
+        core::logError(core::str::cat("Exception in toggleCamera: ", e.what()));
         cameraEnabled_ = false;
     }
 
-    emit localCameraChanged(cameraEnabled_);
+    localCameraChanged.notify(cameraEnabled_);
 }
 
 void DeviceController::toggleScreenShare()
 {
     if (pendingDisableScreenShare_) {
-        Logger::instance().warning("Ignoring screen share toggle while disable is pending");
+        core::logWarning("Ignoring screen share toggle while disable is pending");
         return;
     }
 
-    if (screenShareDebounceTimer_.isValid()
-        && screenShareDebounceTimer_.elapsed() < kScreenShareDebounceMs) {
-        Logger::instance().warning("Screen share toggle debounced, ignoring rapid toggle");
+    if (screenShareDebounceAt_.has_value()
+        && core::elapsedMs(*screenShareDebounceAt_) < kScreenShareDebounceMs) {
+        core::logWarning("Screen share toggle debounced, ignoring rapid toggle");
         return;
     }
-    screenShareDebounceTimer_.start();
+    screenShareDebounceAt_ = core::SteadyClock::now();
 
     screenShareEnabled_ = !screenShareEnabled_;
-    Logger::instance().info(QString("Screen sharing toggled: %1")
-        .arg(screenShareEnabled_ ? "ON" : "OFF"));
+    core::logInfo(core::str::cat("Screen sharing toggled: ", screenShareEnabled_ ? "ON" : "OFF"));
 
     try {
         if (screenShareEnabled_) {
-            Logger::instance().info("Starting screen capturer...");
+            core::logInfo("Starting screen capturer...");
             if (screenCapturer_->start()) {
                 connectScreenSignals();
                 auto source = screenCapturer_->getVideoSource();
@@ -615,14 +598,13 @@ void DeviceController::toggleScreenShare()
                     localParticipant->publishTrack(localScreenTrack_, options);
                     screenTrackSid_ = resolvePublishedTrackSid(localParticipant, localScreenTrack_);
                     if (!screenTrackSid_.empty()) {
-                        Logger::instance().info(QString("Screen share track published with SID: %1")
-                            .arg(QString::fromStdString(screenTrackSid_)));
+                        core::logInfo(core::str::cat("Screen share track published with SID: ", screenTrackSid_));
                     } else {
-                        Logger::instance().warning("Screen share track published but SID is not available yet");
+                        core::logWarning("Screen share track published but SID is not available yet");
                     }
                 }
             } else {
-                Logger::instance().error("Failed to start screen sharing");
+                core::logError("Failed to start screen sharing");
                 screenShareEnabled_ = false;
             }
         } else {
@@ -632,11 +614,11 @@ void DeviceController::toggleScreenShare()
             if (localParticipant && localScreenTrack_) {
                 const UnpublishOutcome outcome =
                     unpublishLocalTrack(localParticipant, localScreenTrack_, &screenTrackSid_,
-                                        QStringLiteral("screen share track"), true);
+                                        "screen share track", true);
                 if (outcome == UnpublishOutcome::PublicationUnavailable) {
                     pendingDisableScreenShare_ = true;
                     if (!pendingDisableScreenShareLogged_) {
-                        Logger::instance().warning("Deferring screen share shutdown until publication SID becomes available");
+                        core::logWarning("Deferring screen share shutdown until publication SID becomes available");
                         pendingDisableScreenShareLogged_ = true;
                     }
                     schedulePendingUnpublishRetry();
@@ -647,38 +629,40 @@ void DeviceController::toggleScreenShare()
                 finalizeScreenShareDisabled();
             }
             screenShareEnabled_ = false;
-            emit localScreenShareChanged(false);
+            localScreenShareChanged.notify(false);
             return;
         }
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Exception in toggleScreenShare: %1").arg(e.what()));
+        core::logError(core::str::cat("Exception in toggleScreenShare: ", e.what()));
         screenShareEnabled_ = false;
     }
 
-    emit localScreenShareChanged(screenShareEnabled_);
+    localScreenShareChanged.notify(screenShareEnabled_);
 }
 
-void DeviceController::setScreenShareMode(ScreenCapturer::Mode mode, QScreen* screen, WId windowId)
+void DeviceController::setScreenShareMode(ScreenCapturer::Mode mode,
+                                          core::MonitorId monitorId,
+                                          core::WindowId windowId)
 {
     if (!screenCapturer_) {
         return;
     }
     screenCapturer_->setMode(mode);
-    if (mode == ScreenCapturer::Mode::Screen && screen) {
-        screenCapturer_->setScreen(screen);
+    if (mode == ScreenCapturer::Mode::Screen) {
+        screenCapturer_->setScreen(monitorId);
     } else if (mode == ScreenCapturer::Mode::Window) {
         screenCapturer_->setWindow(windowId);
     }
 }
 
-void DeviceController::switchCamera(const QString& deviceId)
+void DeviceController::switchCamera(const std::string& deviceId)
 {
     if (pendingDisableCamera_) {
-        Logger::instance().warning("Ignoring camera switch while camera shutdown is pending");
+        core::logWarning("Ignoring camera switch while camera shutdown is pending");
         return;
     }
 
-    Logger::instance().info(QString("Switching camera to device: %1").arg(deviceId));
+    core::logInfo(core::str::cat("Switching camera to device: ", deviceId));
 
     try {
         const bool wasEnabled = cameraEnabled_;
@@ -687,18 +671,18 @@ void DeviceController::switchCamera(const QString& deviceId)
         if (cameraEnabled_ && localVideoTrack_) {
             const UnpublishOutcome outcome =
                 unpublishLocalTrack(localParticipant, localVideoTrack_, &cameraTrackSid_,
-                                    QStringLiteral("camera track"), true);
+                                    "camera track", true);
             if (outcome == UnpublishOutcome::PublicationUnavailable) {
-                Logger::instance().warning("Deferring camera switch until current publication SID becomes available");
+                core::logWarning("Deferring camera switch until current publication SID becomes available");
                 return;
             }
             cameraCapturer_->stop();
             localVideoTrack_ = nullptr;
         }
 
-        const bool switched = cameraCapturer_->setCameraById(deviceId.toUtf8());
+        const bool switched = cameraCapturer_->setCameraById(deviceId);
         if (!switched) {
-            Logger::instance().warning(QString("Requested camera device not found: %1").arg(deviceId));
+            core::logWarning(core::str::cat("Requested camera device not found: ", deviceId));
         }
 
         if (wasEnabled) {
@@ -712,37 +696,33 @@ void DeviceController::switchCamera(const QString& deviceId)
                         options.source = livekit::TrackSource::SOURCE_CAMERA;
                         localParticipant->publishTrack(localVideoTrack_, options);
                         cameraTrackSid_ = resolvePublishedTrackSid(localParticipant, localVideoTrack_);
-                        Logger::instance().info(QString("Camera switched and republished successfully%1")
-                            .arg(cameraTrackSid_.empty()
-                                ? QString()
-                                : QStringLiteral(": ") + QString::fromStdString(cameraTrackSid_)));
+                        core::logInfo(core::str::cat("Camera switched and republished successfully", cameraTrackSid_.empty() ? std::string() : ": " + std::string(cameraTrackSid_)));
                     }
                 }
             } else {
-                Logger::instance().error("Failed to restart camera with new device");
+                core::logError("Failed to restart camera with new device");
                 cameraEnabled_ = false;
-                emit localCameraChanged(cameraEnabled_);
+                localCameraChanged.notify(cameraEnabled_);
             }
         }
 
         if (switched) {
-            Settings::instance().setSelectedCameraId(deviceId);
+            preferredCameraChanged.notify(deviceId);
         }
-        Settings::instance().sync();
 
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Exception in switchCamera: %1").arg(e.what()));
+        core::logError(core::str::cat("Exception in switchCamera: ", e.what()));
     }
 }
 
-void DeviceController::switchMicrophone(const QString& deviceId)
+void DeviceController::switchMicrophone(const std::string& deviceId)
 {
     if (pendingDisableMicrophone_) {
-        Logger::instance().warning("Ignoring microphone switch while microphone shutdown is pending");
+        core::logWarning("Ignoring microphone switch while microphone shutdown is pending");
         return;
     }
 
-    Logger::instance().info(QString("Switching microphone to device: %1").arg(deviceId));
+    core::logInfo(core::str::cat("Switching microphone to device: ", deviceId));
 
     try {
         const bool wasEnabled = microphoneEnabled_;
@@ -751,16 +731,16 @@ void DeviceController::switchMicrophone(const QString& deviceId)
         if (microphoneEnabled_ && localAudioTrack_) {
             const UnpublishOutcome outcome =
                 unpublishLocalTrack(localParticipant, localAudioTrack_, &audioTrackSid_,
-                                    QStringLiteral("audio track"), true);
+                                    "audio track", true);
             if (outcome == UnpublishOutcome::PublicationUnavailable) {
-                Logger::instance().warning("Deferring microphone switch until current publication SID becomes available");
+                core::logWarning("Deferring microphone switch until current publication SID becomes available");
                 return;
             }
             microphoneCapturer_->stop();
             localAudioTrack_ = nullptr;
         }
 
-        microphoneCapturer_->setDeviceById(deviceId.toUtf8());
+        microphoneCapturer_->setDeviceById(deviceId);
 
         if (wasEnabled) {
             if (microphoneCapturer_->start()) {
@@ -773,69 +753,58 @@ void DeviceController::switchMicrophone(const QString& deviceId)
                         options.source = livekit::TrackSource::SOURCE_MICROPHONE;
                         audioTrackSid_.clear();
                         localParticipant->publishTrack(localAudioTrack_, options);
-                        Logger::instance().info("Microphone switched and republished successfully");
+                        core::logInfo("Microphone switched and republished successfully");
                     }
                 }
             } else {
-                Logger::instance().error("Failed to restart microphone with new device");
+                core::logError("Failed to restart microphone with new device");
                 microphoneEnabled_ = false;
-                emit localMicrophoneChanged(microphoneEnabled_);
+                localMicrophoneChanged.notify(microphoneEnabled_);
             }
         }
 
-        Settings::instance().setSelectedMicrophoneId(deviceId);
-        Settings::instance().sync();
+        preferredMicrophoneChanged.notify(deviceId);
 
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Exception in switchMicrophone: %1").arg(e.what()));
+        core::logError(core::str::cat("Exception in switchMicrophone: ", e.what()));
     }
 }
 
 void DeviceController::connectScreenSignals()
 {
-    static QMetaObject::Connection screenConn;
-    if (screenConn) {
-        QObject::disconnect(screenConn);
-    }
-    screenConn = QObject::connect(screenCapturer_, &ScreenCapturer::frameCaptured,
-                                  this, [this](const QImage& frame) {
-                                      emit localScreenFrameReady(frame);
-                                  });
+    // Previously a function-local `static QMetaObject::Connection`, which meant
+    // a second DeviceController would disconnect the first one's handler. The
+    // subscription is now per-instance and owned by this object.
+    screenFrameConnection_ = screenCapturer_->frameCaptured.connect(
+        [this](const core::VideoFrame& frame) {
+            localScreenFrameReady.notify(frame);
+        });
 }
 
 // =============================================================================
 // Audio processing settings (runtime-applicable)
 // =============================================================================
 
-void DeviceController::applyAudioSettings()
+void DeviceController::applyAudioSettings(const core::AudioProcessingConfig& settings)
 {
     if (!microphoneCapturer_) return;
-
-    auto& settings = Settings::instance();
     
     // Basic toggles
-    microphoneCapturer_->setEchoCancellationEnabled(settings.isEchoCancellationEnabled());
-    microphoneCapturer_->setNoiseSuppressionEnabled(settings.isNoiseSuppressionEnabled());
-    microphoneCapturer_->setAutoGainControlEnabled(settings.isAutoGainControlEnabled());
-    microphoneCapturer_->setHighPassFilterEnabled(settings.isHighPassFilterEnabled());
+    microphoneCapturer_->setEchoCancellationEnabled(settings.echoCancellation);
+    microphoneCapturer_->setNoiseSuppressionEnabled(settings.noiseSuppression);
+    microphoneCapturer_->setAutoGainControlEnabled(settings.autoGainControl);
+    microphoneCapturer_->setHighPassFilterEnabled(settings.highPassFilter);
     
     // Advanced parameters
     microphoneCapturer_->setNoiseSuppressionLevel(
-        static_cast<AudioProcessingModule::NoiseSuppressionLevel>(settings.noiseSuppressionLevel()));
+        static_cast<AudioProcessingModule::NoiseSuppressionLevel>(settings.noiseSuppressionLevel));
     microphoneCapturer_->setGainControlMode(
-        static_cast<AudioProcessingModule::GainControlMode>(settings.gainControlMode()));
-    microphoneCapturer_->setFixedDigitalGainDb(settings.fixedDigitalGainDb());
-    microphoneCapturer_->setAdaptiveDigitalMaxGainDb(settings.adaptiveDigitalMaxGainDb());
-    microphoneCapturer_->setEchoEnhancedFilterEnabled(settings.isEchoEnhancedFilterEnabled());
+        static_cast<AudioProcessingModule::GainControlMode>(settings.gainControlMode));
+    microphoneCapturer_->setFixedDigitalGainDb(settings.fixedDigitalGainDb);
+    microphoneCapturer_->setAdaptiveDigitalMaxGainDb(settings.adaptiveDigitalMaxGainDb);
+    microphoneCapturer_->setEchoEnhancedFilterEnabled(settings.echoEnhancedFilter);
 
-    Logger::instance().info(QString("Audio settings re-applied (AEC=%1, NS=%2[lvl=%3], AGC=%4[mode=%5], HPF=%6, AEC-enhanced=%7)")
-                           .arg(settings.isEchoCancellationEnabled())
-                           .arg(settings.isNoiseSuppressionEnabled())
-                           .arg(settings.noiseSuppressionLevel())
-                           .arg(settings.isAutoGainControlEnabled())
-                           .arg(settings.gainControlMode())
-                           .arg(settings.isHighPassFilterEnabled())
-                           .arg(settings.isEchoEnhancedFilterEnabled()));
+    core::logInfo(core::str::cat("Audio settings re-applied (AEC=", settings.echoCancellation, ", NS=", settings.noiseSuppression, "[lvl=", settings.noiseSuppressionLevel, "], AGC=", settings.autoGainControl, "[mode=", settings.gainControlMode, "], HPF=", settings.highPassFilter, ", AEC-enhanced=", settings.echoEnhancedFilter, ")"));
 }
 
 void DeviceController::setEchoCancellationEnabled(bool enabled)

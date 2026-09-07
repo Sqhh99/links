@@ -8,7 +8,10 @@
 #include <QVariantList>
 #include <QImage>
 
+#include <memory>
+
 #include "../core/conference/conference_manager.h"
+#include "../adapters/qt/qt_platform_services.h"
 #include "network_client.h"
 #include "../core/screen_capturer.h"
 #include "ShareModeManager.h"
@@ -97,10 +100,10 @@ public:
     bool networkStatsAvailable() const;
     QString videoResolution() const;
     double videoFps() const { return networkStats_.videoFps; }
-    QString audioCodec() const { return networkStats_.audioCodec; }
-    QString videoCodec() const { return networkStats_.videoCodec; }
+    QString audioCodec() const { return QString::fromStdString(networkStats_.audioCodec); }
+    QString videoCodec() const { return QString::fromStdString(networkStats_.videoCodec); }
     int availableSendBandwidth() const { return networkStats_.availableSendBandwidthKbps; }
-    QString transportProtocol() const { return networkStats_.transportProtocol; }
+    QString transportProtocol() const { return QString::fromStdString(networkStats_.transportProtocol); }
     QString meetingDuration() const;
     bool recording() const;
     bool recordingAvailable() const;
@@ -236,8 +239,14 @@ private:
     void updateParticipantsList();
     void addChatMessage(const ChatMessage& msg);
 
-    ConferenceManager* conferenceManager_;
+    // Owns the Qt-backed implementations of the core ports. Declared before
+    // conferenceManager_ so it outlives it -- core holds raw pointers into it.
+    std::unique_ptr<links::qt_adapter::QtPlatformServices> platformServices_;
+    std::unique_ptr<ConferenceManager> conferenceManager_;
     ShareModeManager* shareModeManager_;
+
+    // Subscriptions to conferenceManager_; cleared first in the destructor.
+    links::core::ConnectionBag coreConnections_;
     QString url_;
     QString token_;
     QString roomName_;

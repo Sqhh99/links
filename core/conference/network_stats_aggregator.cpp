@@ -4,7 +4,7 @@
 #include <cmath>
 #include <type_traits>
 #include <variant>
-#include <QString>
+#include "../base/strings.h"
 
 namespace {
 
@@ -53,10 +53,10 @@ NetworkStatsAggregationResult aggregateNetworkStats(
     int bestVideoWidth = 0;
     int bestVideoHeight = 0;
     double bestVideoFps = -1.0;
-    QString audioCodec;
-    QString videoCodec;
+    std::string audioCodec;
+    std::string videoCodec;
     double availableOutgoingBitrate = -1.0;
-    QString transportProtocol;
+    std::string transportProtocol;
 
     for (const livekit::RtcStats& stat : stats) {
         std::visit(
@@ -115,16 +115,16 @@ NetworkStatsAggregationResult aggregateNetworkStats(
                     }
                 } else if constexpr (std::is_same_v<T, livekit::RtcCodecStats>) {
                     // Extract codec names (e.g. "audio/opus" -> "opus", "video/VP8" -> "VP8")
-                    const QString mimeType = QString::fromStdString(typedStat.codec.mime_type);
-                    if (mimeType.startsWith("audio/", Qt::CaseInsensitive) && audioCodec.isEmpty()) {
-                        audioCodec = mimeType.mid(6);
-                    } else if (mimeType.startsWith("video/", Qt::CaseInsensitive) && videoCodec.isEmpty()) {
-                        videoCodec = mimeType.mid(6);
+                    const std::string& mimeType = typedStat.codec.mime_type;
+                    if (links::core::str::startsWithIgnoreCase(mimeType, "audio/") && audioCodec.empty()) {
+                        audioCodec = mimeType.substr(6);
+                    } else if (links::core::str::startsWithIgnoreCase(mimeType, "video/") && videoCodec.empty()) {
+                        videoCodec = mimeType.substr(6);
                     }
                 } else if constexpr (std::is_same_v<T, livekit::RtcLocalCandidateStats>) {
                     // Transport protocol (e.g. "udp", "tcp")
-                    if (transportProtocol.isEmpty() && !typedStat.candidate.protocol.empty()) {
-                        transportProtocol = QString::fromStdString(typedStat.candidate.protocol).toUpper();
+                    if (transportProtocol.empty() && !typedStat.candidate.protocol.empty()) {
+                        transportProtocol = links::core::str::toUpperAscii(typedStat.candidate.protocol);
                     }
                 }
             },

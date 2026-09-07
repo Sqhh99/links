@@ -1,37 +1,45 @@
 #ifndef CORE_CONFERENCE_DEVICE_CONTROLLER_H
 #define CORE_CONFERENCE_DEVICE_CONTROLLER_H
 
-#include <QElapsedTimer>
-#include <QTimer>
-#include <QObject>
-#include <QImage>
-#include <QString>
+#include <chrono>
 #include <memory>
+#include <optional>
 #include <string>
-#include "livekit/livekit.h"
-#include "../camera_capturer.h"
-#include "../microphone_capturer.h"
-#include "../screen_capturer.h"
+
 #include "../audio_processing_module.h"
+#include "../base/signal.h"
+#include "../base/time.h"
+#include "../base/timer.h"
+#include "../camera_capturer.h"
+#include "../media/video_frame.h"
+#include "../microphone_capturer.h"
+#include "../platform_services.h"
+#include "../screen_capturer.h"
+#include "device_config.h"
+#include "livekit/livekit.h"
 
-class DeviceController : public QObject {
-    Q_OBJECT
-
+class DeviceController {
 public:
-    explicit DeviceController(livekit::Room* room, QObject* parent = nullptr);
+    DeviceController(livekit::Room* room,
+                     const links::core::PlatformServices& services,
+                     const links::core::DeviceSelection& devices,
+                     const links::core::AudioProcessingConfig& audio);
+    ~DeviceController();
 
     void setRoom(livekit::Room* room);
     void stopCapturers();
     void unpublishLocalTracks();
     void resetLocalState();
-    void handleLocalTrackPublished(livekit::TrackSource source, const QString& publicationSid);
+    void handleLocalTrackPublished(livekit::TrackSource source, const std::string& publicationSid);
 
     void toggleMicrophone();
     void toggleCamera();
     void toggleScreenShare();
-    void setScreenShareMode(ScreenCapturer::Mode mode, QScreen* screen, WId windowId);
-    void switchCamera(const QString& deviceId);
-    void switchMicrophone(const QString& deviceId);
+    void setScreenShareMode(ScreenCapturer::Mode mode,
+                            links::core::MonitorId monitorId,
+                            links::core::WindowId windowId);
+    void switchCamera(const std::string& deviceId);
+    void switchMicrophone(const std::string& deviceId);
 
     bool isMicrophoneEnabled() const { return microphoneEnabled_; }
     bool isCameraEnabled() const { return cameraEnabled_; }
@@ -40,7 +48,10 @@ public:
     // =========================================================================
     // Audio processing settings (runtime-applicable)
     // =========================================================================
-    void applyAudioSettings();  // Re-read from Settings and apply
+
+    /// Re-apply the whole audio-processing configuration. The caller (ui/) owns
+    /// persistence and hands the values in.
+    void applyAudioSettings(const links::core::AudioProcessingConfig& config);
 
     // Basic toggles
     void setEchoCancellationEnabled(bool enabled);
@@ -61,12 +72,16 @@ public:
      */
     void feedReverseAudio(const int16_t* data, int samples, int sampleRate, int channels);
 
-signals:
-    void localMicrophoneChanged(bool enabled);
-    void localCameraChanged(bool enabled);
-    void localScreenShareChanged(bool enabled);
-    void localVideoFrameReady(const QImage& frame);
-    void localScreenFrameReady(const QImage& frame);
+    links::core::Signal<bool> localMicrophoneChanged;
+    links::core::Signal<bool> localCameraChanged;
+    links::core::Signal<bool> localScreenShareChanged;
+    links::core::Signal<const links::core::VideoFrame&> localVideoFrameReady;
+    links::core::Signal<const links::core::VideoFrame&> localScreenFrameReady;
+
+    /// Emitted when a device switch should be persisted. Replaces the direct
+    /// Settings::instance() writes core used to make.
+    links::core::Signal<const std::string&> preferredCameraChanged;
+    links::core::Signal<const std::string&> preferredMicrophoneChanged;
 
 private:
     void connectScreenSignals();
@@ -83,10 +98,13 @@ private:
      */
     std::shared_ptr<livekit::LocalParticipant> localParticipant() const;
 
+    const links::core::PlatformServices& services_;
     livekit::Room* room_{nullptr};
-    CameraCapturer* cameraCapturer_{nullptr};
-    MicrophoneCapturer* microphoneCapturer_{nullptr};
-    ScreenCapturer* screenCapturer_{nullptr};
+
+    std::unique_ptr<CameraCapturer> cameraCapturer_;
+    std::unique_ptr<MicrophoneCapturer> microphoneCapturer_;
+    std::unique_ptr<ScreenCapturer> screenCapturer_;
+
     std::shared_ptr<livekit::Track> localVideoTrack_;
     std::shared_ptr<livekit::Track> localAudioTrack_;
     std::shared_ptr<livekit::Track> localScreenTrack_;
@@ -103,10 +121,18 @@ private:
     bool pendingDisableCameraLogged_{false};
     bool pendingDisableMicrophoneLogged_{false};
     bool pendingDisableScreenShareLogged_{false};
-    QTimer pendingUnpublishRetryTimer_;
+    std::unique_ptr<links::core::Timer> pendingUnpublishRetryTimer_;
 
-    QElapsedTimer screenShareDebounceTimer_;
+    // Monotonic, like QElapsedTimer. Unset until the first screen-share toggle.
+    std::optional<links::core::SteadyClock::time_point> screenShareDebounceAt_;
     static constexpr int kScreenShareDebounceMs = 500;
+
+    // Subscriptions to the capturers; cleared first in the destructor.
+    links::core::ConnectionBag capturerConnections_;
+
+    // Re-established whenever screen sharing starts; replacing it drops the
+    // previous subscription.
+    links::core::Connection screenFrameConnection_;
 };
 
 #endif // CORE_CONFERENCE_DEVICE_CONTROLLER_H

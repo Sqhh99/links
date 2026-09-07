@@ -76,6 +76,27 @@ bool startsWithIgnoreCase(std::string_view text, std::string_view prefix)
     return true;
 }
 
+bool containsIgnoreCase(std::string_view text, std::string_view needle)
+{
+    if (needle.empty()) {
+        return true;
+    }
+    if (needle.size() > text.size()) {
+        return false;
+    }
+    for (std::size_t i = 0; i + needle.size() <= text.size(); ++i) {
+        if (startsWithIgnoreCase(text.substr(i), needle)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+bool contains(std::string_view text, std::string_view needle)
+{
+    return text.find(needle) != std::string_view::npos;
+}
+
 bool equalsIgnoreCase(std::string_view a, std::string_view b)
 {
     return a.size() == b.size() && startsWithIgnoreCase(a, b);

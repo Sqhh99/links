@@ -3,16 +3,10 @@
 # Tests for AudioProcessingModule and MicrophoneCapturer
 # =============================================================================
 
+# The AUDIO_PROCESSING_TESTS define is gone: core::log has no Qt dependency,
+# so this file now compiles identically here and in the app.
 add_executable(audio_processing_tests
     core/test_audio_processing_module.cpp
-)
-
-target_sources(audio_processing_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}/core/audio_processing_module.cpp
-)
-
-target_compile_definitions(audio_processing_tests PRIVATE
-    AUDIO_PROCESSING_TESTS
 )
 
 set_target_properties(audio_processing_tests PROPERTIES
@@ -24,30 +18,21 @@ set_target_properties(audio_processing_tests PROPERTIES
 target_link_libraries(audio_processing_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    ${WEBRTC_APM_LIBRARY}
-)
-
-target_include_directories(audio_processing_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
-    ${CMAKE_SOURCE_DIR}/utils
-    ${WEBRTC_APM_INCLUDE_DIR}
-    ${WEBRTC_ABSEIL_INCLUDE_DIR}
+    links_core
 )
 
 # =============================================================================
 # Microphone Capturer Tests (requires Qt and LiveKit)
 # =============================================================================
 
+# No longer needs Qt: MicrophoneCapturer is driven by a core::AudioInput, which
+# the test supplies as a fake.
 add_executable(microphone_capturer_tests
     core/test_microphone_capturer.cpp
-    ${CMAKE_SOURCE_DIR}/core/microphone_capturer.cpp
-    ${CMAKE_SOURCE_DIR}/core/audio_processing_module.cpp
-    ${CMAKE_SOURCE_DIR}/utils/logger.cpp
 )
 
 set_target_properties(microphone_capturer_tests PROPERTIES
-    AUTOMOC ON
+    AUTOMOC OFF
     AUTOUIC OFF
     AUTORCC OFF
 )
@@ -55,20 +40,7 @@ set_target_properties(microphone_capturer_tests PROPERTIES
 target_link_libraries(microphone_capturer_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    Qt6::Core
-    Qt6::Multimedia
-    ${LIVEKIT_LIBRARY}
-    ${LIVEKIT_FFI_LIBRARY}
-    ${WEBRTC_APM_LIBRARY}
-)
-
-target_include_directories(microphone_capturer_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
-    ${CMAKE_SOURCE_DIR}/utils
-    ${LIVEKIT_INCLUDE_DIR}
-    ${WEBRTC_APM_INCLUDE_DIR}
-    ${WEBRTC_ABSEIL_INCLUDE_DIR}
+    links_core
 )
 
 if(UNIX)
@@ -111,7 +83,6 @@ target_include_directories(desktop_capture_tests PRIVATE
 
 add_executable(conference_network_stats_tests
     core/test_network_stats_aggregator.cpp
-    ${CMAKE_SOURCE_DIR}/core/conference/network_stats_aggregator.cpp
 )
 
 set_target_properties(conference_network_stats_tests PROPERTIES
@@ -123,14 +94,7 @@ set_target_properties(conference_network_stats_tests PROPERTIES
 target_link_libraries(conference_network_stats_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    Qt6::Core
-)
-
-target_include_directories(conference_network_stats_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
-    ${CMAKE_SOURCE_DIR}/utils
-    ${LIVEKIT_INCLUDE_DIR}
+    links_core
 )
 
 # =============================================================================
@@ -139,7 +103,6 @@ target_include_directories(conference_network_stats_tests PRIVATE
 
 add_executable(conference_metadata_parser_tests
     core/test_participant_metadata_parser.cpp
-    ${CMAKE_SOURCE_DIR}/core/conference/participant_metadata_parser.cpp
 )
 
 set_target_properties(conference_metadata_parser_tests PROPERTIES
@@ -151,13 +114,7 @@ set_target_properties(conference_metadata_parser_tests PROPERTIES
 target_link_libraries(conference_metadata_parser_tests PRIVATE
     GTest::gtest
     GTest::gtest_main
-    Qt6::Core
-)
-
-target_include_directories(conference_metadata_parser_tests PRIVATE
-    ${CMAKE_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/core
-    ${CMAKE_SOURCE_DIR}/utils
+    links_core
 )
 
 # =============================================================================

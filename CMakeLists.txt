@@ -92,6 +92,7 @@ set(LINKS_CORE_BASE_SOURCES
     core/base/log.cpp
     core/base/strings.cpp
     core/media/video_frame.cpp
+    core/media/audio_resampler.cpp
     core/platform_window_ops.cpp
     core/thumbnail_service.cpp
     core/desktop_capture/desktop_frame.cpp
@@ -100,8 +101,48 @@ set(LINKS_CORE_BASE_SOURCES
     core/recording/frame_clock.cpp
 )
 
+# The LiveKit-dependent half of core. Still no Qt.
+set(LINKS_CORE_SOURCES
+    core/audio_processing_module.cpp
+    core/camera_capturer.cpp
+    core/microphone_capturer.cpp
+    core/screen_capturer.cpp
+    core/room_event_delegate.cpp
+    core/conference/conference_manager.cpp
+    core/conference/device_controller.cpp
+    core/conference/media_pipeline.cpp
+    core/conference/network_stats_aggregator.cpp
+    core/conference/participant_metadata_parser.cpp
+    core/conference/participant_store.cpp
+    core/conference/room_controller.cpp
+)
+
+set(LINKS_CORE_HEADERS
+    core/audio_processing_module.h
+    core/camera_capturer.h
+    core/microphone_capturer.h
+    core/screen_capturer.h
+    core/room_event_delegate.h
+    core/platform_services.h
+    core/conference/conference_manager.h
+    core/conference/conference_types.h
+    core/conference/device_config.h
+    core/conference/device_controller.h
+    core/conference/media_pipeline.h
+    core/conference/network_stats_aggregator.h
+    core/conference/participant_metadata_parser.h
+    core/conference/participant_store.h
+    core/conference/room_controller.h
+)
+
 set(LINKS_CORE_BASE_HEADERS
     core/base/log.h
+    core/media/audio_format.h
+    core/media/audio_input.h
+    core/media/audio_player.h
+    core/media/audio_resampler.h
+    core/media/media_devices.h
+    core/media/video_input.h
     core/base/signal.h
     core/base/strings.h
     core/base/executor.h
@@ -206,22 +247,39 @@ elseif(UNIX)
     target_link_libraries(links_core_base PUBLIC X11::X11)
 endif()
 
+# =============================================================================
+# links_core - the LiveKit-dependent half of core. Also links no Qt6::* target.
+# Kept separate from links_core_base so the desktop-capture and recording tests
+# do not acquire a LiveKit runtime dependency they never had.
+# =============================================================================
+add_library(links_core STATIC
+    ${LINKS_CORE_SOURCES}
+    ${LINKS_CORE_HEADERS}
+)
+
+set_target_properties(links_core PROPERTIES
+    AUTOMOC OFF
+    AUTOUIC OFF
+    AUTORCC OFF
+    POSITION_INDEPENDENT_CODE ON
+)
+
+target_link_libraries(links_core PUBLIC
+    links_core_base
+    ${LIVEKIT_LIBRARY}
+    ${LIVEKIT_FFI_LIBRARY}
+    ${WEBRTC_APM_LIBRARY}
+)
+
+target_include_directories(links_core PUBLIC
+    ${LIVEKIT_INCLUDE_DIR}
+    ${WEBRTC_APM_INCLUDE_DIR}
+    ${WEBRTC_ABSEIL_INCLUDE_DIR}
+)
+
 # Source files
 set(SOURCES
     main.cpp
-    # Core modules
-    core/conference/conference_manager.cpp
-    core/conference/network_stats_aggregator.cpp
-    core/conference/participant_metadata_parser.cpp
-    core/conference/participant_store.cpp
-    core/conference/media_pipeline.cpp
-    core/conference/device_controller.cpp
-    core/conference/room_controller.cpp
-    core/camera_capturer.cpp
-    core/microphone_capturer.cpp
-    core/audio_processing_module.cpp
-    core/screen_capturer.cpp
-    core/room_event_delegate.cpp
     # Utils
     utils/logger.cpp
     utils/settings.cpp
@@ -230,6 +288,11 @@ set(SOURCES
     ui/adapters/qt/qt_task_runner.cpp
     ui/adapters/qt/qt_timer_factory.cpp
     ui/adapters/qt/qt_log_sink.cpp
+    ui/adapters/qt/qt_audio_input.cpp
+    ui/adapters/qt/qt_audio_player.cpp
+    ui/adapters/qt/qt_video_input.cpp
+    ui/adapters/qt/qt_media_devices.cpp
+    ui/adapters/qt/qt_platform_services.cpp
     # QML backends
     ui/backend/network_client.cpp
     ui/backend/LoginBackend.cpp
@@ -256,19 +319,6 @@ if(WIN32)
 endif()
 
 set(HEADERS
-    # Core modules
-    core/conference/conference_manager.h
-    core/conference/conference_types.h
-    core/conference/network_stats_aggregator.h
-    core/conference/participant_metadata_parser.h
-    core/conference/participant_store.h
-    core/conference/media_pipeline.h
-    core/conference/device_controller.h
-    core/conference/room_controller.h
-    core/camera_capturer.h
-    core/microphone_capturer.h
-    core/screen_capturer.h
-    core/room_event_delegate.h
     # Utils
     utils/logger.h
     utils/settings.h
@@ -277,6 +327,11 @@ set(HEADERS
     ui/adapters/qt/qt_task_runner.h
     ui/adapters/qt/qt_timer_factory.h
     ui/adapters/qt/qt_log_sink.h
+    ui/adapters/qt/qt_audio_input.h
+    ui/adapters/qt/qt_audio_player.h
+    ui/adapters/qt/qt_video_input.h
+    ui/adapters/qt/qt_media_devices.h
+    ui/adapters/qt/qt_platform_services.h
     # QML backends
     ui/backend/network_client.h
     ui/backend/LoginBackend.h
@@ -422,10 +477,7 @@ qt_add_qml_module(links
 
 # Link libraries
 target_link_libraries(links PRIVATE
-    links_core_base
-    ${LIVEKIT_LIBRARY}
-    ${LIVEKIT_FFI_LIBRARY}
-    ${WEBRTC_APM_LIBRARY}
+    links_core
     Qt6::Core
     Qt6::Gui
     Qt6::Network
@@ -496,13 +548,8 @@ endif()
 
 # Include directories
 target_include_directories(links PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/ui
-    ${CMAKE_CURRENT_SOURCE_DIR}/core
     ${CMAKE_CURRENT_SOURCE_DIR}/utils
-    ${LIVEKIT_INCLUDE_DIR}
-    ${WEBRTC_APM_INCLUDE_DIR}
-    ${WEBRTC_ABSEIL_INCLUDE_DIR}
 )
 
 # Set output directory

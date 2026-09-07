@@ -2,6 +2,7 @@
 #include "LocalRecordingManager.h"
 #include "../utils/logger.h"
 #include "../utils/settings.h"
+#include "../adapters/qt/qt_capture_adapter.h"
 #include <QCoreApplication>
 #include <QJsonObject>
 #include <QJsonDocument>
@@ -69,11 +70,21 @@ bool isRoomEndedDisconnectReason(livekit::DisconnectReason reason)
         || reason == livekit::DisconnectReason::RoomClosed;
 }
 
+/// Core speaks UTF-8 std::string; QString::fromStdString decodes UTF-8.
+inline QString qs(const std::string& value)
+{
+    return QString::fromStdString(value);
+}
+
 } // namespace
 
 ConferenceBackend::ConferenceBackend(QObject* parent)
     : QObject(parent)
-    , conferenceManager_(new ConferenceManager(this))
+    , platformServices_(std::make_unique<links::qt_adapter::QtPlatformServices>(this))
+    , conferenceManager_(std::make_unique<ConferenceManager>(
+          platformServices_->services(),
+          links::qt_adapter::QtPlatformServices::readDeviceSelection(),
+          links::qt_adapter::QtPlatformServices::readAudioConfig()))
     , shareModeManager_(new ShareModeManager(this))
     , isHost_(false)
 {
@@ -100,10 +111,13 @@ ConferenceBackend::ConferenceBackend(QObject* parent)
 
 ConferenceBackend::~ConferenceBackend()
 {
+    // First: after this no core callback can reach a half-destroyed backend.
+    coreConnections_.clear();
+
     participantReconcileTimer_.stop();
     stopRecordingIfActive();
     if (conferenceManager_ && conferenceManager_->isConnected()) {
-        conferenceManager_->disconnect();
+        conferenceManager_->disconnectFromRoom();
     }
 }
 
@@ -122,7 +136,7 @@ void ConferenceBackend::initialize(const QString& url, const QString& token,
                            .arg(roomName).arg(meetingNo).arg(isHost));
     
     setupConnections();
-    conferenceManager_->connect(url, token);
+    conferenceManager_->connectToRoom(url.toStdString(), token.toStdString());
     
     emit meetingNoChanged();
     emit roomNameChanged();
@@ -131,86 +145,120 @@ void ConferenceBackend::initialize(const QString& url, const QString& token,
 
 void ConferenceBackend::setupConnections()
 {
-    connect(conferenceManager_, &ConferenceManager::connected,
-            this, &ConferenceBackend::onConnected);
-    connect(conferenceManager_, &ConferenceManager::disconnected,
-            this, &ConferenceBackend::onDisconnected);
-    connect(conferenceManager_, &ConferenceManager::roomDisconnected,
-            this, &ConferenceBackend::onRoomDisconnected);
-    connect(conferenceManager_, &ConferenceManager::connectionStateChanged,
-            this, &ConferenceBackend::onConnectionStateChanged);
-    connect(conferenceManager_, &ConferenceManager::participantJoined,
-            this, &ConferenceBackend::onParticipantJoined);
-    connect(conferenceManager_, &ConferenceManager::participantLeft,
-            this, &ConferenceBackend::onParticipantLeft);
-    connect(conferenceManager_, &ConferenceManager::chatMessageReceived,
-            this, &ConferenceBackend::onChatMessageReceived);
-    connect(conferenceManager_, &ConferenceManager::videoFrameReceived,
-            this, &ConferenceBackend::onVideoFrameReceived);
-    connect(conferenceManager_, &ConferenceManager::localVideoFrameReady,
-            this, &ConferenceBackend::onLocalVideoFrameReady);
-    connect(conferenceManager_, &ConferenceManager::localScreenFrameReady,
-            this, &ConferenceBackend::onLocalScreenFrameReady);
-    connect(conferenceManager_, &ConferenceManager::trackMutedStateChanged,
-            this, &ConferenceBackend::onTrackMutedStateChanged);
-    connect(conferenceManager_, &ConferenceManager::trackUnsubscribed,
-            this, &ConferenceBackend::onTrackUnsubscribed);
-    connect(conferenceManager_, &ConferenceManager::trackSubscribed,
-            this, &ConferenceBackend::onTrackSubscribed);
-    connect(conferenceManager_, &ConferenceManager::trackUnpublished,
-            this, &ConferenceBackend::onTrackUnpublished);
-    connect(conferenceManager_, &ConferenceManager::localConnectionQualityChanged,
-            this, [this](int quality) {
-                const auto nextQuality = static_cast<NetworkQualityLevel>(quality);
-                if (nextQuality == networkQuality_) {
-                    return;
-                }
-                networkQuality_ = nextQuality;
-                emit networkMetricsChanged();
-            });
-    connect(conferenceManager_, &ConferenceManager::localNetworkStatsUpdated,
-            this, [this](const NetworkStatsSnapshot& stats) {
-                if (!networkStatsDifferent(networkStats_, stats)) {
-                    return;
-                }
-                networkStats_ = stats;
-                emit networkMetricsChanged();
-            });
-    connect(conferenceManager_, &ConferenceManager::localScreenShareChanged,
-            this, [this](bool enabled) {
-                emit screenSharingChanged();
-                // Automatically enter/exit share mode when screen sharing changes
-                if (enabled) {
-                    shareModeManager_->enterShareMode();
-                } else {
-                    shareModeManager_->exitShareMode();
-                    if (recordingManager_) {
-                        recordingManager_->clearScreenShareFrame();
-                    }
-                    currentSharedScreenIndex_ = -1;
-                    currentSharedWindowId_ = 0;
-                    emit localScreenShareEnded();
-                }
-            });
-    connect(conferenceManager_, &ConferenceManager::localMicrophoneChanged,
-            this, [this](bool enabled) {
-                if (micState_.value("local", false) == enabled) {
-                    return;
-                }
-                micState_["local"] = enabled;
-                emit micEnabledChanged();
-                updateParticipantsList();
-            });
-    connect(conferenceManager_, &ConferenceManager::localCameraChanged,
-            this, [this](bool enabled) {
-                if (camState_.value("local", false) == enabled) {
-                    return;
-                }
-                camState_["local"] = enabled;
-                emit camEnabledChanged();
-                updateParticipantsList();
-                // Note: localCameraEnded is emitted from toggleCamera() method
-            });
+    // Core no longer uses Qt signals; it exposes links::core::Signal members.
+    // Each subscription is owned by coreConnections_, which reproduces the
+    // auto-disconnect Qt gave us when the receiver QObject died.
+    auto& cm = *conferenceManager_;
+    auto& bag = coreConnections_;
+    namespace qta = links::qt_adapter;
+
+    bag += cm.connected.connect([this]() { onConnected(); });
+    bag += cm.disconnected.connect([this]() { onDisconnected(); });
+    bag += cm.roomDisconnected.connect([this](int reason) { onRoomDisconnected(reason); });
+    bag += cm.connectionStateChanged.connect(
+        [this](livekit::ConnectionState state) { onConnectionStateChanged(state); });
+
+    bag += cm.participantJoined.connect(
+        [this](const ParticipantInfo& info) { onParticipantJoined(info); });
+    bag += cm.participantLeft.connect([this](const std::string& identity) {
+        onParticipantLeft(QString::fromStdString(identity));
+    });
+
+    bag += cm.chatMessageReceived.connect(
+        [this](const ChatMessage& message) { onChatMessageReceived(message); });
+
+    bag += cm.videoFrameReceived.connect(
+        [this](const std::string& identity, const std::string& trackSid,
+               const links::core::VideoFrame& frame, livekit::TrackSource source) {
+            onVideoFrameReceived(QString::fromStdString(identity),
+                                 QString::fromStdString(trackSid),
+                                 qta::toQImage(frame), source);
+        });
+    bag += cm.localVideoFrameReady.connect([this](const links::core::VideoFrame& frame) {
+        onLocalVideoFrameReady(qta::toQImage(frame));
+    });
+    bag += cm.localScreenFrameReady.connect([this](const links::core::VideoFrame& frame) {
+        onLocalScreenFrameReady(qta::toQImage(frame));
+    });
+
+    bag += cm.trackMutedStateChanged.connect(
+        [this](const std::string& trackSid, const std::string& identity,
+               livekit::TrackKind kind, bool muted) {
+            onTrackMutedStateChanged(QString::fromStdString(trackSid),
+                                     QString::fromStdString(identity), kind, muted);
+        });
+    bag += cm.trackUnsubscribed.connect(
+        [this](const std::string& trackSid, const std::string& identity) {
+            onTrackUnsubscribed(QString::fromStdString(trackSid),
+                                QString::fromStdString(identity));
+        });
+    bag += cm.trackSubscribed.connect(
+        [this](const TrackInfo& track) { onTrackSubscribed(track); });
+    bag += cm.trackUnpublished.connect(
+        [this](const std::string& trackSid, const std::string& identity,
+               livekit::TrackKind kind, livekit::TrackSource source) {
+            onTrackUnpublished(QString::fromStdString(trackSid),
+                               QString::fromStdString(identity), kind, source);
+        });
+
+    bag += cm.localConnectionQualityChanged.connect([this](int quality) {
+        const auto nextQuality = static_cast<NetworkQualityLevel>(quality);
+        if (nextQuality == networkQuality_) {
+            return;
+        }
+        networkQuality_ = nextQuality;
+        emit networkMetricsChanged();
+    });
+    bag += cm.localNetworkStatsUpdated.connect([this](const NetworkStatsSnapshot& stats) {
+        if (!networkStatsDifferent(networkStats_, stats)) {
+            return;
+        }
+        networkStats_ = stats;
+        emit networkMetricsChanged();
+    });
+
+    bag += cm.localScreenShareChanged.connect([this](bool enabled) {
+        emit screenSharingChanged();
+        // Automatically enter/exit share mode when screen sharing changes
+        if (enabled) {
+            shareModeManager_->enterShareMode();
+        } else {
+            shareModeManager_->exitShareMode();
+            if (recordingManager_) {
+                recordingManager_->clearScreenShareFrame();
+            }
+            currentSharedScreenIndex_ = -1;
+            currentSharedWindowId_ = 0;
+            emit localScreenShareEnded();
+        }
+    });
+    bag += cm.localMicrophoneChanged.connect([this](bool enabled) {
+        if (micState_.value("local", false) == enabled) {
+            return;
+        }
+        micState_["local"] = enabled;
+        emit micEnabledChanged();
+        updateParticipantsList();
+    });
+    bag += cm.localCameraChanged.connect([this](bool enabled) {
+        if (camState_.value("local", false) == enabled) {
+            return;
+        }
+        camState_["local"] = enabled;
+        emit camEnabledChanged();
+        updateParticipantsList();
+        // Note: localCameraEnded is emitted from toggleCamera() method
+    });
+
+    // Core reports a device correction instead of writing QSettings itself.
+    bag += cm.preferredCameraChanged.connect([](const std::string& deviceId) {
+        Settings::instance().setSelectedCameraId(QString::fromStdString(deviceId));
+        Settings::instance().sync();
+    });
+    bag += cm.preferredMicrophoneChanged.connect([](const std::string& deviceId) {
+        Settings::instance().setSelectedMicrophoneId(QString::fromStdString(deviceId));
+        Settings::instance().sync();
+    });
 }
 
 void ConferenceBackend::setupParticipantReconcileTimer()
@@ -612,7 +660,9 @@ void ConferenceBackend::startScreenShare(int screenIndex)
         currentSharedWindowId_ = 0;
 
         QScreen* screen = screens[screenIndex];
-        conferenceManager_->setScreenShareMode(ScreenCapturer::Mode::Screen, screen, 0);
+        // Resolve here, in the Qt layer -- core takes a backend-native id.
+        const auto monitorId = links::qt_adapter::resolveMonitorId(screen);
+        conferenceManager_->setScreenShareMode(ScreenCapturer::Mode::Screen, monitorId, 0);
         if (!conferenceManager_->isScreenSharing()) {
             conferenceManager_->toggleScreenShare();
         }
@@ -635,8 +685,8 @@ void ConferenceBackend::startWindowShare(qulonglong windowId)
     currentSharedScreenIndex_ = -1;
     currentSharedWindowId_ = windowId;
 
-    WId id = static_cast<WId>(windowId);
-    conferenceManager_->setScreenShareMode(ScreenCapturer::Mode::Window, nullptr, id);
+    conferenceManager_->setScreenShareMode(ScreenCapturer::Mode::Window, 0,
+                                           static_cast<links::core::WindowId>(windowId));
     if (!conferenceManager_->isScreenSharing()) {
         conferenceManager_->toggleScreenShare();
     }
@@ -661,7 +711,7 @@ void ConferenceBackend::stopScreenShare()
 void ConferenceBackend::switchMicrophone(const QString& deviceId)
 {
     if (conferenceManager_) {
-        conferenceManager_->switchMicrophone(deviceId);
+        conferenceManager_->switchMicrophone(deviceId.toStdString());
         updateParticipantsList();
     }
 }
@@ -669,7 +719,7 @@ void ConferenceBackend::switchMicrophone(const QString& deviceId)
 void ConferenceBackend::switchCamera(const QString& deviceId)
 {
     if (conferenceManager_) {
-        conferenceManager_->switchCamera(deviceId);
+        conferenceManager_->switchCamera(deviceId.toStdString());
         updateParticipantsList();
     }
 }
@@ -677,7 +727,8 @@ void ConferenceBackend::switchCamera(const QString& deviceId)
 void ConferenceBackend::applyAudioSettings()
 {
     if (conferenceManager_) {
-        conferenceManager_->applyAudioSettings();
+        conferenceManager_->applyAudioSettings(
+            links::qt_adapter::QtPlatformServices::readAudioConfig());
         Logger::instance().info("Audio settings re-applied to active conference");
     }
 }
@@ -712,7 +763,7 @@ void ConferenceBackend::confirmLeave()
     const bool hasValidMeetingNo =
         QRegularExpression(QStringLiteral("^\\d{9}$")).match(meetingNo).hasMatch();
 
-    QString selfIdentity = conferenceManager_->getLocalParticipantIdentity().trimmed();
+    QString selfIdentity = qs(conferenceManager_->getLocalParticipantIdentity()).trimmed();
     if (selfIdentity.isEmpty()) {
         selfIdentity = userName_.trimmed();
     }
@@ -754,14 +805,14 @@ void ConferenceBackend::confirmLeave()
         QTimer::singleShot(3000, networkClient, &QObject::deleteLater);
     }
 
-    conferenceManager_->disconnect();
+    conferenceManager_->disconnectFromRoom();
 }
 
 // Chat
 void ConferenceBackend::sendChatMessage(const QString& message)
 {
     if (conferenceManager_ && !message.trimmed().isEmpty()) {
-        conferenceManager_->sendChatMessage(message);
+        conferenceManager_->sendChatMessage(message.toStdString());
         // Note: Message will be added to the list when received back from server
         // via onChatMessageReceived to avoid duplicates
     }
@@ -982,27 +1033,30 @@ void ConferenceBackend::onConnectionStateChanged(livekit::ConnectionState state)
 
 void ConferenceBackend::onParticipantJoined(const ParticipantInfo& info)
 {
-    if (info.identity.trimmed().isEmpty()) {
+    const QString identity = qs(info.identity);
+    const QString name = qs(info.name);
+
+    if (identity.trimmed().isEmpty()) {
         Logger::instance().warning("Ignoring participantJoined with empty identity");
         reconcileParticipantsNow("backend_empty_join_identity");
         return;
     }
 
-    const bool isNewParticipant = !nameMap_.contains(info.identity);
-    Logger::instance().debug(QString("Participant joined (backend): %1").arg(info.name));
-    
-    nameMap_[info.identity] = info.name.isEmpty() ? info.identity : info.name;
-    micState_[info.identity] = info.isMicrophoneEnabled;
-    camState_[info.identity] = info.isCameraEnabled;
-    hostState_[info.identity] = info.isHost;
-    
+    const bool isNewParticipant = !nameMap_.contains(identity);
+    Logger::instance().debug(QString("Participant joined (backend): %1").arg(name));
+
+    nameMap_[identity] = name.isEmpty() ? identity : name;
+    micState_[identity] = info.isMicrophoneEnabled;
+    camState_[identity] = info.isCameraEnabled;
+    hostState_[identity] = info.isHost;
+
     updateParticipantsList();
     if (isNewParticipant) {
         emit participantCountChanged();
-        emit participantJoined(info.identity, nameMap_[info.identity]);
+        emit participantJoined(identity, nameMap_[identity]);
     } else {
         Logger::instance().debug(QString("Duplicate participantJoined signal suppressed: %1")
-                                 .arg(info.identity));
+                                 .arg(identity));
     }
 }
 
@@ -1053,7 +1107,7 @@ void ConferenceBackend::onParticipantLeft(const QString& identity)
         Logger::instance().info("Host left the meeting, triggering meeting-ended flow");
         emit meetingEndedByHost();
         if (conferenceManager_ && conferenceManager_->isConnected()) {
-            conferenceManager_->disconnect();
+            conferenceManager_->disconnectFromRoom();
         }
         return;
     }
@@ -1150,10 +1204,12 @@ void ConferenceBackend::onTrackSubscribed(const TrackInfo& track)
                           track.source == livekit::TrackSource::SOURCE_SCREENSHARE_AUDIO);
     
     // Record this track's info for proper state handling when mute events fire
-    trackInfoMap_[track.trackSid] = qMakePair(track.participantIdentity, isScreenShare);
-    
+    const QString trackSid = qs(track.trackSid);
+    const QString participantIdentity = qs(track.participantIdentity);
+    trackInfoMap_[trackSid] = qMakePair(participantIdentity, isScreenShare);
+
     Logger::instance().info(QString("Track subscribed recorded: %1 from %2 (isScreenShare: %3)")
-        .arg(track.trackSid, track.participantIdentity)
+        .arg(trackSid, participantIdentity)
         .arg(isScreenShare ? "true" : "false"));
 }
 
@@ -1291,31 +1347,34 @@ void ConferenceBackend::updateParticipantsList()
     localParticipant["isHost"] = isHost_;
     participants_.append(localParticipant);
 
-    const QList<ParticipantInfo> remoteParticipants =
-        conferenceManager_ ? conferenceManager_->getParticipants() : QList<ParticipantInfo>{};
+    const std::vector<ParticipantInfo> remoteParticipants =
+        conferenceManager_ ? conferenceManager_->getParticipants()
+                           : std::vector<ParticipantInfo>{};
     QSet<QString> remoteIds;
-    remoteIds.reserve(remoteParticipants.size());
+    remoteIds.reserve(static_cast<int>(remoteParticipants.size()));
 
     for (const ParticipantInfo& info : remoteParticipants) {
-        if (info.identity.isEmpty()) {
+        const QString identity = qs(info.identity);
+        if (identity.isEmpty()) {
             continue;
         }
 
-        remoteIds.insert(info.identity);
+        remoteIds.insert(identity);
 
-        const QString displayName = info.name.isEmpty() ? info.identity : info.name;
-        nameMap_[info.identity] = displayName;
-        micState_[info.identity] = micState_.value(info.identity, info.isMicrophoneEnabled);
-        camState_[info.identity] = camState_.value(info.identity, info.isCameraEnabled);
-        screenShareState_[info.identity] = screenShareState_.value(info.identity, info.isScreenSharing);
-        hostState_[info.identity] = info.isHost;
+        const QString name = qs(info.name);
+        const QString displayName = name.isEmpty() ? identity : name;
+        nameMap_[identity] = displayName;
+        micState_[identity] = micState_.value(identity, info.isMicrophoneEnabled);
+        camState_[identity] = camState_.value(identity, info.isCameraEnabled);
+        screenShareState_[identity] = screenShareState_.value(identity, info.isScreenSharing);
+        hostState_[identity] = info.isHost;
 
         QVariantMap participant;
-        participant["identity"] = info.identity;
-        participant["name"] = nameMap_.value(info.identity, displayName);
-        participant["micEnabled"] = micState_.value(info.identity, info.isMicrophoneEnabled);
-        participant["camEnabled"] = camState_.value(info.identity, info.isCameraEnabled);
-        participant["screenSharing"] = screenShareState_.value(info.identity, info.isScreenSharing);
+        participant["identity"] = identity;
+        participant["name"] = nameMap_.value(identity, displayName);
+        participant["micEnabled"] = micState_.value(identity, info.isMicrophoneEnabled);
+        participant["camEnabled"] = camState_.value(identity, info.isCameraEnabled);
+        participant["screenSharing"] = screenShareState_.value(identity, info.isScreenSharing);
         participant["isLocal"] = false;
         participant["isHost"] = info.isHost;
         participants_.append(participant);
@@ -1412,10 +1471,10 @@ void ConferenceBackend::updateParticipantsList()
 void ConferenceBackend::addChatMessage(const ChatMessage& msg)
 {
     QVariantMap message;
-    message["sender"] = msg.sender;
-    message["senderIdentity"] = msg.senderIdentity;
-    message["message"] = msg.message;
-    message["timestamp"] = msg.timestamp;
+    message["sender"] = qs(msg.sender);
+    message["senderIdentity"] = qs(msg.senderIdentity);
+    message["message"] = qs(msg.message);
+    message["timestamp"] = static_cast<qint64>(msg.timestamp);
     message["isLocal"] = msg.isLocal;
     
     chatMessages_.append(message);

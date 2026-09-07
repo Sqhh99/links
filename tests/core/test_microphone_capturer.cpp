@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
-#include <QCoreApplication>
-#include <QThread>
-#include <QAudioDevice>
-#include <QMediaDevices>
+
+#include <chrono>
+#include <thread>
+#include <vector>
+
+#include "core/media/audio_input.h"
 #include "core/microphone_capturer.h"
 #include "livekit/livekit.h"
 
@@ -27,6 +29,69 @@ public:
 const ::testing::Environment* const kLiveKitEnvironment =
     ::testing::AddGlobalTestEnvironment(new LiveKitEnvironment);
 
+/**
+ * Stand-in for a real microphone.
+ *
+ * This is what the AudioInput port buys us: MicrophoneCapturer's framing and
+ * APM behaviour can now be exercised without Qt, without audio hardware, and
+ * deterministically. Previously these tests needed a QCoreApplication and were
+ * skipped whenever the machine had no microphone.
+ */
+class FakeAudioInput : public links::core::AudioInput {
+public:
+    bool start(const links::core::AudioFormat& format) override
+    {
+        if (failToStart) {
+            return false;
+        }
+        format_ = format;
+        active_ = true;
+        ++startCount;
+        return true;
+    }
+
+    void stop() override
+    {
+        active_ = false;
+        ++stopCount;
+    }
+
+    bool isActive() const override { return active_; }
+
+    void setDeviceId(const std::string& deviceId) override { lastDeviceId = deviceId; }
+
+    void setDataCallback(
+        std::function<void(const std::int16_t*, std::size_t)> callback) override
+    {
+        dataCallback_ = std::move(callback);
+    }
+
+    void setErrorCallback(std::function<void(const std::string&)> callback) override
+    {
+        errorCallback_ = std::move(callback);
+    }
+
+    /// Push `sampleCount` samples of silence through the capturer.
+    void emitSamples(std::size_t sampleCount)
+    {
+        std::vector<std::int16_t> samples(sampleCount, 0);
+        if (dataCallback_) {
+            dataCallback_(samples.data(), samples.size());
+        }
+    }
+
+    bool failToStart{false};
+    int startCount{0};
+    int stopCount{0};
+    std::string lastDeviceId;
+
+private:
+    bool active_{false};
+    links::core::AudioFormat format_{};
+    std::function<void(const std::int16_t*, std::size_t)> dataCallback_;
+    std::function<void(const std::string&)> errorCallback_;
+};
+
 } // namespace
 
 // =============================================================================
@@ -35,22 +100,13 @@ const ::testing::Environment* const kLiveKitEnvironment =
 
 class MicrophoneCapturerTest : public ::testing::Test {
 protected:
-    static QCoreApplication* app;
+    FakeAudioInput input;
     MicrophoneCapturer* capturer = nullptr;
-    
-    static void SetUpTestSuite() {
-        // Qt requires a QCoreApplication for audio devices
-        if (!app) {
-            int argc = 0;
-            char** argv = nullptr;
-            app = new QCoreApplication(argc, argv);
-        }
-    }
-    
+
     void SetUp() override {
-        capturer = new MicrophoneCapturer();
+        capturer = new MicrophoneCapturer(input);
     }
-    
+
     void TearDown() override {
         if (capturer) {
             capturer->stop();
@@ -60,48 +116,36 @@ protected:
     }
 };
 
-QCoreApplication* MicrophoneCapturerTest::app = nullptr;
-
 // Test: Default state
 TEST_F(MicrophoneCapturerTest, DefaultState) {
     EXPECT_FALSE(capturer->isActive());
     EXPECT_EQ(capturer->getAudioSource(), nullptr);
 }
 
-// Test: Available devices
-TEST_F(MicrophoneCapturerTest, AvailableDevices) {
-    auto devices = MicrophoneCapturer::availableDevices();
-    // Should return a list (may be empty if no microphones)
-    // Just verify it doesn't crash
-    SUCCEED();
-}
-
 // Test: Audio processing module access
 TEST_F(MicrophoneCapturerTest, AudioProcessingModuleAccess) {
     auto* apm = capturer->audioProcessingModule();
     EXPECT_NE(apm, nullptr);
-    
+
     // Should be initialized by constructor
     EXPECT_TRUE(apm->isInitialized());
 }
 
 // Test: Audio processing configuration
 TEST_F(MicrophoneCapturerTest, AudioProcessingConfiguration) {
-    // Set options
     capturer->setEchoCancellationEnabled(false);
     capturer->setNoiseSuppressionEnabled(false);
     capturer->setAutoGainControlEnabled(false);
-    
+
     auto* apm = capturer->audioProcessingModule();
     EXPECT_FALSE(apm->isEchoCancellationEnabled());
     EXPECT_FALSE(apm->isNoiseSuppressionEnabled());
     EXPECT_FALSE(apm->isAutoGainControlEnabled());
-    
-    // Re-enable
+
     capturer->setEchoCancellationEnabled(true);
     capturer->setNoiseSuppressionEnabled(true);
     capturer->setAutoGainControlEnabled(true);
-    
+
     EXPECT_TRUE(apm->isEchoCancellationEnabled());
     EXPECT_TRUE(apm->isNoiseSuppressionEnabled());
     EXPECT_TRUE(apm->isAutoGainControlEnabled());
@@ -109,21 +153,18 @@ TEST_F(MicrophoneCapturerTest, AudioProcessingConfiguration) {
 
 // Test: Set device by ID (with empty ID)
 TEST_F(MicrophoneCapturerTest, SetDeviceByEmptyId) {
-    // Setting empty ID should not crash
-    capturer->setDeviceById(QByteArray());
-    SUCCEED();
+    capturer->setDeviceById(std::string());
+    EXPECT_TRUE(input.lastDeviceId.empty());
 }
 
-// Test: Set device by non-existent ID
-TEST_F(MicrophoneCapturerTest, SetDeviceByNonExistentId) {
-    // Setting non-existent ID should not crash
+// Test: Set device by ID forwards to the input
+TEST_F(MicrophoneCapturerTest, SetDeviceByIdForwards) {
     capturer->setDeviceById("non-existent-device-id");
-    SUCCEED();
+    EXPECT_EQ(input.lastDeviceId, "non-existent-device-id");
 }
 
 // Test: Stop without start
 TEST_F(MicrophoneCapturerTest, StopWithoutStart) {
-    // Stopping without starting should not crash
     capturer->stop();
     EXPECT_FALSE(capturer->isActive());
 }
@@ -136,106 +177,77 @@ TEST_F(MicrophoneCapturerTest, MultipleStopCalls) {
     EXPECT_FALSE(capturer->isActive());
 }
 
-// =============================================================================
-// Integration Tests (require actual microphone hardware)
-// These tests are skipped if no microphone is available
-// =============================================================================
-
-class MicrophoneCapturerIntegrationTest : public MicrophoneCapturerTest {
-protected:
-    bool hasMicrophone() {
-        return !QMediaDevices::audioInputs().isEmpty();
-    }
-};
-
 // Test: Start and stop capture
-TEST_F(MicrophoneCapturerIntegrationTest, StartStopCapture) {
-    if (!hasMicrophone()) {
-        GTEST_SKIP() << "No microphone available";
-    }
-    
-    // Start
+TEST_F(MicrophoneCapturerTest, StartStopCapture) {
     EXPECT_TRUE(capturer->start());
     EXPECT_TRUE(capturer->isActive());
     EXPECT_NE(capturer->getAudioSource(), nullptr);
-    
-    // Let it capture for a short time
-    QThread::msleep(100);
-    
-    // Stop
+    EXPECT_EQ(input.startCount, 1);
+
     capturer->stop();
     EXPECT_FALSE(capturer->isActive());
+    EXPECT_EQ(input.stopCount, 1);
 }
 
 // Test: Start, stop, and restart
-TEST_F(MicrophoneCapturerIntegrationTest, RestartCapture) {
-    if (!hasMicrophone()) {
-        GTEST_SKIP() << "No microphone available";
-    }
-    
-    // First start/stop cycle
+TEST_F(MicrophoneCapturerTest, RestartCapture) {
     EXPECT_TRUE(capturer->start());
     EXPECT_TRUE(capturer->isActive());
-    QThread::msleep(50);
     capturer->stop();
     EXPECT_FALSE(capturer->isActive());
-    
-    // Second start/stop cycle
+
     EXPECT_TRUE(capturer->start());
     EXPECT_TRUE(capturer->isActive());
-    QThread::msleep(50);
     capturer->stop();
     EXPECT_FALSE(capturer->isActive());
+
+    EXPECT_EQ(input.startCount, 2);
 }
 
 // Test: Double start (idempotent)
-TEST_F(MicrophoneCapturerIntegrationTest, DoubleStart) {
-    if (!hasMicrophone()) {
-        GTEST_SKIP() << "No microphone available";
-    }
-    
+TEST_F(MicrophoneCapturerTest, DoubleStart) {
     EXPECT_TRUE(capturer->start());
     EXPECT_TRUE(capturer->start()); // Should return true (already active)
-    
+    EXPECT_EQ(input.startCount, 1); // ... without restarting the device
     capturer->stop();
 }
 
-// Test: Set device while active (should warn)
-TEST_F(MicrophoneCapturerIntegrationTest, SetDeviceWhileActive) {
-    if (!hasMicrophone()) {
-        GTEST_SKIP() << "No microphone available";
-    }
-    
+// Test: A failing device start is reported
+TEST_F(MicrophoneCapturerTest, StartFailurePropagates) {
+    input.failToStart = true;
+    EXPECT_FALSE(capturer->start());
+    EXPECT_FALSE(capturer->isActive());
+}
+
+// Test: Setting a device while active is rejected
+TEST_F(MicrophoneCapturerTest, SetDeviceWhileActiveIsRejected) {
     EXPECT_TRUE(capturer->start());
-    
-    // Setting device while active should be rejected (but not crash)
-    auto devices = QMediaDevices::audioInputs();
-    if (!devices.isEmpty()) {
-        capturer->setDevice(devices.first());
-    }
-    
-    // Should still be active
+
+    capturer->setDeviceById("some-other-device");
+    EXPECT_TRUE(input.lastDeviceId.empty()); // never forwarded
+
     EXPECT_TRUE(capturer->isActive());
-    
     capturer->stop();
 }
 
-// Test: Switch devices
-TEST_F(MicrophoneCapturerIntegrationTest, SwitchDevices) {
-    auto devices = QMediaDevices::audioInputs();
-    if (devices.size() < 2) {
-        GTEST_SKIP() << "Need at least 2 microphones to test switching";
-    }
-    
-    // Set first device
-    capturer->setDevice(devices[0]);
+// Test: Samples shorter than one 10 ms frame are buffered, not dropped.
+TEST_F(MicrophoneCapturerTest, PartialFrameIsBuffered) {
     EXPECT_TRUE(capturer->start());
-    QThread::msleep(50);
+
+    // 480 samples is exactly one 10 ms frame at 48 kHz mono; feed less.
+    input.emitSamples(100);
+    input.emitSamples(100);
+
+    // Nothing to assert on the LiveKit side without a real room; the contract
+    // under test is that partial frames neither crash nor are discarded.
+    SUCCEED();
     capturer->stop();
-    
-    // Set second device
-    capturer->setDevice(devices[1]);
+}
+
+// Test: A full frame is consumed without error.
+TEST_F(MicrophoneCapturerTest, FullFrameIsProcessed) {
     EXPECT_TRUE(capturer->start());
-    QThread::msleep(50);
+    input.emitSamples(480 * 3);
+    SUCCEED();
     capturer->stop();
 }

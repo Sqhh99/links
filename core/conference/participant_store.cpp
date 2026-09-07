@@ -1,13 +1,25 @@
 #include "participant_store.h"
 
-ParticipantInfo ParticipantStore::addParticipant(const QString& identity,
-                                                 const QString& sid,
-                                                 const QString& name,
+namespace {
+
+template <typename Map, typename Key, typename Value>
+Value valueOr(const Map& map, const Key& key, Value fallback)
+{
+    const auto it = map.find(key);
+    return it == map.end() ? fallback : it->second;
+}
+
+}  // namespace
+
+ParticipantInfo ParticipantStore::addParticipant(const std::string& identity,
+                                                 const std::string& sid,
+                                                 const std::string& name,
                                                  bool isHost)
 {
     ParticipantInfo info;
-    if (participants_.contains(identity)) {
-        info = participants_.value(identity);
+    const auto existing = participants_.find(identity);
+    if (existing != participants_.end()) {
+        info = existing->second;
         info.sid = sid;
         info.name = name;
         info.isHost = isHost;
@@ -25,29 +37,35 @@ ParticipantInfo ParticipantStore::addParticipant(const QString& identity,
     return info;
 }
 
-void ParticipantStore::removeParticipant(const QString& identity)
+void ParticipantStore::removeParticipant(const std::string& identity)
 {
-    participants_.remove(identity);
+    participants_.erase(identity);
 }
 
-bool ParticipantStore::contains(const QString& identity) const
+bool ParticipantStore::contains(const std::string& identity) const
 {
-    return participants_.contains(identity);
+    return participants_.find(identity) != participants_.end();
 }
 
-ParticipantInfo ParticipantStore::participantInfo(const QString& identity) const
+ParticipantInfo ParticipantStore::participantInfo(const std::string& identity) const
 {
-    return participants_.value(identity);
+    const auto it = participants_.find(identity);
+    return it == participants_.end() ? ParticipantInfo{} : it->second;
 }
 
-QList<ParticipantInfo> ParticipantStore::participants() const
+std::vector<ParticipantInfo> ParticipantStore::participants() const
 {
-    return participants_.values();
+    std::vector<ParticipantInfo> out;
+    out.reserve(participants_.size());
+    for (const auto& entry : participants_) {
+        out.push_back(entry.second);
+    }
+    return out;
 }
 
 int ParticipantStore::size() const
 {
-    return participants_.size();
+    return static_cast<int>(participants_.size());
 }
 
 void ParticipantStore::clear()
@@ -58,65 +76,67 @@ void ParticipantStore::clear()
     screenShareActive_.clear();
 }
 
-void ParticipantStore::setTrackSource(const QString& trackSid, livekit::TrackSource source)
+void ParticipantStore::setTrackSource(const std::string& trackSid, livekit::TrackSource source)
 {
     trackSources_[trackSid] = source;
 }
 
-void ParticipantStore::setTrackKind(const QString& trackSid, livekit::TrackKind kind)
+void ParticipantStore::setTrackKind(const std::string& trackSid, livekit::TrackKind kind)
 {
     trackKinds_[trackSid] = kind;
 }
 
-void ParticipantStore::removeTrack(const QString& trackSid)
+void ParticipantStore::removeTrack(const std::string& trackSid)
 {
-    trackSources_.remove(trackSid);
-    trackKinds_.remove(trackSid);
+    trackSources_.erase(trackSid);
+    trackKinds_.erase(trackSid);
 }
 
-bool ParticipantStore::hasTrackSource(const QString& trackSid) const
+bool ParticipantStore::hasTrackSource(const std::string& trackSid) const
 {
-    return trackSources_.contains(trackSid);
+    return trackSources_.find(trackSid) != trackSources_.end();
 }
 
-livekit::TrackSource ParticipantStore::trackSource(const QString& trackSid) const
+livekit::TrackSource ParticipantStore::trackSource(const std::string& trackSid) const
 {
-    return trackSources_.value(trackSid, livekit::TrackSource::SOURCE_UNKNOWN);
+    return valueOr(trackSources_, trackSid, livekit::TrackSource::SOURCE_UNKNOWN);
 }
 
-livekit::TrackKind ParticipantStore::trackKind(const QString& trackSid) const
+livekit::TrackKind ParticipantStore::trackKind(const std::string& trackSid) const
 {
-    return trackKinds_.value(trackSid, livekit::TrackKind::KIND_AUDIO);
+    return valueOr(trackKinds_, trackSid, livekit::TrackKind::KIND_AUDIO);
 }
 
-void ParticipantStore::setScreenShareActive(const QString& identity, bool active)
+void ParticipantStore::setScreenShareActive(const std::string& identity, bool active)
 {
     screenShareActive_[identity] = active;
 }
 
-bool ParticipantStore::screenShareActive(const QString& identity) const
+bool ParticipantStore::screenShareActive(const std::string& identity) const
 {
-    return screenShareActive_.value(identity, false);
+    return valueOr(screenShareActive_, identity, false);
 }
 
-ParticipantInfo ParticipantStore::refreshParticipantInfo(const QString& identity)
+ParticipantInfo ParticipantStore::refreshParticipantInfo(const std::string& identity)
 {
-    if (!participants_.contains(identity)) {
+    const auto participant = participants_.find(identity);
+    if (participant == participants_.end()) {
         return ParticipantInfo{};
     }
 
-    ParticipantInfo updated = participants_[identity];
+    ParticipantInfo updated = participant->second;
     updated.isMicrophoneEnabled = false;
     updated.isCameraEnabled = false;
     updated.isScreenSharing = false;
 
     // Update based on tracked sources/kinds (mirrors existing behavior).
-    for (auto it = trackSources_.begin(); it != trackSources_.end(); ++it) {
-        const QString trackSid = it.key();
-        const livekit::TrackSource source = it.value();
+    for (const auto& entry : trackSources_) {
+        const std::string& trackSid = entry.first;
+        const livekit::TrackSource source = entry.second;
 
-        if (trackKinds_.contains(trackSid)) {
-            const livekit::TrackKind kind = trackKinds_[trackSid];
+        const auto kindIt = trackKinds_.find(trackSid);
+        if (kindIt != trackKinds_.end()) {
+            const livekit::TrackKind kind = kindIt->second;
             if (kind == livekit::TrackKind::KIND_AUDIO
                 && source == livekit::TrackSource::SOURCE_MICROPHONE) {
                 updated.isMicrophoneEnabled = true;
@@ -133,6 +153,6 @@ ParticipantInfo ParticipantStore::refreshParticipantInfo(const QString& identity
         }
     }
 
-    participants_[identity] = updated;
+    participant->second = updated;
     return updated;
 }
