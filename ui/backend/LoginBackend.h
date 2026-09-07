@@ -5,7 +5,7 @@
 #include <QString>
 #include <QVariantList>
 
-#include "../core/network_client.h"
+#include "network_client.h"
 
 class LoginBackend : public QObject
 {

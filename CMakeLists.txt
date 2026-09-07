@@ -73,8 +73,6 @@ set(SOURCES
     core/conference/media_pipeline.cpp
     core/conference/device_controller.cpp
     core/conference/room_controller.cpp
-    core/media_manager.cpp
-    core/network_client.cpp
     core/camera_capturer.cpp
     core/microphone_capturer.cpp
     core/audio_processing_module.cpp
@@ -84,14 +82,16 @@ set(SOURCES
     core/thumbnail_service.cpp
     core/recording/recording_layout.cpp
     core/recording/frame_clock.cpp
-    ui/adapters/qt/qt_capture_adapter.cpp
     # Desktop Capture module
     core/desktop_capture/desktop_frame.cpp
     core/desktop_capture/desktop_capturer.cpp
     # Utils
     utils/logger.cpp
     utils/settings.cpp
+    # Qt adapters
+    ui/adapters/qt/qt_capture_adapter.cpp
     # QML backends
+    ui/backend/network_client.cpp
     ui/backend/LoginBackend.cpp
     ui/backend/SettingsBackend.cpp
     ui/backend/ConferenceBackend.cpp
@@ -147,8 +147,6 @@ set(HEADERS
     core/conference/media_pipeline.h
     core/conference/device_controller.h
     core/conference/room_controller.h
-    core/media_manager.h
-    core/network_client.h
     core/camera_capturer.h
     core/microphone_capturer.h
     core/screen_capturer.h
@@ -167,13 +165,15 @@ set(HEADERS
     # Utils
     utils/logger.h
     utils/settings.h
+    # Qt adapters
+    ui/adapters/qt/qt_capture_adapter.h
     # QML backends
+    ui/backend/network_client.h
     ui/backend/LoginBackend.h
     ui/backend/SettingsBackend.h
     ui/backend/ConferenceBackend.h
     ui/backend/VideoRenderer.h
     ui/backend/ScreenPickerBackend.h
-    ui/adapters/qt/qt_capture_adapter.h
     ui/backend/ShareModeManager.h
     ui/backend/AuthBackend.h
     ui/backend/ThemeManager.h

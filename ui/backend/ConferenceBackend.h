@@ -9,7 +9,7 @@
 #include <QImage>
 
 #include "../core/conference/conference_manager.h"
-#include "../core/network_client.h"
+#include "network_client.h"
 #include "../core/screen_capturer.h"
 #include "ShareModeManager.h"
 

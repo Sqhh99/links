@@ -4,7 +4,7 @@
 #include <QObject>
 #include <QString>
 #include <QTimer>
-#include "../core/network_client.h"
+#include "network_client.h"
 
 class AuthBackend : public QObject
 {
