@@ -29,7 +29,7 @@ std::vector<MonitorInfo> enumerateMonitors()
 {
 #ifdef _WIN32
     std::vector<MonitorInfo> out;
-    for (const auto& monitor : win::enumerateMonitors()) {
+    for (const auto& monitor : desktop_capture::win::enumerateMonitors()) {
         MonitorInfo info;
         info.id = reinterpret_cast<MonitorId>(monitor.handle);
         // Device names are ASCII ("\\.\DISPLAY1"), so a narrowing copy is safe.

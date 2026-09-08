@@ -208,8 +208,8 @@ bool hasNetworkStatsData(const NetworkStatsSnapshot& snapshot)
         || snapshot.uplinkKbps >= 0
         || snapshot.downlinkKbps >= 0
         || snapshot.videoWidth > 0
-        || !snapshot.audioCodec.isEmpty()
-        || !snapshot.videoCodec.isEmpty()
+        || !snapshot.audioCodec.empty()
+        || !snapshot.videoCodec.empty()
         || snapshot.availableSendBandwidthKbps >= 0
-        || !snapshot.transportProtocol.isEmpty();
+        || !snapshot.transportProtocol.empty();
 }

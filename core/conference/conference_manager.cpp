@@ -908,7 +908,6 @@ void ConferenceManager::pollLocalNetworkStats()
     const auto tracks = collectTrackStatsSources();
     const std::int64_t nowMs = core::nowMsSinceEpoch();
     std::set<std::string> currentTrackSids;
-    currentTrackSids.reserve(static_cast<int>(tracks.size()));
     for (const auto& track : tracks) {
         if (!track) {
             continue;

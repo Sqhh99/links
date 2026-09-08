@@ -3,6 +3,7 @@
 
 #include <functional>
 #include <memory>
+#include <type_traits>
 #include <utility>
 
 namespace links {
@@ -72,11 +73,16 @@ private:
 template <typename Fn>
 void postGuarded(TaskRunner& runner, const LifetimeToken& token, Fn&& fn)
 {
-    runner.post([weak = token.weak(), fn = std::forward<Fn>(fn)]() mutable {
+    // std::function requires a copy-constructible target, but these tasks
+    // routinely capture move-only payloads -- a livekit::VideoFrameEvent, for
+    // instance. Holding the callable through a shared_ptr makes the wrapper
+    // copyable without copying the payload.
+    auto held = std::make_shared<std::decay_t<Fn>>(std::forward<Fn>(fn));
+    runner.post([weak = token.weak(), held = std::move(held)]() {
         if (weak.expired()) {
             return;
         }
-        fn();
+        (*held)();
     });
 }
 
