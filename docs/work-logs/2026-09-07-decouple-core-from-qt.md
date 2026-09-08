@@ -359,3 +359,53 @@ AEC 反向参考信号的位置与内容**一字未改**——仍然喂**未重�
 CMake 与测试调整、CI 检查、`CLAUDE.md` 更新、本记录撰写。
 第四节列出的静态检查是实际执行的命令输出；**构建与测试未执行**，
 且本阶段代码从未经过编译器检验。
+
+
+---
+
+# 阶段 5：第一次 Windows 构建与修复
+
+- **日期：** 2026-09-08
+- **提交：** `67cbb06`
+
+## 一、构建结果
+
+用户在 Windows 上执行 `build.cmd release`。**CMake 配置成功**——
+`links_core_base` / `links_core` 两个目标正确生成，`nlohmann_json` 3.12.0 正确解析，
+`/utf-8` 已生效（编译命令行里可见）。编译在 **23/221** 处中断。
+
+## 二、4 个错误及修复
+
+| # | 位置 | 错误 | 根因 |
+| --- | --- | --- | --- |
+| 1 | `core/platform_window_ops.cpp:32` | `C2039: "enumerateMonitors" 不是 "links::core::win" 的成员` | 该函数定义在 `links::desktop_capture::win`（`window_utils.h`），而调用点位于 `namespace links::core` 内部，裸写 `win::` 优先解析到 `links::core::win`（`platform_window_ops_win.h` 里另一个真实存在的同名命名空间）。**正因为两个 `win` 命名空间都存在，报错是「不是成员」而不是「未声明」**，这类问题写代码时最容易漏。改为 `desktop_capture::win::` 限定 |
+| 2 | `core/base/executor.h:80` | `static assertion failed: 'The target function object type must be copy constructible'` | `livekit::VideoFrame` 的拷贝构造是 `= delete`（`video_frame.h:54`），所以包含它的 `VideoFrameEvent` 是 move-only，`MediaPipeline` reader 线程里捕获 `event` 的 lambda 也是 move-only，塞不进 `std::function`。**这是本次改造最有价值的一个修复**：不是在调用点绕过，而是在 `postGuarded` 内部改用 `shared_ptr` 持有可调用对象，使外层包装可拷贝而负载不拷贝——所有 move-only 负载都受益 |
+| 3 | `core/conference/conference_manager.cpp:911` | `C2039: "reserve" 不是 std::set 的成员` | 从 `QSet` 沿用。`std::set` 没有 `reserve()` |
+| 4 | `core/conference/network_stats_aggregator.cpp:211-214` | 3 处 `.isEmpty()` | 这些字段已改为 `std::string` |
+
+## 三、顺带做的预防性排查
+
+因为构建只跑到 23/221，为避免用户为同类错误反复往返，主动核对了：
+
+- 所有用到的 LiveKit API 与 1.10.1 头文件的实际签名：`VideoSource::captureFrame`、
+  `AudioSource::captureFrame`、`VideoFrame` / `AudioFrame` 构造函数、
+  `UserDataPacketEvent::data` 的类型、`DesktopFrame` 的访问器、
+  `DesktopCapturer::Callback::onCaptureResult` 的签名——全部匹配。
+- `core/` 中不再有 Qt 容器方法（`.isEmpty/.append/.value/.keys/.values` 等）。
+- `core/` 中不再有 `std::string::contains`（那是 C++23，本项目是 C++20）。
+- `std::set`/`std::map` 上没有其它 `reserve()` 调用。
+
+## 四、验证情况
+
+**仍未通过构建。** 剩余 198 个编译单元、`ui/`、适配器层与全部测试尚未经过编译器检验，
+预期还有更多错误。第二节的 4 处修复本身也**未经编译验证**（本会话环境无工具链），
+需要下一次构建确认。
+
+## 五、遗留事项
+
+同前一阶段第五节，全部未变；在编译通过之前，功能层面的手工联调无法开始。
+
+## AI 使用披露
+
+本阶段由 Claude Code 完成：错误分析、修复、预防性排查、本记录撰写。
+构建由用户在 Windows 上执行并回报输出；修复本身未经编译验证。

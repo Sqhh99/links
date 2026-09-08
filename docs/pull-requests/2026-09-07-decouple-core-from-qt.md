@@ -84,10 +84,23 @@ Qt 头文件只能通过 `Qt6::*` 的 usage requirements 进入搜索路径，�
 - [ ] 网络指标面板持续更新
 - [ ] Windows 本地录制
 
-**以上全部未执行。** 本次改动在没有 C++ 工具链的 WSL 环境中完成——没有 cmake、
-没有编译器、没有 Qt6，仓库里的 `build/` 是在别处产出的 Windows 产物。
-这是一次约 6600 行、涉及线程模型与音视频通路的重构，**在没有编译反馈的前提下写成，
-预期存在编译错误**，需要在 Windows 上按报错逐个修复后再评审功能。
+**以上全部未执行，且当前分支还编译不过。**
+
+改动本身是在没有 C++ 工具链的 WSL 环境中完成的（没有 cmake、没有编译器、没有 Qt6，
+仓库里的 `build/` 是在别处产出的 Windows 产物）。作者随后在 Windows 上跑了第一次
+`build.cmd release`：CMake 配置成功（`links_core_base` / `links_core` 两个目标正确生成，
+`nlohmann_json` 正确解析），但编译在 **23/221** 处中断，报出 4 个错误，已在
+`67cbb06` 修复：
+
+| 错误 | 原因 |
+| --- | --- |
+| `win::enumerateMonitors` 不是 `links::core::win` 的成员 | 该函数在 `links::desktop_capture::win`，而调用点位于 `namespace links::core` 内，裸写 `win::` 解析到了另一个同名且真实存在的命名空间 |
+| `std::function` 目标不可拷贝构造 | `livekit::VideoFrame` 的拷贝构造被 `= delete`，因此 `VideoFrameEvent` 是 move-only，捕获它的 lambda 也是 move-only，无法放进 `std::function`。已改为在 `postGuarded` 内部用 `shared_ptr` 持有可调用对象——这条影响所有 move-only 负载，不止这一处 |
+| `std::set::reserve` 不存在 | 从 `QSet` 沿用下来 |
+| 3 处 `.isEmpty()` | 这些字段已经是 `std::string` |
+
+**剩余 198 个编译单元、`ui/`、适配器层与全部测试尚未经过编译器检验，预期还有更多错误。**
+合并前需要在 Windows 上反复构建修复至通过，再执行上面的手工联调清单。
 
 已执行的只有静态检查：core 无 Qt 依赖、每个 `notify()` 的信号都有声明、
 每个定义的成员函数都有声明、CMake 清单与磁盘一致、搬迁文件的 include 可解析、
