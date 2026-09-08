@@ -10,6 +10,13 @@ namespace core = links::core;
 MicrophoneCapturer::MicrophoneCapturer(core::AudioInput& input)
     : input_(input)
 {
+    // Must happen here, as it did before the Qt split. Without it
+    // apm_.isInitialized() stays false and sendBufferedFrames() silently skips
+    // processFrame(), which disables AEC, noise suppression and AGC outright.
+    if (!apm_.initialize()) {
+        core::logWarning("Failed to initialize Audio Processing Module");
+    }
+
     input_.setDataCallback([this](const std::int16_t* data, std::size_t count) {
         onSamples(data, count);
     });
