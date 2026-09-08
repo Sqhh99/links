@@ -1,185 +1,64 @@
 #include "media_pipeline.h"
+
+#include <utility>
+
+#include "../base/log.h"
+#include "../base/strings.h"
+#include "../media/audio_resampler.h"
 #include "participant_store.h"
-#include "../../utils/logger.h"
-#include <QByteArray>
-#include <QMetaObject>
-#include <algorithm>
 #include <cstdint>
-#include <cstring>
-#include <cmath>
+#include <vector>
 
-namespace {
+namespace core = links::core;
 
-float clampSample(float value)
-{
-    return std::max(-1.0f, std::min(1.0f, value));
-}
-
-std::vector<float> mixAndResampleToFloat(const std::vector<int16_t>& input,
-                                         int srcRate,
-                                         int srcChannels,
-                                         int dstRate,
-                                         int dstChannels)
-{
-    if (input.empty() || srcRate <= 0 || dstRate <= 0 || srcChannels <= 0 || dstChannels <= 0) {
-        return {};
-    }
-
-    const int srcFrames = static_cast<int>(input.size()) / srcChannels;
-    if (srcFrames <= 0) {
-        return {};
-    }
-
-    const double ratio = static_cast<double>(dstRate) / static_cast<double>(srcRate);
-    const int dstFrames = std::max(1, static_cast<int>(std::llround(srcFrames * ratio)));
-    std::vector<float> output(static_cast<size_t>(dstFrames * dstChannels), 0.0f);
-
-    for (int dstFrame = 0; dstFrame < dstFrames; ++dstFrame) {
-        const double srcPos = static_cast<double>(dstFrame) / ratio;
-        const int srcIndex = std::min(srcFrames - 1, std::max(0, static_cast<int>(std::llround(srcPos))));
-
-        float left = 0.0f;
-        float right = 0.0f;
-        if (srcChannels == 1) {
-            left = right = static_cast<float>(input[srcIndex]) / 32768.0f;
-        } else {
-            const int base = srcIndex * srcChannels;
-            left = static_cast<float>(input[base]) / 32768.0f;
-            right = static_cast<float>(input[base + 1]) / 32768.0f;
-        }
-
-        for (int dstChannel = 0; dstChannel < dstChannels; ++dstChannel) {
-            float sample = 0.0f;
-            if (dstChannels == 1) {
-                sample = (left + right) * 0.5f;
-            } else {
-                sample = (dstChannel % 2 == 0) ? left : right;
-            }
-            output[static_cast<size_t>(dstFrame * dstChannels + dstChannel)] = clampSample(sample);
-        }
-    }
-
-    return output;
-}
-
-QByteArray convertFloatPcmToOutputBytes(const std::vector<float>& input, const QAudioFormat& format)
-{
-    if (input.empty()) {
-        return {};
-    }
-
-    QByteArray output;
-    const QAudioFormat::SampleFormat sampleFormat = format.sampleFormat();
-    const int bytesPerSample = format.bytesPerSample();
-    if (bytesPerSample <= 0) {
-        return {};
-    }
-
-    output.resize(static_cast<int>(input.size() * static_cast<size_t>(bytesPerSample)));
-    char* dst = output.data();
-
-    for (size_t i = 0; i < input.size(); ++i) {
-        const float sample = clampSample(input[i]);
-        const size_t offset = i * static_cast<size_t>(bytesPerSample);
-        switch (sampleFormat) {
-        case QAudioFormat::UInt8: {
-            const uint8_t value = static_cast<uint8_t>(std::lround((sample * 0.5f + 0.5f) * 255.0f));
-            std::memcpy(dst + offset, &value, sizeof(value));
-            break;
-        }
-        case QAudioFormat::Int16: {
-            const int16_t value = static_cast<int16_t>(std::lround(sample * 32767.0f));
-            std::memcpy(dst + offset, &value, sizeof(value));
-            break;
-        }
-        case QAudioFormat::Int32: {
-            const int32_t value = static_cast<int32_t>(std::lround(sample * 2147483647.0f));
-            std::memcpy(dst + offset, &value, sizeof(value));
-            break;
-        }
-        case QAudioFormat::Float: {
-            std::memcpy(dst + offset, &sample, sizeof(sample));
-            break;
-        }
-        default:
-            return {};
-        }
-    }
-
-    return output;
-}
-
-QAudioFormat choosePlaybackFormat(const QAudioDevice& device, int sampleRate, int channels)
-{
-    QAudioFormat requested;
-    requested.setSampleRate(sampleRate);
-    requested.setChannelCount(channels);
-    requested.setSampleFormat(QAudioFormat::Int16);
-    if (device.isFormatSupported(requested)) {
-        return requested;
-    }
-
-    QAudioFormat fallback = device.preferredFormat();
-    if (!device.isFormatSupported(fallback)) {
-        fallback = requested;
-    }
-    return fallback;
-}
-
-bool audioFormatsEqual(const QAudioFormat& lhs, const QAudioFormat& rhs)
-{
-    return lhs.sampleRate() == rhs.sampleRate()
-        && lhs.channelCount() == rhs.channelCount()
-        && lhs.sampleFormat() == rhs.sampleFormat();
-}
-
-} // namespace
-
-MediaPipeline::MediaPipeline(ParticipantStore* participantStore, QObject* parent)
-    : QObject(parent),
-      participantStore_(participantStore)
+MediaPipeline::MediaPipeline(ParticipantStore* participantStore,
+                             core::TaskRunner& taskRunner,
+                             core::AudioPlayerFactory& audioPlayers)
+    : participantStore_(participantStore),
+      taskRunner_(taskRunner),
+      audioPlayerFactory_(audioPlayers)
 {
 }
 
 MediaPipeline::~MediaPipeline()
 {
-    if (!videoStreams_.isEmpty() || !audioStreams_.isEmpty()
+    if (!videoStreams_.empty() || !audioStreams_.empty()
         || !videoStreamThreads_.empty() || !audioStreamThreads_.empty()
-        || !streamStopFlags_.isEmpty() || !audioPlayers_.isEmpty()) {
+        || !streamStopFlags_.empty() || !audioPlayers_.empty()) {
         stopAll();
     }
 }
 
-void MediaPipeline::setVideoStream(const QString& trackSid,
+void MediaPipeline::setVideoStream(const std::string& trackSid,
                                    std::shared_ptr<livekit::VideoStream> stream)
 {
     videoStreams_[trackSid] = std::move(stream);
 }
 
-void MediaPipeline::setAudioStream(const QString& trackSid,
+void MediaPipeline::setAudioStream(const std::string& trackSid,
                                    std::shared_ptr<livekit::AudioStream> stream)
 {
     audioStreams_[trackSid] = std::move(stream);
 }
 
-bool MediaPipeline::hasVideoStream(const QString& trackSid) const
+bool MediaPipeline::hasVideoStream(const std::string& trackSid) const
 {
-    return videoStreams_.contains(trackSid);
+    return videoStreams_.find(trackSid) != videoStreams_.end();
 }
 
-bool MediaPipeline::hasAudioStream(const QString& trackSid) const
+bool MediaPipeline::hasAudioStream(const std::string& trackSid) const
 {
-    return audioStreams_.contains(trackSid);
+    return audioStreams_.find(trackSid) != audioStreams_.end();
 }
 
-void MediaPipeline::removeVideoStream(const QString& trackSid)
+void MediaPipeline::removeVideoStream(const std::string& trackSid)
 {
-    videoStreams_.remove(trackSid);
+    videoStreams_.erase(trackSid);
 }
 
-void MediaPipeline::removeAudioStream(const QString& trackSid)
+void MediaPipeline::removeAudioStream(const std::string& trackSid)
 {
-    audioStreams_.remove(trackSid);
+    audioStreams_.erase(trackSid);
 }
 
 void MediaPipeline::setReverseAudioCallback(ReverseAudioCallback callback)
@@ -187,11 +66,11 @@ void MediaPipeline::setReverseAudioCallback(ReverseAudioCallback callback)
     reverseAudioCallback_ = std::move(callback);
 }
 
-void MediaPipeline::startVideoStreamReader(const QString& trackSid,
-                                           const QString& participantIdentity,
+void MediaPipeline::startVideoStreamReader(const std::string& trackSid,
+                                           const std::string& participantIdentity,
                                            std::shared_ptr<livekit::VideoStream> stream)
 {
-    auto* stopFlag = new std::atomic<bool>(false);
+    auto stopFlag = std::make_shared<std::atomic<bool>>(false);
     streamStopFlags_[trackSid] = stopFlag;
 
     std::thread readerThread([this, trackSid, participantIdentity, stream, stopFlag]() {
@@ -201,20 +80,21 @@ void MediaPipeline::startVideoStreamReader(const QString& trackSid,
                 break;
             }
 
-            QMetaObject::invokeMethod(this, [this, event = std::move(event), trackSid, participantIdentity]() mutable {
-                handleVideoFrame(event, trackSid, participantIdentity);
-            }, Qt::QueuedConnection);
+            core::postGuarded(taskRunner_, lifetime_,
+                [this, event = std::move(event), trackSid, participantIdentity]() mutable {
+                    handleVideoFrame(event, trackSid, participantIdentity);
+                });
         }
     });
 
     videoStreamThreads_[trackSid] = std::make_unique<std::thread>(std::move(readerThread));
 }
 
-void MediaPipeline::startAudioStreamReader(const QString& trackSid,
-                                           const QString& participantIdentity,
+void MediaPipeline::startAudioStreamReader(const std::string& trackSid,
+                                           const std::string& participantIdentity,
                                            std::shared_ptr<livekit::AudioStream> stream)
 {
-    auto* stopFlag = new std::atomic<bool>(false);
+    auto stopFlag = std::make_shared<std::atomic<bool>>(false);
     streamStopFlags_[trackSid] = stopFlag;
 
     std::thread readerThread([this, trackSid, participantIdentity, stream, stopFlag]() {
@@ -224,77 +104,73 @@ void MediaPipeline::startAudioStreamReader(const QString& trackSid,
                 break;
             }
 
-            QMetaObject::invokeMethod(this, [this, event = std::move(event), trackSid, participantIdentity]() mutable {
-                handleAudioFrame(event, trackSid, participantIdentity);
-            }, Qt::QueuedConnection);
+            core::postGuarded(taskRunner_, lifetime_,
+                [this, event = std::move(event), trackSid, participantIdentity]() mutable {
+                    handleAudioFrame(event, trackSid, participantIdentity);
+                });
         }
     });
 
     audioStreamThreads_[trackSid] = std::make_unique<std::thread>(std::move(readerThread));
 }
 
-void MediaPipeline::stopTrack(const QString& trackSid)
+void MediaPipeline::stopTrack(const std::string& trackSid)
 {
     stopStreamReaders(trackSid);
 
-    if (videoStreams_.contains(trackSid)) {
-        videoStreams_.remove(trackSid);
-    }
-    if (audioStreams_.contains(trackSid)) {
-        audioStreams_.remove(trackSid);
-    }
-    if (audioPlayers_.contains(trackSid)) {
-        auto player = audioPlayers_.take(trackSid);
-        if (player.sink) {
-            player.sink->stop();
+    videoStreams_.erase(trackSid);
+    audioStreams_.erase(trackSid);
+
+    const auto player = audioPlayers_.find(trackSid);
+    if (player != audioPlayers_.end()) {
+        if (player->second.player) {
+            player->second.player->close();
         }
+        audioPlayers_.erase(player);
     }
 }
 
 void MediaPipeline::stopAll()
 {
-    for (auto it = streamStopFlags_.begin(); it != streamStopFlags_.end(); ++it) {
-        if (it.value()) {
-            it.value()->store(true);
+    for (auto& entry : streamStopFlags_) {
+        if (entry.second) {
+            entry.second->store(true);
         }
     }
 
-    for (auto& [trackSid, threadPtr] : videoStreamThreads_) {
-        if (threadPtr && threadPtr->joinable()) {
-            threadPtr->join();
+    for (auto& entry : videoStreamThreads_) {
+        if (entry.second && entry.second->joinable()) {
+            entry.second->join();
         }
     }
     videoStreamThreads_.clear();
 
-    for (auto& [trackSid, threadPtr] : audioStreamThreads_) {
-        if (threadPtr && threadPtr->joinable()) {
-            threadPtr->join();
+    for (auto& entry : audioStreamThreads_) {
+        if (entry.second && entry.second->joinable()) {
+            entry.second->join();
         }
     }
     audioStreamThreads_.clear();
 
-    for (auto it = streamStopFlags_.begin(); it != streamStopFlags_.end(); ++it) {
-        delete it.value();
-    }
     streamStopFlags_.clear();
 
-    Logger::instance().info("Cleaning up video streams");
+    core::logInfo("Cleaning up video streams");
     videoStreams_.clear();
 
-    Logger::instance().info("Cleaning up audio streams");
+    core::logInfo("Cleaning up audio streams");
     audioStreams_.clear();
 
-    for (auto& player : audioPlayers_) {
-        if (player.sink) {
-            player.sink->stop();
+    for (auto& entry : audioPlayers_) {
+        if (entry.second.player) {
+            entry.second.player->close();
         }
     }
     audioPlayers_.clear();
 }
 
 void MediaPipeline::handleVideoFrame(const livekit::VideoFrameEvent& event,
-                                     const QString& trackSid,
-                                     const QString& participantIdentity)
+                                     const std::string& trackSid,
+                                     const std::string& participantIdentity)
 {
     const auto& frame = event.frame;
     if (frame.width() == 0 || frame.height() == 0) {
@@ -309,104 +185,110 @@ void MediaPipeline::handleVideoFrame(const livekit::VideoFrameEvent& event,
         participantStore_->setScreenShareActive(participantIdentity, true);
     }
 
-    QImage image(frame.data(), frame.width(), frame.height(), QImage::Format_RGBA8888);
-    QImage imageCopy = image.copy();
+    // One deep copy here, as before (QImage wrap + .copy()); every later hop is
+    // a shared_ptr bump.
+    const core::VideoFrame image = core::VideoFrame::copyFrom(
+        frame.data(), frame.width(), frame.height(),
+        frame.width() * 4, core::PixelFormat::RGBA8888);
 
-    emit videoFrameReady(participantIdentity, trackSid, imageCopy, source);
+    videoFrameReady.notify(participantIdentity, trackSid, image, source);
 }
 
 void MediaPipeline::handleAudioFrame(const livekit::AudioFrameEvent& event,
-                                     const QString& trackSid,
-                                     const QString& participantIdentity)
+                                     const std::string& trackSid,
+                                     const std::string& participantIdentity)
 {
     const auto& frame = event.frame;
 
-    emit audioActivity(participantIdentity, true);
+    audioActivity.notify(participantIdentity, true);
 
-    auto playbackIt = audioPlayers_.find(trackSid);
-    if (playbackIt == audioPlayers_.end()) {
-        playbackIt = audioPlayers_.insert(trackSid, AudioPlayback{});
+    AudioPlayback& playback = audioPlayers_[trackSid];
+    if (!playback.player) {
+        playback.player = audioPlayerFactory_.createPlayer();
+    }
+    if (!playback.player) {
+        core::logWarning("Audio output device unavailable");
+        return;
     }
 
-    AudioPlayback& playback = playbackIt.value();
-    const QAudioDevice device = QMediaDevices::defaultAudioOutput();
-    const QAudioFormat desiredFormat =
-        choosePlaybackFormat(device, frame.sampleRate(), frame.numChannels());
+    const std::string deviceId = audioPlayerFactory_.defaultDeviceId();
+    const core::AudioFormat desiredFormat =
+        playback.player->negotiate(frame.sampleRate(), frame.numChannels());
 
-    bool needRecreate = !playback.sink
-        || playback.outputDevice != device
-        || !audioFormatsEqual(playback.format, desiredFormat);
+    // Reopen when the default device changed or the negotiated format moved --
+    // the same condition the QAudioDevice/QAudioFormat comparison expressed.
+    const bool needReopen = !playback.player->isOpen()
+        || playback.deviceId != deviceId
+        || playback.format != desiredFormat;
 
-    if (needRecreate) {
-        if (playback.sink) {
-            playback.sink->stop();
+    if (needReopen) {
+        playback.player->close();
+
+        if (desiredFormat.sampleRate != frame.sampleRate()
+            || desiredFormat.channels != frame.numChannels()
+            || desiredFormat.sampleFormat != core::SampleFormat::Int16) {
+            core::logWarning("Audio format not supported by output device, using preferred format");
         }
 
-        if (desiredFormat.sampleRate() != frame.sampleRate()
-            || desiredFormat.channelCount() != frame.numChannels()
-            || desiredFormat.sampleFormat() != QAudioFormat::Int16) {
-            Logger::instance().warning("Audio format not supported by output device, using preferred format");
-        }
-
-        playback.outputDevice = device;
+        playback.deviceId = deviceId;
         playback.format = desiredFormat;
-        playback.sink = QSharedPointer<QAudioSink>::create(device, desiredFormat);
-        playback.device = playback.sink ? playback.sink->start() : nullptr;
+        playback.player->open(desiredFormat);
     }
 
-    if (!playback.device) {
-        Logger::instance().warning("Audio output device unavailable");
+    if (!playback.player->isOpen()) {
+        core::logWarning("Audio output device unavailable");
         return;
     }
 
     const auto& samples = frame.data();
     const std::vector<float> floatPcm =
-        mixAndResampleToFloat(samples,
-                              frame.sampleRate(),
-                              frame.numChannels(),
-                              playback.format.sampleRate(),
-                              playback.format.channelCount());
-    const QByteArray data = convertFloatPcmToOutputBytes(floatPcm, playback.format);
-    if (data.isEmpty()) {
-        Logger::instance().warning("Failed to convert remote audio frame to playback format");
+        core::mixAndResampleToFloat(samples,
+                                    frame.sampleRate(),
+                                    frame.numChannels(),
+                                    playback.format.sampleRate,
+                                    playback.format.channels);
+    const std::vector<std::uint8_t> data = core::packFloatPcm(floatPcm, playback.format);
+    if (data.empty()) {
+        core::logWarning("Failed to convert remote audio frame to playback format");
         return;
     }
-    
+
     // Feed far-end audio to the AEC so it can learn the echo path.
     // This is essential for echo cancellation to work correctly.
+    //
+    // Order matters and must not be changed: the AEC is fed the ORIGINAL,
+    // un-resampled samples at the source rate, and it is fed BEFORE the write.
     if (reverseAudioCallback_ && !samples.empty()) {
         int numSamples = static_cast<int>(samples.size()) / frame.numChannels();
         reverseAudioCallback_(samples.data(), numSamples,
                               frame.sampleRate(), frame.numChannels());
     }
-    
-    playback.device->write(data);
+
+    playback.player->write(data.data(), data.size());
 }
 
-void MediaPipeline::stopStreamReaders(const QString& trackSid)
+void MediaPipeline::stopStreamReaders(const std::string& trackSid)
 {
-    if (streamStopFlags_.contains(trackSid)) {
-        streamStopFlags_[trackSid]->store(true);
+    const auto flag = streamStopFlags_.find(trackSid);
+    if (flag != streamStopFlags_.end() && flag->second) {
+        flag->second->store(true);
     }
 
-    if (videoStreamThreads_.count(trackSid) > 0) {
-        auto& threadPtr = videoStreamThreads_[trackSid];
-        if (threadPtr && threadPtr->joinable()) {
-            threadPtr->join();
+    const auto videoThread = videoStreamThreads_.find(trackSid);
+    if (videoThread != videoStreamThreads_.end()) {
+        if (videoThread->second && videoThread->second->joinable()) {
+            videoThread->second->join();
         }
-        videoStreamThreads_.erase(trackSid);
+        videoStreamThreads_.erase(videoThread);
     }
 
-    if (audioStreamThreads_.count(trackSid) > 0) {
-        auto& threadPtr = audioStreamThreads_[trackSid];
-        if (threadPtr && threadPtr->joinable()) {
-            threadPtr->join();
+    const auto audioThread = audioStreamThreads_.find(trackSid);
+    if (audioThread != audioStreamThreads_.end()) {
+        if (audioThread->second && audioThread->second->joinable()) {
+            audioThread->second->join();
         }
-        audioStreamThreads_.erase(trackSid);
+        audioStreamThreads_.erase(audioThread);
     }
 
-    if (streamStopFlags_.contains(trackSid)) {
-        delete streamStopFlags_[trackSid];
-        streamStopFlags_.remove(trackSid);
-    }
+    streamStopFlags_.erase(trackSid);
 }

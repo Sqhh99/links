@@ -22,6 +22,17 @@ struct WindowInfo {
     WindowRect geometry;
 };
 
+/// Backend-native monitor handle: HMONITOR on Windows, CGDirectDisplayID on
+/// macOS, screen index on X11. 0 means "unspecified / primary".
+using MonitorId = std::uint64_t;
+
+struct MonitorInfo {
+    MonitorId id{0};
+    std::string name;   // platform device name, UTF-8
+    WindowRect geometry;
+    bool isPrimary{false};
+};
+
 }  // namespace core
 }  // namespace links
 

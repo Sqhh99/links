@@ -1,16 +1,11 @@
 #include "conference_manager.h"
 #include "participant_metadata_parser.h"
 #include "../room_event_delegate.h"
-#include "../../utils/logger.h"
-#include <QFutureWatcher>
-#include <QDateTime>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QMetaType>
-#include <QSet>
-#include <QStringList>
-#include <QTimer>
-#include <QtConcurrent/QtConcurrentRun>
+#include <nlohmann/json.hpp>
+
+#include "../base/log.h"
+#include "../base/strings.h"
+#include "../base/time.h"
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
@@ -20,13 +15,16 @@
 #include "livekit/remote_participant.h"
 #include "livekit/track.h"
 #include "livekit/video_stream.h"
+#include <map>
+#include <set>
+#include <string>
+#include <memory>
+#include <cstdint>
+#include <chrono>
+
+namespace core = links::core;
 
 namespace {
-
-struct AsyncNetworkPollResult {
-    bool hasData{false};
-    NetworkStatsAggregationResult aggregation;
-};
 
 bool networkStatsEquivalent(const NetworkStatsSnapshot& lhs,
                             const NetworkStatsSnapshot& rhs)
@@ -47,61 +45,95 @@ bool networkStatsEquivalent(const NetworkStatsSnapshot& lhs,
 
 } // namespace
 
-ConferenceManager::ConferenceManager(QObject* parent)
-    : QObject(parent),
+ConferenceManager::ConferenceManager(const core::PlatformServices& services,
+                                     const core::DeviceSelection& devices,
+                                     const core::AudioProcessingConfig& audio)
+    : services_(services),
       roomController_(std::make_unique<RoomController>()),
-      roomDelegate_(std::make_unique<RoomEventDelegate>()),
+      roomDelegate_(std::make_unique<RoomEventDelegate>(*services.taskRunner)),
       participantStore_(std::make_unique<ParticipantStore>()),
-      mediaPipeline_(std::make_unique<MediaPipeline>(participantStore_.get())),
-      deviceController_(std::make_unique<DeviceController>(roomController_->room()))
+      mediaPipeline_(std::make_unique<MediaPipeline>(participantStore_.get(),
+                                                     *services.taskRunner,
+                                                     *services.audioPlayers)),
+      deviceController_(std::make_unique<DeviceController>(roomController_->room(),
+                                                           services, devices, audio))
 {
-    Logger::instance().info("ConferenceManager created");
-    qRegisterMetaType<livekit::TrackSource>("livekit::TrackSource");
-    qRegisterMetaType<livekit::TrackKind>("livekit::TrackKind");
-    qRegisterMetaType<NetworkStatsSnapshot>("NetworkStatsSnapshot");
+    core::logInfo("ConferenceManager created");
 
     roomController_->setDelegate(roomDelegate_.get());
 
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::participantConnectedQueued,
-                     this, &ConferenceManager::onParticipantConnectedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::participantDisconnectedQueued,
-                     this, &ConferenceManager::onParticipantDisconnectedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::trackSubscribedQueued,
-                     this, &ConferenceManager::onTrackSubscribedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::trackUnsubscribedQueued,
-                     this, &ConferenceManager::onTrackUnsubscribedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::trackMutedQueued,
-                     this, &ConferenceManager::onTrackMutedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::trackUnmutedQueued,
-                     this, &ConferenceManager::onTrackUnmutedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::trackUnpublishedQueued,
-                     this, &ConferenceManager::onTrackUnpublishedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::connectionQualityChangedQueued,
-                     this, &ConferenceManager::onConnectionQualityChangedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::connectionStateChangedQueued,
-                     this, &ConferenceManager::onConnectionStateChangedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::roomDisconnectedQueued,
-                     this, &ConferenceManager::onRoomDisconnectedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::dataReceivedQueued,
-                     this, &ConferenceManager::onDataReceivedQueued);
-    QObject::connect(roomDelegate_.get(), &RoomEventDelegate::localTrackPublishedQueued,
-                     this, &ConferenceManager::onLocalTrackPublishedQueued);
+    auto& bag = collaboratorConnections_;
+    auto& delegate = *roomDelegate_;
 
-    QObject::connect(deviceController_.get(), &DeviceController::localMicrophoneChanged,
-                     this, &ConferenceManager::localMicrophoneChanged);
-    QObject::connect(deviceController_.get(), &DeviceController::localCameraChanged,
-                     this, &ConferenceManager::localCameraChanged);
-    QObject::connect(deviceController_.get(), &DeviceController::localScreenShareChanged,
-                     this, &ConferenceManager::localScreenShareChanged);
-    QObject::connect(deviceController_.get(), &DeviceController::localVideoFrameReady,
-                     this, &ConferenceManager::localVideoFrameReady);
-    QObject::connect(deviceController_.get(), &DeviceController::localScreenFrameReady,
-                     this, &ConferenceManager::localScreenFrameReady);
+    bag += delegate.participantConnected.connect(
+        [this](std::string identity, std::string sid, std::string name, bool isHost) {
+            onParticipantConnected(std::move(identity), std::move(sid), std::move(name), isHost);
+        });
+    bag += delegate.participantDisconnected.connect(
+        [this](std::string identity, int reason) {
+            onParticipantDisconnected(std::move(identity), reason);
+        });
+    bag += delegate.trackSubscribed.connect(
+        [this](std::string trackSid, std::string identity, int kind, int source, bool muted,
+               std::shared_ptr<livekit::Track> track,
+               std::shared_ptr<livekit::RemoteTrackPublication> publication) {
+            onTrackSubscribed(std::move(trackSid), std::move(identity), kind, source, muted,
+                              std::move(track), std::move(publication));
+        });
+    bag += delegate.trackUnsubscribed.connect(
+        [this](std::string trackSid, std::string identity) {
+            onTrackUnsubscribed(std::move(trackSid), std::move(identity));
+        });
+    bag += delegate.trackMuted.connect(
+        [this](std::string trackSid, std::string identity, int kind) {
+            onTrackMuted(std::move(trackSid), std::move(identity), kind);
+        });
+    bag += delegate.trackUnmuted.connect(
+        [this](std::string trackSid, std::string identity, int kind) {
+            onTrackUnmuted(std::move(trackSid), std::move(identity), kind);
+        });
+    bag += delegate.trackUnpublished.connect(
+        [this](std::string trackSid, std::string identity, int kind, int source) {
+            onTrackUnpublished(std::move(trackSid), std::move(identity), kind, source);
+        });
+    bag += delegate.connectionQualityChanged.connect(
+        [this](std::string identity, int quality) {
+            onConnectionQualityChanged(std::move(identity), quality);
+        });
+    bag += delegate.connectionStateChanged.connect(
+        [this](int state) { onConnectionStateChanged(state); });
+    bag += delegate.roomDisconnected.connect(
+        [this](int reason) { onRoomDisconnected(reason); });
+    bag += delegate.dataReceived.connect(
+        [this](std::vector<std::uint8_t> data, std::string identity, std::string topic) {
+            onDataReceived(std::move(data), std::move(identity), std::move(topic));
+        });
+    bag += delegate.localTrackPublished.connect(
+        [this](std::string publicationSid, int kind, int source) {
+            onLocalTrackPublished(std::move(publicationSid), kind, source);
+        });
 
-    QObject::connect(mediaPipeline_.get(), &MediaPipeline::videoFrameReady,
-                     this, &ConferenceManager::videoFrameReceived);
-    QObject::connect(mediaPipeline_.get(), &MediaPipeline::audioActivity,
-                     this, &ConferenceManager::audioActivity);
+    auto& device = *deviceController_;
+    bag += device.localMicrophoneChanged.connect(
+        [this](bool enabled) { localMicrophoneChanged.notify(enabled); });
+    bag += device.localCameraChanged.connect(
+        [this](bool enabled) { localCameraChanged.notify(enabled); });
+    bag += device.localScreenShareChanged.connect(
+        [this](bool enabled) { localScreenShareChanged.notify(enabled); });
+    bag += device.localVideoFrameReady.connect(
+        [this](const core::VideoFrame& frame) { localVideoFrameReady.notify(frame); });
+    bag += device.localScreenFrameReady.connect(
+        [this](const core::VideoFrame& frame) { localScreenFrameReady.notify(frame); });
+    bag += device.preferredCameraChanged.connect(
+        [this](const std::string& id) { preferredCameraChanged.notify(id); });
+    bag += device.preferredMicrophoneChanged.connect(
+        [this](const std::string& id) { preferredMicrophoneChanged.notify(id); });
+
+    bag += mediaPipeline_->videoFrameReady.connect(
+        [this](const std::string& identity, const std::string& trackSid,
+               const core::VideoFrame& frame, livekit::TrackSource source) {
+            videoFrameReceived.notify(identity, trackSid, frame, source);
+        });
 
     // Feed far-end (remote speaker) audio into the local APM for echo cancellation.
     // Without this, the AEC has no reference signal and cannot cancel echoes.
@@ -110,22 +142,22 @@ ConferenceManager::ConferenceManager(QObject* parent)
             feedReverseAudio(data, samples, sampleRate, channels);
         });
 
-    networkStatsTimer_.setInterval(1000);
-    networkStatsTimer_.setSingleShot(false);
-    QObject::connect(&networkStatsTimer_, &QTimer::timeout,
-                     this, &ConferenceManager::pollLocalNetworkStats);
+    networkStatsTimer_ = services_.timers->createTimer([this]() { pollLocalNetworkStats(); });
 }
 
 ConferenceManager::~ConferenceManager()
 {
+    // First: no collaborator callback may run while members are torn down.
+    collaboratorConnections_.clear();
+
     if (connected_) {
-        disconnect();
+        disconnectFromRoom();
     }
 }
 
-void ConferenceManager::connect(const QString& url, const QString& token)
+void ConferenceManager::connectToRoom(const std::string& url, const std::string& token)
 {
-    Logger::instance().info("Connecting to room: " + url);
+    core::logInfo(core::str::cat("Connecting to room: ", url));
     lastDisconnectReason_ = livekit::DisconnectReason::Unknown;
     deviceController_->setRoom(roomController_->room());
 
@@ -138,23 +170,23 @@ void ConferenceManager::connect(const QString& url, const QString& token)
         bool success = roomController_->connectToRoom(url, token, options);
 
         if (success) {
-            Logger::instance().info("Connection initiated successfully");
+            core::logInfo("Connection initiated successfully");
             markConnected("connect_success", true);
         } else {
-            Logger::instance().error("Connection failed");
-            emit connectionError("Failed to connect to room");
+            core::logError("Connection failed");
+            connectionError.notify("Failed to connect to room");
         }
 
     } catch (const std::exception& e) {
-        QString error = QString("Connection failed: %1").arg(e.what());
-        Logger::instance().error(error);
-        emit connectionError(error);
+        const std::string error = core::str::cat("Connection failed: ", e.what());
+        core::logError(error);
+        connectionError.notify(error);
     }
 }
 
-void ConferenceManager::onLocalTrackPublishedQueued(QString publicationSid, int kind, int source)
+void ConferenceManager::onLocalTrackPublished(std::string publicationSid, int kind, int source)
 {
-    Q_UNUSED(kind);
+    (void)kind;
     if (!deviceController_) {
         return;
     }
@@ -163,15 +195,15 @@ void ConferenceManager::onLocalTrackPublishedQueued(QString publicationSid, int 
                                                 publicationSid);
 }
 
-void ConferenceManager::disconnect()
+void ConferenceManager::disconnectFromRoom()
 {
     if (disconnecting_) {
-        Logger::instance().warning("Disconnect requested while cleanup is already in progress");
+        core::logWarning("Disconnect requested while cleanup is already in progress");
         return;
     }
 
     disconnecting_ = true;
-    Logger::instance().info("Disconnecting from room");
+    core::logInfo("Disconnecting from room");
     lastDisconnectReason_ = livekit::DisconnectReason::ClientInitiated;
     const bool wasConnected = connected_;
     connected_ = false;
@@ -182,12 +214,12 @@ void ConferenceManager::disconnect()
 
         participantStore_->clear();
         participantIdentity_.clear();
-        networkStatsTimer_.stop();
+        networkStatsTimer_->stop();
         resetNetworkMetrics();
 
-        emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
-        emit localNetworkStatsUpdated(localNetworkStats_);
-        emit disconnected();
+        localConnectionQualityChanged.notify(static_cast<int>(localNetworkQuality_));
+        localNetworkStatsUpdated.notify(localNetworkStats_);
+        disconnected.notify();
 
         disconnecting_ = false;
     };
@@ -195,32 +227,28 @@ void ConferenceManager::disconnect()
     try {
         deviceController_->stopCapturers();
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Disconnect cleanup error while stopping capturers: %1")
-                                 .arg(e.what()));
+        core::logError(core::str::cat("Disconnect cleanup error while stopping capturers: ", e.what()));
     }
 
     try {
         // Clear streams before room reset so FFI listeners are removed safely.
         mediaPipeline_->stopAll();
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Disconnect cleanup error while stopping media pipeline: %1")
-                                 .arg(e.what()));
+        core::logError(core::str::cat("Disconnect cleanup error while stopping media pipeline: ", e.what()));
     }
 
     if (roomController_->room()) {
         try {
             roomController_->clearDelegate();
         } catch (const std::exception& e) {
-            Logger::instance().error(QString("Disconnect cleanup error while clearing room delegate: %1")
-                                     .arg(e.what()));
+            core::logError(core::str::cat("Disconnect cleanup error while clearing room delegate: ", e.what()));
         }
 
         if (wasConnected) {
             try {
                 deviceController_->unpublishLocalTracks();
             } catch (const std::exception& e) {
-                Logger::instance().error(QString("Disconnect cleanup error while unpublishing local tracks: %1")
-                                         .arg(e.what()));
+                core::logError(core::str::cat("Disconnect cleanup error while unpublishing local tracks: ", e.what()));
             }
         }
 
@@ -230,17 +258,15 @@ void ConferenceManager::disconnect()
             // inside a RoomDelegate callback (those arrive via queued connections).
             roomController_->disconnectFromRoom(livekit::DisconnectReason::ClientInitiated);
         } catch (const std::exception& e) {
-            Logger::instance().error(QString("Disconnect cleanup error while disconnecting room: %1")
-                                     .arg(e.what()));
+            core::logError(core::str::cat("Disconnect cleanup error while disconnecting room: ", e.what()));
         }
 
         try {
-            Logger::instance().info("Resetting room");
+            core::logInfo("Resetting room");
             roomController_->reset();
-            Logger::instance().info("Room disconnected successfully");
+            core::logInfo("Room disconnected successfully");
         } catch (const std::exception& e) {
-            Logger::instance().error(QString("Disconnect cleanup error while resetting room: %1")
-                                     .arg(e.what()));
+            core::logError(core::str::cat("Disconnect cleanup error while resetting room: ", e.what()));
         }
     }
 
@@ -250,7 +276,7 @@ void ConferenceManager::disconnect()
 void ConferenceManager::toggleMicrophone()
 {
     if (!connected_) {
-        Logger::instance().warning("Ignoring toggleMicrophone: conference is not connected");
+        core::logWarning("Ignoring toggleMicrophone: conference is not connected");
         return;
     }
     deviceController_->toggleMicrophone();
@@ -259,7 +285,7 @@ void ConferenceManager::toggleMicrophone()
 void ConferenceManager::toggleCamera()
 {
     if (!connected_) {
-        Logger::instance().warning("Ignoring toggleCamera: conference is not connected");
+        core::logWarning("Ignoring toggleCamera: conference is not connected");
         return;
     }
     deviceController_->toggleCamera();
@@ -268,30 +294,32 @@ void ConferenceManager::toggleCamera()
 void ConferenceManager::toggleScreenShare()
 {
     if (!connected_) {
-        Logger::instance().warning("Ignoring toggleScreenShare: conference is not connected");
+        core::logWarning("Ignoring toggleScreenShare: conference is not connected");
         return;
     }
     deviceController_->toggleScreenShare();
 }
 
-void ConferenceManager::setScreenShareMode(ScreenCapturer::Mode mode, QScreen* screen, WId windowId)
+void ConferenceManager::setScreenShareMode(ScreenCapturer::Mode mode,
+                                           core::MonitorId monitorId,
+                                           core::WindowId windowId)
 {
-    deviceController_->setScreenShareMode(mode, screen, windowId);
+    deviceController_->setScreenShareMode(mode, monitorId, windowId);
 }
 
-void ConferenceManager::switchCamera(const QString& deviceId)
+void ConferenceManager::switchCamera(const std::string& deviceId)
 {
     if (!connected_) {
-        Logger::instance().warning("Ignoring switchCamera: conference is not connected");
+        core::logWarning("Ignoring switchCamera: conference is not connected");
         return;
     }
     deviceController_->switchCamera(deviceId);
 }
 
-void ConferenceManager::switchMicrophone(const QString& deviceId)
+void ConferenceManager::switchMicrophone(const std::string& deviceId)
 {
     if (!connected_) {
-        Logger::instance().warning("Ignoring switchMicrophone: conference is not connected");
+        core::logWarning("Ignoring switchMicrophone: conference is not connected");
         return;
     }
     deviceController_->switchMicrophone(deviceId);
@@ -316,10 +344,10 @@ bool ConferenceManager::isScreenSharing() const
 // Audio processing settings (runtime-applicable during conference)
 // =============================================================================
 
-void ConferenceManager::applyAudioSettings()
+void ConferenceManager::applyAudioSettings(const core::AudioProcessingConfig& config)
 {
     if (deviceController_) {
-        deviceController_->applyAudioSettings();
+        deviceController_->applyAudioSettings(config);
     }
 }
 
@@ -382,48 +410,49 @@ void ConferenceManager::feedReverseAudio(const int16_t* data, int samples,
     if (deviceController_) deviceController_->feedReverseAudio(data, samples, sampleRate, channels);
 }
 
-void ConferenceManager::sendChatMessage(const QString& message)
+void ConferenceManager::sendChatMessage(const std::string& message)
 {
-    if (!connected_ || message.trimmed().isEmpty()) {
+    if (!connected_ || core::str::trimWhitespace(message).empty()) {
         return;
     }
 
     try {
         auto localParticipant = roomController_->localParticipant();
         if (!localParticipant) {
-            Logger::instance().warning("No local participant");
+            core::logWarning("No local participant");
             return;
         }
 
-        QJsonObject json;
+        // Wire format is unchanged: a compact JSON object with the same four
+        // keys. nlohmann writes the ms timestamp as an integer, which is what
+        // QJsonDocument produced for this magnitude, so older peers still parse it.
+        nlohmann::json json;
         json["type"] = "chat";
         json["message"] = message;
-        json["timestamp"] = QDateTime::currentMSecsSinceEpoch();
-        json["sender"] = QString::fromStdString(localParticipant->name());
+        json["timestamp"] = core::nowMsSinceEpoch();
+        json["sender"] = localParticipant->name();
 
-        QJsonDocument doc(json);
-        QByteArray jsonData = doc.toJson(QJsonDocument::Compact);
-
+        const std::string jsonData = json.dump();
         std::vector<uint8_t> data(jsonData.begin(), jsonData.end());
         localParticipant->publishData(data, true, {}, "chat");
 
         ChatMessage msg;
-        msg.sender = QString::fromStdString(localParticipant->name());
-        msg.senderIdentity = QString::fromStdString(localParticipant->identity());
+        msg.sender = std::string(localParticipant->name());
+        msg.senderIdentity = std::string(localParticipant->identity());
         msg.message = message;
-        msg.timestamp = QDateTime::currentMSecsSinceEpoch();
+        msg.timestamp = core::nowMsSinceEpoch();
         msg.isLocal = true;
 
-        emit chatMessageReceived(msg);
+        chatMessageReceived.notify(msg);
 
-        Logger::instance().debug("Chat message sent: " + message);
+        core::logDebug(core::str::cat("Chat message sent: ", message));
 
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Failed to send chat message: %1").arg(e.what()));
+        core::logError(core::str::cat("Failed to send chat message: ", e.what()));
     }
 }
 
-QList<ParticipantInfo> ConferenceManager::getParticipants() const
+std::vector<ParticipantInfo> ConferenceManager::getParticipants() const
 {
     return participantStore_->participants();
 }
@@ -438,13 +467,13 @@ void ConferenceManager::reconcileParticipants()
     reconcileParticipantsInternal("manual");
 }
 
-void ConferenceManager::onParticipantConnectedQueued(QString identity,
-                                                     QString sid,
-                                                     QString name,
+void ConferenceManager::onParticipantConnected(std::string identity,
+                                                     std::string sid,
+                                                     std::string name,
                                                      bool isHost)
 {
-    if (identity.trimmed().isEmpty()) {
-        Logger::instance().warning("Participant connected event has empty identity, triggering reconciliation");
+    if (core::str::trimWhitespace(identity).empty()) {
+        core::logWarning("Participant connected event has empty identity, triggering reconciliation");
         reconcileParticipantsInternal("participant_connected_empty_identity");
         return;
     }
@@ -453,50 +482,49 @@ void ConferenceManager::onParticipantConnectedQueued(QString identity,
         const ParticipantInfo before = participantStore_->participantInfo(identity);
         const ParticipantInfo updated = participantStore_->addParticipant(identity, sid, name, isHost);
         if (before.name != updated.name || before.sid != updated.sid || before.isHost != updated.isHost) {
-            emit participantUpdated(updated);
+            participantUpdated.notify(updated);
         }
-        Logger::instance().debug(QString("Duplicate participant connected reconciled: %1").arg(identity));
+        core::logDebug(core::str::cat("Duplicate participant connected reconciled: ", identity));
         reconcileParticipantsInternal("participant_connected_duplicate");
         return;
     }
 
     ParticipantInfo info = participantStore_->addParticipant(identity, sid, name, isHost);
 
-    Logger::instance().info(QString("Participant joined: %1")
-                                .arg(name.isEmpty() ? identity : name));
-    emit participantJoined(info);
+    core::logInfo(core::str::cat("Participant joined: ", name.empty() ? identity : name));
+    participantJoined.notify(info);
     reconcileParticipantsInternal("participant_connected_event");
 }
 
-void ConferenceManager::onParticipantDisconnectedQueued(QString identity, int reason)
+void ConferenceManager::onParticipantDisconnected(std::string identity, int reason)
 {
-    Q_UNUSED(reason);
+    (void)reason;
 
-    if (identity.trimmed().isEmpty()) {
-        Logger::instance().warning("Participant disconnected event has empty identity, triggering reconciliation");
+    if (core::str::trimWhitespace(identity).empty()) {
+        core::logWarning("Participant disconnected event has empty identity, triggering reconciliation");
         reconcileParticipantsInternal("participant_disconnected_empty_identity");
         return;
     }
 
     if (!participantStore_->contains(identity)) {
-        Logger::instance().debug(QString("Duplicate participant disconnected ignored: %1").arg(identity));
+        core::logDebug(core::str::cat("Duplicate participant disconnected ignored: ", identity));
         reconcileParticipantsInternal("participant_disconnected_duplicate");
         return;
     }
 
     participantStore_->removeParticipant(identity);
 
-    Logger::instance().info("Participant left: " + identity);
-    emit participantLeft(identity);
+    core::logInfo(core::str::cat("Participant left: ", identity));
+    participantLeft.notify(identity);
     reconcileParticipantsInternal("participant_disconnected_event");
 }
 
-void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString participantIdentity,
+void ConferenceManager::onTrackSubscribed(std::string trackSid, std::string participantIdentity,
                                                 int kind, int source, bool muted,
                                                 std::shared_ptr<livekit::Track> track,
                                                 std::shared_ptr<livekit::RemoteTrackPublication> publication)
 {
-    Q_UNUSED(publication);
+    (void)publication;
 
     TrackInfo info;
     info.trackSid = trackSid;
@@ -512,8 +540,9 @@ void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString partic
     if (info.kind == livekit::TrackKind::KIND_VIDEO
         && (info.source == livekit::TrackSource::SOURCE_UNKNOWN
             || info.source == livekit::TrackSource::SOURCE_CAMERA)) {
-        QString trackName = track ? QString::fromStdString(track->name()).toLower() : "";
-        if (trackName.contains("screen") || trackName.contains("share")) {
+        const std::string trackName =
+            track ? core::str::toLowerAscii(track->name()) : std::string();
+        if (core::str::contains(trackName, "screen") || core::str::contains(trackName, "share")) {
             participantStore_->setTrackSource(trackSid, livekit::TrackSource::SOURCE_SCREENSHARE);
             info.source = livekit::TrackSource::SOURCE_SCREENSHARE;
         }
@@ -523,9 +552,8 @@ void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString partic
                           || participantStore_->trackSource(trackSid)
                               == livekit::TrackSource::SOURCE_SCREENSHARE_AUDIO);
 
-    QString kindStr = (info.kind == livekit::TrackKind::KIND_AUDIO) ? "audio" : "video";
-    Logger::instance().info(QString("Track subscribed: %1 from %2")
-                           .arg(kindStr, participantIdentity));
+    std::string kindStr = (info.kind == livekit::TrackKind::KIND_AUDIO) ? "audio" : "video";
+    core::logInfo(core::str::cat("Track subscribed: ", kindStr, " from ", participantIdentity));
 
     if (info.kind == livekit::TrackKind::KIND_VIDEO && track) {
         try {
@@ -538,12 +566,13 @@ void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString partic
             mediaPipeline_->setVideoStream(trackSid, videoStream);
             mediaPipeline_->startVideoStreamReader(trackSid, participantIdentity, videoStream);
 
-            QTimer::singleShot(100, this, [this, trackSid, identity = participantIdentity,
-                                           kind = info.kind, muted]() {
-                emit trackMutedStateChanged(trackSid, identity, kind, muted);
-            });
+            services_.timers->singleShot(std::chrono::milliseconds(100),
+                [this, trackSid, identity = participantIdentity,
+                 kind = info.kind, muted]() {
+                    trackMutedStateChanged.notify(trackSid, identity, kind, muted);
+                });
         } catch (const std::exception& e) {
-            Logger::instance().error(QString("Failed to create video stream: %1").arg(e.what()));
+            core::logError(core::str::cat("Failed to create video stream: ", e.what()));
         }
     } else if (info.kind == livekit::TrackKind::KIND_AUDIO && track) {
         try {
@@ -552,31 +581,31 @@ void ConferenceManager::onTrackSubscribedQueued(QString trackSid, QString partic
             mediaPipeline_->setAudioStream(trackSid, audioStream);
             mediaPipeline_->startAudioStreamReader(trackSid, participantIdentity, audioStream);
 
-            QTimer::singleShot(100, this, [this, trackSid, identity = participantIdentity,
-                                           kind = info.kind, muted]() {
-                emit trackMutedStateChanged(trackSid, identity, kind, muted);
-            });
+            services_.timers->singleShot(std::chrono::milliseconds(100),
+                [this, trackSid, identity = participantIdentity,
+                 kind = info.kind, muted]() {
+                    trackMutedStateChanged.notify(trackSid, identity, kind, muted);
+                });
         } catch (const std::exception& e) {
-            Logger::instance().error(QString("Failed to create audio stream: %1").arg(e.what()));
+            core::logError(core::str::cat("Failed to create audio stream: ", e.what()));
         }
     }
 
-    emit trackSubscribed(info);
+    trackSubscribed.notify(info);
     updateParticipantInfo(participantIdentity);
     reconcileParticipantsInternal("track_subscribed_event");
 }
 
-void ConferenceManager::onTrackUnsubscribedQueued(QString trackSid, QString participantIdentity)
+void ConferenceManager::onTrackUnsubscribed(std::string trackSid, std::string participantIdentity)
 {
-    Logger::instance().info(QString("Track unsubscribed: %1 from %2")
-                           .arg(trackSid, participantIdentity));
+    core::logInfo(core::str::cat("Track unsubscribed: ", trackSid, " from ", participantIdentity));
 
     mediaPipeline_->stopTrack(trackSid);
 
-    emit trackUnsubscribed(trackSid, participantIdentity);
+    trackUnsubscribed.notify(trackSid, participantIdentity);
 
     livekit::TrackKind kind = participantStore_->trackKind(trackSid);
-    emit trackMutedStateChanged(trackSid, participantIdentity, kind, true);
+    trackMutedStateChanged.notify(trackSid, participantIdentity, kind, true);
 
     participantStore_->removeTrack(trackSid);
 
@@ -584,51 +613,48 @@ void ConferenceManager::onTrackUnsubscribedQueued(QString trackSid, QString part
     reconcileParticipantsInternal("track_unsubscribed_event");
 }
 
-void ConferenceManager::onTrackMutedQueued(QString trackSid, QString participantIdentity, int kind)
+void ConferenceManager::onTrackMuted(std::string trackSid, std::string participantIdentity, int kind)
 {
     livekit::TrackKind trackKind = static_cast<livekit::TrackKind>(kind);
-    QString kindStr = (trackKind == livekit::TrackKind::KIND_AUDIO) ? "AUDIO" : "VIDEO";
-    Logger::instance().info(QString("Track muted: sid=%1, identity=%2, kind=%3")
-        .arg(trackSid).arg(participantIdentity).arg(kindStr));
+    std::string kindStr = (trackKind == livekit::TrackKind::KIND_AUDIO) ? "AUDIO" : "VIDEO";
+    core::logInfo(core::str::cat("Track muted: sid=", trackSid, ", identity=", participantIdentity, ", kind=", kindStr));
 
     participantStore_->setTrackKind(trackSid, trackKind);
-    emit trackMutedStateChanged(trackSid, participantIdentity, trackKind, true);
+    trackMutedStateChanged.notify(trackSid, participantIdentity, trackKind, true);
 }
 
-void ConferenceManager::onTrackUnmutedQueued(QString trackSid, QString participantIdentity, int kind)
+void ConferenceManager::onTrackUnmuted(std::string trackSid, std::string participantIdentity, int kind)
 {
     livekit::TrackKind trackKind = static_cast<livekit::TrackKind>(kind);
-    QString kindStr = (trackKind == livekit::TrackKind::KIND_AUDIO) ? "AUDIO" : "VIDEO";
-    Logger::instance().info(QString("Track unmuted: sid=%1, identity=%2, kind=%3")
-        .arg(trackSid).arg(participantIdentity).arg(kindStr));
+    std::string kindStr = (trackKind == livekit::TrackKind::KIND_AUDIO) ? "AUDIO" : "VIDEO";
+    core::logInfo(core::str::cat("Track unmuted: sid=", trackSid, ", identity=", participantIdentity, ", kind=", kindStr));
 
     participantStore_->setTrackKind(trackSid, trackKind);
-    emit trackMutedStateChanged(trackSid, participantIdentity, trackKind, false);
+    trackMutedStateChanged.notify(trackSid, participantIdentity, trackKind, false);
 }
 
-void ConferenceManager::onTrackUnpublishedQueued(QString trackSid, QString participantIdentity, int kind, int source)
+void ConferenceManager::onTrackUnpublished(std::string trackSid, std::string participantIdentity, int kind, int source)
 {
     livekit::TrackKind trackKind = static_cast<livekit::TrackKind>(kind);
     livekit::TrackSource trackSource = static_cast<livekit::TrackSource>(source);
 
-    Logger::instance().info(QString("Track unpublished: sid=%1, identity=%2, kind=%3, source=%4")
-        .arg(trackSid, participantIdentity)
-        .arg(kind).arg(source));
+    core::logInfo(core::str::cat("Track unpublished: sid=", trackSid, ", identity=", participantIdentity,
+                                 ", kind=", kind, ", source=", source));
 
-    emit trackUnpublished(trackSid, participantIdentity, trackKind, trackSource);
+    trackUnpublished.notify(trackSid, participantIdentity, trackKind, trackSource);
 
     participantStore_->removeTrack(trackSid);
     reconcileParticipantsInternal("track_unpublished_event");
 }
 
-void ConferenceManager::onConnectionQualityChangedQueued(QString participantIdentity, int quality)
+void ConferenceManager::onConnectionQualityChanged(std::string participantIdentity, int quality)
 {
-    if (participantIdentity.trimmed().isEmpty()) {
+    if (core::str::trimWhitespace(participantIdentity).empty()) {
         return;
     }
 
-    const QString localIdentity = resolveLocalParticipantIdentity();
-    if (localIdentity.isEmpty() || participantIdentity != localIdentity) {
+    const std::string localIdentity = resolveLocalParticipantIdentity();
+    if (localIdentity.empty() || participantIdentity != localIdentity) {
         return;
     }
 
@@ -639,36 +665,32 @@ void ConferenceManager::onConnectionQualityChangedQueued(QString participantIden
     }
 
     localNetworkQuality_ = mappedQuality;
-    emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
+    localConnectionQualityChanged.notify(static_cast<int>(localNetworkQuality_));
 
     if (!hasNetworkStatsData(localNetworkStats_) || usingEstimatedNetworkStats_) {
         const NetworkStatsSnapshot estimated =
-            buildEstimatedNetworkSnapshot(localNetworkQuality_, QDateTime::currentMSecsSinceEpoch());
+            buildEstimatedNetworkSnapshot(localNetworkQuality_, core::nowMsSinceEpoch());
         usingEstimatedNetworkStats_ = true;
         if (!networkStatsEquivalent(localNetworkStats_, estimated)) {
             localNetworkStats_ = estimated;
-            Logger::instance().debug(
-                QString("Estimated network stats applied from quality: rtt=%1ms, jitter=%2ms, loss=%3%")
-                    .arg(localNetworkStats_.rttMs)
-                    .arg(localNetworkStats_.jitterMs)
-                    .arg(localNetworkStats_.packetLossPercent, 0, 'f', 1));
-            emit localNetworkStatsUpdated(localNetworkStats_);
+            core::logDebug(core::str::cat("Estimated network stats applied from quality: rtt=", localNetworkStats_.rttMs, "ms, jitter=", localNetworkStats_.jitterMs, "ms, loss=", core::str::num(localNetworkStats_.packetLossPercent, 1), "%"));
+            localNetworkStatsUpdated.notify(localNetworkStats_);
         }
     }
 }
 
-void ConferenceManager::onConnectionStateChangedQueued(int state)
+void ConferenceManager::onConnectionStateChanged(int state)
 {
     livekit::ConnectionState connState = static_cast<livekit::ConnectionState>(state);
-    Logger::instance().info(QString("Connection state changed: %1").arg(state));
+    core::logInfo(core::str::cat("Connection state changed: ", state));
 
     if (connState == livekit::ConnectionState::Connected) {
         markConnected("connection_connected_state", false);
     } else if (connState == livekit::ConnectionState::Reconnecting) {
-        networkStatsTimer_.stop();
+        networkStatsTimer_->stop();
         resetNetworkMetrics();
-        emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
-        emit localNetworkStatsUpdated(localNetworkStats_);
+        localConnectionQualityChanged.notify(static_cast<int>(localNetworkQuality_));
+        localNetworkStatsUpdated.notify(localNetworkStats_);
     } else if (connState == livekit::ConnectionState::Disconnected) {
         const bool hadMic = deviceController_->isMicrophoneEnabled();
         const bool hadCam = deviceController_->isCameraEnabled();
@@ -678,26 +700,26 @@ void ConferenceManager::onConnectionStateChangedQueued(int state)
         deviceController_->resetLocalState();
 
         if (hadMic) {
-            emit localMicrophoneChanged(false);
+            localMicrophoneChanged.notify(false);
         }
         if (hadCam) {
-            emit localCameraChanged(false);
+            localCameraChanged.notify(false);
         }
         if (hadScreenShare) {
-            emit localScreenShareChanged(false);
+            localScreenShareChanged.notify(false);
         }
 
         connected_ = false;
         participantStore_->clear();
         participantIdentity_.clear();
-        networkStatsTimer_.stop();
+        networkStatsTimer_->stop();
         resetNetworkMetrics();
-        emit localConnectionQualityChanged(static_cast<int>(localNetworkQuality_));
-        emit localNetworkStatsUpdated(localNetworkStats_);
-        emit disconnected();
+        localConnectionQualityChanged.notify(static_cast<int>(localNetworkQuality_));
+        localNetworkStatsUpdated.notify(localNetworkStats_);
+        disconnected.notify();
     }
 
-    emit connectionStateChanged(connState);
+    connectionStateChanged.notify(connState);
 }
 
 void ConferenceManager::markConnected(const char* source, bool emitStateSignal)
@@ -706,85 +728,88 @@ void ConferenceManager::markConnected(const char* source, bool emitStateSignal)
     connected_ = true;
 
     const auto roomInfo = roomController_->roomInfo();
-    roomName_ = QString::fromStdString(roomInfo.name);
+    roomName_ = std::string(roomInfo.name);
 
     auto localParticipant = roomController_->localParticipant();
     if (localParticipant) {
-        participantName_ = QString::fromStdString(localParticipant->name());
-        participantIdentity_ = QString::fromStdString(localParticipant->identity());
+        participantName_ = std::string(localParticipant->name());
+        participantIdentity_ = std::string(localParticipant->identity());
     }
 
     reconcileParticipantsInternal(source);
-    if (!networkStatsTimer_.isActive()) {
-        networkStatsTimer_.start();
+    if (!networkStatsTimer_->isActive()) {
+        // 1 s repeating, same cadence as the QTimer it replaces.
+        networkStatsTimer_->start(std::chrono::milliseconds(1000), /*repeat=*/true);
     }
     pollLocalNetworkStats();
 
     if (!wasConnected) {
-        emit connected();
+        connected.notify();
         if (emitStateSignal) {
-            emit connectionStateChanged(livekit::ConnectionState::Connected);
+            connectionStateChanged.notify(livekit::ConnectionState::Connected);
         }
     }
 }
 
-void ConferenceManager::onRoomDisconnectedQueued(int reason)
+void ConferenceManager::onRoomDisconnected(int reason)
 {
     lastDisconnectReason_ = static_cast<livekit::DisconnectReason>(reason);
-    Logger::instance().info(QString("Room disconnected reason received: %1").arg(reason));
-    emit roomDisconnected(reason);
+    core::logInfo(core::str::cat("Room disconnected reason received: ", reason));
+    roomDisconnected.notify(reason);
 }
 
-void ConferenceManager::onDataReceivedQueued(QByteArray data, QString participantIdentity, QString topic)
+void ConferenceManager::onDataReceived(std::vector<std::uint8_t> data,
+                                       std::string participantIdentity,
+                                       std::string topic)
 {
-    Q_UNUSED(topic);
+    (void)topic;
 
     try {
-        QJsonDocument doc = QJsonDocument::fromJson(data);
+        const auto doc = nlohmann::json::parse(data.begin(), data.end(), nullptr,
+                                               /*allow_exceptions=*/false);
 
-        if (!doc.isObject()) {
+        if (doc.is_discarded() || !doc.is_object()) {
             return;
         }
 
-        QJsonObject json = doc.object();
-        QString type = json["type"].toString();
+        const std::string type = doc.value("type", std::string());
 
         if (type == "chat") {
             ChatMessage msg;
-            msg.sender = json["sender"].toString();
+            msg.sender = doc.value("sender", std::string());
             msg.senderIdentity = participantIdentity;
-            msg.message = json["message"].toString();
-            msg.timestamp = json["timestamp"].toVariant().toLongLong();
+            msg.message = doc.value("message", std::string());
+            msg.timestamp = doc.value("timestamp", std::int64_t{0});
             msg.isLocal = false;
 
-            Logger::instance().debug("Chat message received from " + msg.sender);
-            emit chatMessageReceived(msg);
+            core::logDebug(core::str::cat("Chat message received from ", msg.sender));
+            chatMessageReceived.notify(msg);
         }
 
     } catch (const std::exception& e) {
-        Logger::instance().error(QString("Failed to parse data: %1").arg(e.what()));
+        core::logError(core::str::cat("Failed to parse data: ", e.what()));
     }
 }
 
-void ConferenceManager::updateParticipantInfo(const QString& identity)
+void ConferenceManager::updateParticipantInfo(const std::string& identity)
 {
     if (!participantStore_->contains(identity)) {
         return;
     }
 
     if (!roomController_->room()) {
-        emit participantUpdated(participantStore_->participantInfo(identity));
+        participantUpdated.notify(participantStore_->participantInfo(identity));
         return;
     }
 
     auto participant = roomController_->remoteParticipant(identity);
     if (!participant) {
-        emit participantUpdated(participantStore_->participantInfo(identity));
+        participantUpdated.notify(participantStore_->participantInfo(identity));
         return;
     }
 
     ParticipantInfo updated = participantStore_->refreshParticipantInfo(identity);
-    emit participantUpdated(updated);
+    participantUpdated.notify(updated);
 }
 
 void ConferenceManager::reconcileParticipantsInternal(const char* source)
@@ -798,80 +823,79 @@ void ConferenceManager::reconcileParticipantsInternal(const char* source)
     }
 
     const auto remoteParticipants = roomController_->remoteParticipants();
-    QMap<QString, ParticipantInfo> remoteSnapshot;
+    std::map<std::string, ParticipantInfo> remoteSnapshot;
     for (const auto& participant : remoteParticipants) {
         if (!participant) {
             continue;
         }
 
-        const QString identity = QString::fromStdString(participant->identity());
-        if (identity.isEmpty()) {
+        const std::string identity = std::string(participant->identity());
+        if (identity.empty()) {
             continue;
         }
 
         ParticipantInfo info;
         info.identity = identity;
-        info.sid = QString::fromStdString(participant->sid());
-        info.name = QString::fromStdString(participant->name());
+        info.sid = std::string(participant->sid());
+        info.name = std::string(participant->name());
         info.isMicrophoneEnabled = false;
         info.isCameraEnabled = false;
         info.isScreenSharing = false;
         info.isHost = links::conference::parseIsHostFromParticipantMetadata(participant->metadata());
-        remoteSnapshot.insert(identity, info);
+        remoteSnapshot[identity] = info;
     }
 
-    const QList<ParticipantInfo> storedParticipants = participantStore_->participants();
-    QSet<QString> storedIds;
-    storedIds.reserve(storedParticipants.size());
+    const std::vector<ParticipantInfo> storedParticipants = participantStore_->participants();
+    std::set<std::string> storedIds;
 
-    QStringList removedIds;
-    QStringList addedIds;
+    std::vector<std::string> removedIds;
+    std::vector<std::string> addedIds;
 
     for (const ParticipantInfo& info : storedParticipants) {
-        if (info.identity.isEmpty()) {
+        if (info.identity.empty()) {
             continue;
         }
 
         storedIds.insert(info.identity);
-        if (!remoteSnapshot.contains(info.identity)) {
+        if (remoteSnapshot.find(info.identity) == remoteSnapshot.end()) {
             participantStore_->removeParticipant(info.identity);
-            emit participantLeft(info.identity);
-            removedIds.append(info.identity);
+            participantLeft.notify(info.identity);
+            removedIds.push_back(info.identity);
         }
     }
 
-    for (auto it = remoteSnapshot.cbegin(); it != remoteSnapshot.cend(); ++it) {
-        const ParticipantInfo& snapshotInfo = it.value();
-        if (storedIds.contains(it.key())) {
-            const ParticipantInfo currentInfo = participantStore_->participantInfo(it.key());
+    for (const auto& entry : remoteSnapshot) {
+        const std::string& identity = entry.first;
+        const ParticipantInfo& snapshotInfo = entry.second;
+        if (storedIds.find(identity) != storedIds.end()) {
+            const ParticipantInfo currentInfo = participantStore_->participantInfo(identity);
             if (currentInfo.sid != snapshotInfo.sid
                 || currentInfo.name != snapshotInfo.name
                 || currentInfo.isHost != snapshotInfo.isHost) {
-                ParticipantInfo updated = participantStore_->addParticipant(
-                    it.key(), snapshotInfo.sid, snapshotInfo.name, snapshotInfo.isHost);
-                emit participantUpdated(updated);
+                participantStore_->addParticipant(
+                    identity, snapshotInfo.sid, snapshotInfo.name, snapshotInfo.isHost);
             }
             continue;
         }
 
         ParticipantInfo added = participantStore_->addParticipant(
-            it.key(), snapshotInfo.sid, snapshotInfo.name, snapshotInfo.isHost);
-        emit participantJoined(added);
-        addedIds.append(it.key());
+            identity, snapshotInfo.sid, snapshotInfo.name, snapshotInfo.isHost);
+        participantJoined.notify(added);
+        addedIds.push_back(identity);
     }
 
-    if (!removedIds.isEmpty() || !addedIds.isEmpty()) {
-        QString message = QString("Participant reconciliation (%1): before=%2, after=%3")
-            .arg(source ? source : "unknown")
-            .arg(storedParticipants.size())
-            .arg(participantStore_->size());
-        if (!addedIds.isEmpty()) {
-            message += QString(", added=[%1]").arg(addedIds.join(","));
+    if (!removedIds.empty() || !addedIds.empty()) {
+        std::string message = core::str::cat(
+            "Participant reconciliation (", source ? source : "unknown",
+            "): before=", static_cast<unsigned long long>(storedParticipants.size()),
+            ", after=", participantStore_->size());
+        if (!addedIds.empty()) {
+            message += core::str::cat(", added=[", core::str::join(addedIds, ","), "]");
         }
-        if (!removedIds.isEmpty()) {
-            message += QString(", removed=[%1]").arg(removedIds.join(","));
+        if (!removedIds.empty()) {
+            message += core::str::cat(", removed=[", core::str::join(removedIds, ","), "]");
         }
-        Logger::instance().info(message);
+        core::logInfo(message);
     }
 }
 
@@ -882,16 +906,15 @@ void ConferenceManager::pollLocalNetworkStats()
     }
 
     const auto tracks = collectTrackStatsSources();
-    const qint64 nowMs = QDateTime::currentMSecsSinceEpoch();
-    QSet<QString> currentTrackSids;
-    currentTrackSids.reserve(static_cast<int>(tracks.size()));
+    const std::int64_t nowMs = core::nowMsSinceEpoch();
+    std::set<std::string> currentTrackSids;
     for (const auto& track : tracks) {
         if (!track) {
             continue;
         }
 
-        const QString sid = QString::fromStdString(track->sid());
-        if (!sid.isEmpty()) {
+        const std::string sid = std::string(track->sid());
+        if (!sid.empty()) {
             currentTrackSids.insert(sid);
         }
     }
@@ -915,7 +938,7 @@ void ConferenceManager::pollLocalNetworkStats()
             snapshot.sampledAtMs = nowMs;
             if (!networkStatsEquivalent(snapshot, localNetworkStats_)) {
                 localNetworkStats_ = snapshot;
-                emit localNetworkStatsUpdated(localNetworkStats_);
+                localNetworkStatsUpdated.notify(localNetworkStats_);
             }
         }
         return;
@@ -926,76 +949,15 @@ void ConferenceManager::pollLocalNetworkStats()
     }
 
     const NetworkByteCounters baselineCounters = previousNetworkByteCounters_;
-    const quint64 pollSeq = ++networkStatsPollSeq_;
+    const std::uint64_t pollSeq = ++networkStatsPollSeq_;
     networkStatsPollInFlight_ = true;
 
-    auto* watcher = new QFutureWatcher<AsyncNetworkPollResult>(this);
-    QObject::connect(watcher, &QFutureWatcher<AsyncNetworkPollResult>::finished,
-                     this, [this, watcher, pollSeq]() {
-        AsyncNetworkPollResult asyncResult;
+    // Runs on Qt's global thread pool (the same one QtConcurrent::run used),
+    // then hops the result back to the main thread. The pollSeq generation
+    // counter still discards stale results, exactly as before.
+    services_.background->run([this, tracks, baselineCounters, nowMs, pollSeq]() {
+        AsyncNetworkPollResult result;
         try {
-            asyncResult = watcher->result();
-        } catch (const std::exception& e) {
-            Logger::instance().warning(QString("Asynchronous network stats polling failed: %1")
-                                       .arg(e.what()));
-        } catch (...) {
-            Logger::instance().warning("Asynchronous network stats polling failed with unknown error");
-        }
-        watcher->deleteLater();
-
-        if (pollSeq != networkStatsPollSeq_) {
-            return;
-        }
-
-        networkStatsPollInFlight_ = false;
-        if (!connected_ || !roomController_ || !roomController_->room()) {
-            return;
-        }
-
-        if (!asyncResult.hasData) {
-            return;
-        }
-
-        const NetworkStatsAggregationResult& aggregated = asyncResult.aggregation;
-        previousNetworkByteCounters_ = aggregated.counters;
-
-        // Grace period: keep estimated stats for the first 5 seconds after connection
-        // to avoid a visual "blip" to empty values. After that, always use real data.
-        const qint64 now = QDateTime::currentMSecsSinceEpoch();
-        const bool withinGracePeriod = usingEstimatedNetworkStats_
-            && (now - localNetworkStats_.sampledAtMs) < 5000;
-        if (!hasNetworkStatsData(aggregated.snapshot) && withinGracePeriod) {
-            return;
-        }
-        usingEstimatedNetworkStats_ = false;
-
-        if (!networkStatsEquivalent(localNetworkStats_, aggregated.snapshot)) {
-            localNetworkStats_ = aggregated.snapshot;
-            Logger::instance().debug(
-                QString("LiveKit network stats updated: rtt=%1ms, jitter=%2ms, loss=%3%, up=%4kbps, down=%5kbps, "
-                        "bw=%6kbps, proto=%7, video=%8x%9@%10fps, acodec=%11, vcodec=%12")
-                    .arg(localNetworkStats_.rttMs)
-                    .arg(localNetworkStats_.jitterMs)
-                    .arg(localNetworkStats_.packetLossPercent, 0, 'f', 1)
-                    .arg(localNetworkStats_.uplinkKbps)
-                    .arg(localNetworkStats_.downlinkKbps)
-                    .arg(localNetworkStats_.availableSendBandwidthKbps)
-                    .arg(localNetworkStats_.transportProtocol.isEmpty()
-                        ? QStringLiteral("none") : localNetworkStats_.transportProtocol)
-                    .arg(localNetworkStats_.videoWidth)
-                    .arg(localNetworkStats_.videoHeight)
-                    .arg(localNetworkStats_.videoFps, 0, 'f', 1)
-                    .arg(localNetworkStats_.audioCodec.isEmpty()
-                        ? QStringLiteral("none") : localNetworkStats_.audioCodec)
-                    .arg(localNetworkStats_.videoCodec.isEmpty()
-                        ? QStringLiteral("none") : localNetworkStats_.videoCodec));
-            emit localNetworkStatsUpdated(localNetworkStats_);
-        }
-    });
-
-    QFuture<AsyncNetworkPollResult> future = QtConcurrent::run(
-        [tracks, baselineCounters, nowMs]() -> AsyncNetworkPollResult {
-            AsyncNetworkPollResult result;
             std::vector<livekit::RtcStats> aggregatedStats;
             for (const auto& track : tracks) {
                 if (!track) {
@@ -1011,20 +973,76 @@ void ConferenceManager::pollLocalNetworkStats()
                 }
             }
 
-            if (aggregatedStats.empty()) {
-                return result;
+            if (!aggregatedStats.empty()) {
+                result.hasData = true;
+                result.aggregation = aggregateNetworkStats(aggregatedStats, baselineCounters, nowMs);
             }
+        } catch (const std::exception& e) {
+            core::logWarning(core::str::cat("Asynchronous network stats polling failed: ", e.what()));
+        } catch (...) {
+            core::logWarning("Asynchronous network stats polling failed with unknown error");
+        }
 
-            result.hasData = true;
-            result.aggregation = aggregateNetworkStats(aggregatedStats, baselineCounters, nowMs);
-            return result;
-        });
-    watcher->setFuture(future);
+        core::postGuarded(*services_.taskRunner, lifetime_,
+            [this, result = std::move(result), pollSeq]() mutable {
+                applyNetworkPollResult(std::move(result), pollSeq);
+            });
+    });
 }
 
-QString ConferenceManager::resolveLocalParticipantIdentity() const
+void ConferenceManager::applyNetworkPollResult(AsyncNetworkPollResult asyncResult,
+                                               std::uint64_t pollSeq)
 {
-    if (!participantIdentity_.isEmpty()) {
+    if (pollSeq != networkStatsPollSeq_) {
+        return;
+    }
+
+    networkStatsPollInFlight_ = false;
+    if (!connected_ || !roomController_ || !roomController_->room()) {
+        return;
+    }
+
+    if (!asyncResult.hasData) {
+        return;
+    }
+
+    const NetworkStatsAggregationResult& aggregated = asyncResult.aggregation;
+    previousNetworkByteCounters_ = aggregated.counters;
+
+    // Grace period: keep estimated stats for the first 5 seconds after connection
+    // to avoid a visual "blip" to empty values. After that, always use real data.
+    const std::int64_t now = core::nowMsSinceEpoch();
+    const bool withinGracePeriod = usingEstimatedNetworkStats_
+        && (now - localNetworkStats_.sampledAtMs) < 5000;
+    if (!hasNetworkStatsData(aggregated.snapshot) && withinGracePeriod) {
+        return;
+    }
+    usingEstimatedNetworkStats_ = false;
+
+    if (!networkStatsEquivalent(localNetworkStats_, aggregated.snapshot)) {
+        localNetworkStats_ = aggregated.snapshot;
+        core::logDebug(core::str::cat(
+            "LiveKit network stats updated: rtt=", localNetworkStats_.rttMs,
+            "ms, jitter=", localNetworkStats_.jitterMs,
+            "ms, loss=", core::str::num(localNetworkStats_.packetLossPercent, 1),
+            "%, up=", localNetworkStats_.uplinkKbps,
+            "kbps, down=", localNetworkStats_.downlinkKbps,
+            "kbps, bw=", localNetworkStats_.availableSendBandwidthKbps,
+            "kbps, proto=", localNetworkStats_.transportProtocol.empty()
+                ? std::string("none") : localNetworkStats_.transportProtocol,
+            ", video=", localNetworkStats_.videoWidth, "x", localNetworkStats_.videoHeight,
+            "@", core::str::num(localNetworkStats_.videoFps, 1),
+            "fps, acodec=", localNetworkStats_.audioCodec.empty()
+                ? std::string("none") : localNetworkStats_.audioCodec,
+            ", vcodec=", localNetworkStats_.videoCodec.empty()
+                ? std::string("none") : localNetworkStats_.videoCodec));
+        localNetworkStatsUpdated.notify(localNetworkStats_);
+    }
+}
+
+std::string ConferenceManager::resolveLocalParticipantIdentity() const
+{
+    if (!participantIdentity_.empty()) {
         return participantIdentity_;
     }
 
@@ -1037,7 +1055,7 @@ QString ConferenceManager::resolveLocalParticipantIdentity() const
         return {};
     }
 
-    return QString::fromStdString(localParticipant->identity());
+    return std::string(localParticipant->identity());
 }
 
 std::vector<std::shared_ptr<livekit::Track>> ConferenceManager::collectTrackStatsSources() const
@@ -1093,7 +1111,7 @@ std::vector<std::shared_ptr<livekit::Track>> ConferenceManager::collectTrackStat
 
 NetworkStatsSnapshot ConferenceManager::buildEstimatedNetworkSnapshot(
     NetworkQualityLevel quality,
-    qint64 nowMs) const
+    std::int64_t nowMs) const
 {
     NetworkStatsSnapshot snapshot;
     snapshot.sampledAtMs = nowMs;

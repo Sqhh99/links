@@ -1,17 +1,16 @@
 #include "audio_processing_module.h"
 
-// Conditionally include logger (not available in unit tests without Qt)
-#ifndef AUDIO_PROCESSING_TESTS
-#include "../utils/logger.h"
-#define APM_LOG_INFO(msg) Logger::instance().info(msg)
-#define APM_LOG_WARNING(msg) Logger::instance().warning(msg)
-#define APM_LOG_ERROR(msg) Logger::instance().error(msg)
-#else
-// No-op logging for tests
-#define APM_LOG_INFO(msg) (void)0
-#define APM_LOG_WARNING(msg) (void)0
-#define APM_LOG_ERROR(msg) (void)0
-#endif
+#include "base/log.h"
+#include "base/strings.h"
+
+// The AUDIO_PROCESSING_TESTS guards that used to wrap every log call are gone:
+// core::log has no Qt dependency, so this file compiles identically in the app
+// and in the unit tests.
+#define APM_LOG_INFO(msg) links::core::logInfo(msg)
+#define APM_LOG_WARNING(msg) links::core::logWarning(msg)
+#define APM_LOG_ERROR(msg) links::core::logError(msg)
+
+namespace core = links::core;
 
 // WebRTC Audio Processing includes
 #include "api/audio/audio_processing.h"
@@ -82,14 +81,7 @@ bool AudioProcessingModule::initialize()
     auto apm = builder.Create();
     if (apm) {
         apm_ = std::unique_ptr<webrtc::AudioProcessing>(apm.release());
-#ifndef AUDIO_PROCESSING_TESTS
-        Logger::instance().info(QString("WebRTC APM initialized (AEC=%1, NS=%2[lvl=%3], AGC=%4, HPF=%5)")
-                               .arg(echoCancellationEnabled_)
-                               .arg(noiseSuppressionEnabled_)
-                               .arg(static_cast<int>(nsLevel_))
-                               .arg(autoGainControlEnabled_)
-                               .arg(highPassFilterEnabled_));
-#endif
+        core::logInfo(core::str::cat("WebRTC APM initialized (AEC=", echoCancellationEnabled_, ", NS=", noiseSuppressionEnabled_, "[lvl=", static_cast<int>(nsLevel_), "], AGC=", autoGainControlEnabled_, ", HPF=", highPassFilterEnabled_, ")"));
         return true;
     } else {
         APM_LOG_ERROR("Failed to create WebRTC Audio Processing Module");
@@ -128,14 +120,7 @@ void AudioProcessingModule::applyConfig()
     
     apm_->ApplyConfig(config);
     
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("APM config updated (AEC=%1, NS=%2[lvl=%3], AGC=%4, HPF=%5)")
-                           .arg(echoCancellationEnabled_)
-                           .arg(noiseSuppressionEnabled_)
-                           .arg(static_cast<int>(nsLevel_))
-                           .arg(autoGainControlEnabled_)
-                           .arg(highPassFilterEnabled_));
-#endif
+    core::logInfo(core::str::cat("APM config updated (AEC=", echoCancellationEnabled_, ", NS=", noiseSuppressionEnabled_, "[lvl=", static_cast<int>(nsLevel_), "], AGC=", autoGainControlEnabled_, ", HPF=", highPassFilterEnabled_, ")"));
 }
 
 // =============================================================================
@@ -146,36 +131,28 @@ void AudioProcessingModule::setEchoCancellationEnabled(bool enabled)
 {
     echoCancellationEnabled_ = enabled;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("Echo cancellation %1").arg(enabled ? "enabled" : "disabled"));
-#endif
+    core::logInfo(core::str::cat("Echo cancellation ", enabled ? "enabled" : "disabled"));
 }
 
 void AudioProcessingModule::setNoiseSuppressionEnabled(bool enabled)
 {
     noiseSuppressionEnabled_ = enabled;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("Noise suppression %1").arg(enabled ? "enabled" : "disabled"));
-#endif
+    core::logInfo(core::str::cat("Noise suppression ", enabled ? "enabled" : "disabled"));
 }
 
 void AudioProcessingModule::setAutoGainControlEnabled(bool enabled)
 {
     autoGainControlEnabled_ = enabled;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("Auto gain control %1").arg(enabled ? "enabled" : "disabled"));
-#endif
+    core::logInfo(core::str::cat("Auto gain control ", enabled ? "enabled" : "disabled"));
 }
 
 void AudioProcessingModule::setHighPassFilterEnabled(bool enabled)
 {
     highPassFilterEnabled_ = enabled;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("High-pass filter %1").arg(enabled ? "enabled" : "disabled"));
-#endif
+    core::logInfo(core::str::cat("High-pass filter ", enabled ? "enabled" : "disabled"));
 }
 
 // =============================================================================
@@ -186,19 +163,14 @@ void AudioProcessingModule::setNoiseSuppressionLevel(NoiseSuppressionLevel level
 {
     nsLevel_ = level;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("Noise suppression level set to %1").arg(static_cast<int>(level)));
-#endif
+    core::logInfo(core::str::cat("Noise suppression level set to ", static_cast<int>(level)));
 }
 
 void AudioProcessingModule::setGainControlMode(GainControlMode mode)
 {
     agcMode_ = mode;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("AGC mode set to %1")
-                           .arg(mode == GainControlMode::kAdaptiveDigital ? "AdaptiveDigital" : "FixedDigital"));
-#endif
+    core::logInfo(core::str::cat("AGC mode set to ", mode == GainControlMode::kAdaptiveDigital ? "AdaptiveDigital" : "FixedDigital"));
 }
 
 void AudioProcessingModule::setFixedDigitalGainDb(float gainDb)
@@ -217,9 +189,7 @@ void AudioProcessingModule::setEchoEnhancedFilterEnabled(bool enabled)
 {
     echoEnhancedFilter_ = enabled;
     applyConfig();
-#ifndef AUDIO_PROCESSING_TESTS
-    Logger::instance().info(QString("AEC enhanced filter %1").arg(enabled ? "enabled" : "disabled"));
-#endif
+    core::logInfo(core::str::cat("AEC enhanced filter ", enabled ? "enabled" : "disabled"));
 }
 
 void AudioProcessingModule::setStreamDelayMs(int delayMs)
@@ -263,9 +233,7 @@ bool AudioProcessingModule::processFrame(int16_t* data, int samples, int sampleR
         );
         
         if (result != webrtc::AudioProcessing::kNoError) {
-#ifndef AUDIO_PROCESSING_TESTS
-            Logger::instance().warning(QString("APM ProcessStream error: %1").arg(result));
-#endif
+            core::logWarning(core::str::cat("APM ProcessStream error: ", result));
             return false;
         }
         
@@ -306,9 +274,7 @@ bool AudioProcessingModule::processReverseStream(const int16_t* data, int sample
         );
         
         if (result != webrtc::AudioProcessing::kNoError) {
-#ifndef AUDIO_PROCESSING_TESTS
-            Logger::instance().warning(QString("APM ProcessReverseStream error: %1").arg(result));
-#endif
+            core::logWarning(core::str::cat("APM ProcessReverseStream error: ", result));
             return false;
         }
         

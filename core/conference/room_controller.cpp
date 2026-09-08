@@ -24,12 +24,12 @@ void RoomController::clearDelegate()
     }
 }
 
-bool RoomController::connectToRoom(const QString& url,
-                                   const QString& token,
+bool RoomController::connectToRoom(const std::string& url,
+                                   const std::string& token,
                                    const livekit::RoomOptions& options)
 {
     ensureRoom();
-    return room_->connect(url.toStdString(), token.toStdString(), options);
+    return room_->connect(url, token, options);
 }
 
 void RoomController::disconnectFromRoom(livekit::DisconnectReason reason)
@@ -63,9 +63,9 @@ std::shared_ptr<livekit::LocalParticipant> RoomController::localParticipant() co
     return room_ ? room_->localParticipant().lock() : nullptr;
 }
 
-std::shared_ptr<livekit::RemoteParticipant> RoomController::remoteParticipant(const QString& identity) const
+std::shared_ptr<livekit::RemoteParticipant> RoomController::remoteParticipant(const std::string& identity) const
 {
-    return room_ ? room_->remoteParticipant(identity.toStdString()).lock() : nullptr;
+    return room_ ? room_->remoteParticipant(identity).lock() : nullptr;
 }
 
 std::vector<std::shared_ptr<livekit::RemoteParticipant>> RoomController::remoteParticipants() const

@@ -1,42 +1,45 @@
 #ifndef CORE_CONFERENCE_PARTICIPANT_STORE_H
 #define CORE_CONFERENCE_PARTICIPANT_STORE_H
 
-#include <QList>
-#include <QMap>
-#include <QString>
+#include <map>
+#include <string>
+#include <vector>
 #include "conference_types.h"
 
 class ParticipantStore {
 public:
-    ParticipantInfo addParticipant(const QString& identity,
-                                   const QString& sid,
-                                   const QString& name,
+    ParticipantInfo addParticipant(const std::string& identity,
+                                   const std::string& sid,
+                                   const std::string& name,
                                    bool isHost = false);
-    void removeParticipant(const QString& identity);
-    bool contains(const QString& identity) const;
-    ParticipantInfo participantInfo(const QString& identity) const;
-    QList<ParticipantInfo> participants() const;
+    void removeParticipant(const std::string& identity);
+    bool contains(const std::string& identity) const;
+    ParticipantInfo participantInfo(const std::string& identity) const;
+    std::vector<ParticipantInfo> participants() const;
     int size() const;
 
     void clear();
 
-    void setTrackSource(const QString& trackSid, livekit::TrackSource source);
-    void setTrackKind(const QString& trackSid, livekit::TrackKind kind);
-    void removeTrack(const QString& trackSid);
-    bool hasTrackSource(const QString& trackSid) const;
-    livekit::TrackSource trackSource(const QString& trackSid) const;
-    livekit::TrackKind trackKind(const QString& trackSid) const;
+    void setTrackSource(const std::string& trackSid, livekit::TrackSource source);
+    void setTrackKind(const std::string& trackSid, livekit::TrackKind kind);
+    void removeTrack(const std::string& trackSid);
+    bool hasTrackSource(const std::string& trackSid) const;
+    livekit::TrackSource trackSource(const std::string& trackSid) const;
+    livekit::TrackKind trackKind(const std::string& trackSid) const;
 
-    void setScreenShareActive(const QString& identity, bool active);
-    bool screenShareActive(const QString& identity) const;
+    void setScreenShareActive(const std::string& identity, bool active);
+    bool screenShareActive(const std::string& identity) const;
 
-    ParticipantInfo refreshParticipantInfo(const QString& identity);
+    ParticipantInfo refreshParticipantInfo(const std::string& identity);
 
 private:
-    QMap<QString, ParticipantInfo> participants_;
-    QMap<QString, livekit::TrackSource> trackSources_;
-    QMap<QString, livekit::TrackKind> trackKinds_;
-    QMap<QString, bool> screenShareActive_;
+    // std::map like QMap keeps participants() in a deterministic key order.
+    // The order differs from QMap's for identities above U+FFFF (UTF-8 byte
+    // order vs UTF-16 code-unit order); identities are server-issued and ASCII.
+    std::map<std::string, ParticipantInfo> participants_;
+    std::map<std::string, livekit::TrackSource> trackSources_;
+    std::map<std::string, livekit::TrackKind> trackKinds_;
+    std::map<std::string, bool> screenShareActive_;
 };
 
 #endif // CORE_CONFERENCE_PARTICIPANT_STORE_H

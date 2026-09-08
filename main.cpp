@@ -18,6 +18,7 @@
 #include "ui/backend/AppearanceManager.h"
 #include "ui/backend/LocalRecordingManager.h"
 #include "utils/logger.h"
+#include "ui/adapters/qt/qt_log_sink.h"
 #include "livekit/livekit.h"
 
 static QQmlApplicationEngine* g_engine = nullptr;
@@ -129,6 +130,12 @@ int main(int argc, char* argv[])
     QQuickStyle::setStyle("Basic");
 
     Logger::instance().init();
+
+    // Route core's Qt-free log facade into the existing Qt Logger, so core can
+    // log without linking Qt while output format and destination stay put.
+    static links::qt_adapter::QtLogSink coreLogSink;
+    links::core::setLogSink(&coreLogSink);
+
     Logger::instance().log("Application started");
 
     livekit::initialize(livekit::LogLevel::Info);

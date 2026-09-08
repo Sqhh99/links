@@ -19,6 +19,12 @@ struct NetworkStatsAggregationResult {
     NetworkByteCounters counters;
 };
 
+/// Result of one off-thread stats poll, handed back to the main thread.
+struct AsyncNetworkPollResult {
+    bool hasData{false};
+    NetworkStatsAggregationResult aggregation;
+};
+
 NetworkStatsAggregationResult aggregateNetworkStats(
     const std::vector<livekit::RtcStats>& stats,
     const NetworkByteCounters& previousCounters,

@@ -3,7 +3,7 @@
 
 #include <memory>
 #include <vector>
-#include <QString>
+#include <string>
 #include "livekit/room.h"
 #include "livekit/livekit.h"
 
@@ -15,13 +15,13 @@ public:
     void setDelegate(livekit::RoomDelegate* delegate);
     void clearDelegate();
 
-    bool connectToRoom(const QString& url, const QString& token, const livekit::RoomOptions& options);
+    bool connectToRoom(const std::string& url, const std::string& token, const livekit::RoomOptions& options);
     void disconnectFromRoom(livekit::DisconnectReason reason = livekit::DisconnectReason::ClientInitiated);
     void reset();
 
     livekit::RoomInfoData roomInfo() const;
     std::shared_ptr<livekit::LocalParticipant> localParticipant() const;
-    std::shared_ptr<livekit::RemoteParticipant> remoteParticipant(const QString& identity) const;
+    std::shared_ptr<livekit::RemoteParticipant> remoteParticipant(const std::string& identity) const;
     std::vector<std::shared_ptr<livekit::RemoteParticipant>> remoteParticipants() const;
 
 private:

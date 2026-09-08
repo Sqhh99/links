@@ -1,38 +1,38 @@
 #ifndef MICROPHONE_CAPTURER_H
 #define MICROPHONE_CAPTURER_H
 
-#include <QObject>
-#include <QAudioSource>
-#include <QAudioFormat>
-#include <QIODevice>
+#include <cstdint>
 #include <memory>
+#include <string>
 #include <vector>
-#include "livekit/audio_source.h"
-#include "audio_processing_module.h"
 
-class MicrophoneCapturer : public QObject
+#include "audio_processing_module.h"
+#include "base/signal.h"
+#include "livekit/audio_source.h"
+#include "media/audio_input.h"
+
+/**
+ * Turns raw microphone PCM into 10 ms LiveKit audio frames.
+ *
+ * The QAudioSource plumbing moved behind links::core::AudioInput; the parts
+ * that matter -- the 480-sample framing buffer, the WebRTC
+ * AudioProcessingModule and the AEC reverse stream -- stayed here.
+ */
+class MicrophoneCapturer
 {
-    Q_OBJECT
-    
 public:
-    explicit MicrophoneCapturer(QObject* parent = nullptr);
-    ~MicrophoneCapturer() override;
-    
-    // Start/stop capture
+    explicit MicrophoneCapturer(links::core::AudioInput& input);
+    ~MicrophoneCapturer();
+
     bool start();
     void stop();
     bool isActive() const { return isActive_; }
-    
-    // Get the LiveKit audio source
+
     std::shared_ptr<livekit::AudioSource> getAudioSource() const { return livekitAudioSource_; }
-    
-    // Get available audio devices
-    static QList<QAudioDevice> availableDevices();
-    
-    // Set audio device (must be called before start())
-    void setDevice(const QAudioDevice& device);
-    void setDeviceById(const QByteArray& deviceId);
-    
+
+    /// Must be called before start(). Empty id selects the system default.
+    void setDeviceById(const std::string& deviceId);
+
     // Audio processing options (AEC, NS, AGC) - delegates to AudioProcessingModule
     void setEchoCancellationEnabled(bool enabled);
     void setNoiseSuppressionEnabled(bool enabled);
@@ -52,38 +52,27 @@ public:
      * Must be called with playback audio data for AEC to work.
      */
     void feedReverseStream(const int16_t* data, int samples, int sampleRate, int channels);
-    
-    // Get the audio processing module for advanced configuration
+
     AudioProcessingModule* audioProcessingModule() { return &apm_; }
-    
-signals:
-    void error(const QString& message);
-    
-private slots:
-    void onReadyRead();
-    void onStateChanged(QAudio::State state);
-    
+
+    links::core::Signal<const std::string&> error;
+
 private:
-    void processAudioData(const QByteArray& data);
+    void onSamples(const std::int16_t* data, std::size_t sampleCount);
     void sendBufferedFrames();
-    
-    std::unique_ptr<QAudioSource> audioSource_;
+
+    links::core::AudioInput& input_;
     std::shared_ptr<livekit::AudioSource> livekitAudioSource_;
-    QIODevice* audioInput_;
-    QAudioFormat format_;
-    
-    bool isActive_;
-    int64_t samplesProcessed_;
-    
-    // Selected audio device
-    QAudioDevice selectedDevice_;
-    
-    // Audio Processing Module
+    links::core::AudioFormat format_{48000, 1, links::core::SampleFormat::Int16};
+
+    bool isActive_{false};
+    std::int64_t samplesProcessed_{0};
+    std::int64_t lastLoggedSamples_{0};
+
     AudioProcessingModule apm_;
-    
-    // Audio buffer for accumulating samples to send in 10ms frames
+
     // At 48kHz mono, 10ms = 480 samples
-    static constexpr int kFrameSizeSamples = 480; // 10ms at 48kHz
+    static constexpr int kFrameSizeSamples = 480;
     std::vector<int16_t> audioBuffer_;
 };
 

@@ -36,6 +36,37 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
+    # core/ must never depend on Qt. links_core and links_core_base link no
+    # Qt6::* target, so a Qt include there is already a compile error -- this
+    # check just fails faster and with a clearer message. It also catches the
+    # Qt keyword macros (emit/signals/slots), which would not fail to compile
+    # but would silently break any translation unit that also includes Qt.
+    - name: Check core is Qt-free
+      shell: bash
+      run: |
+        set -e
+        hits=$(grep -rnE '#include *[<"]Q[A-Za-z]|Q_OBJECT|Q_DECLARE_METATYPE' \
+                 --include='*.h' --include='*.cpp' --include='*.mm' core/ || true)
+        if [ -n "$hits" ]; then
+          echo "Qt dependency found in core/:"
+          echo "$hits"
+          exit 1
+        fi
+        kw=$(grep -rnE '^[^/*]*\b(emit|signals|slots)\b *[({:]' \
+               --include='*.h' --include='*.cpp' core/ || true)
+        if [ -n "$kw" ]; then
+          echo "Qt keyword macro used as an identifier in core/:"
+          echo "$kw"
+          exit 1
+        fi
+        deps=$(grep -rn '#include ".*utils/' --include='*.h' --include='*.cpp' core/ || true)
+        if [ -n "$deps" ]; then
+          echo "core/ must not depend on utils/ (that layer is Qt):"
+          echo "$deps"
+          exit 1
+        fi
+        echo "OK: core/ is Qt-free"
+
     # Install Qt
     - name: Install Qt
       uses: jurplel/install-qt-action@v4

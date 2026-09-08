@@ -10,6 +10,10 @@ namespace links {
 namespace core {
 
 std::vector<WindowInfo> enumerateWindows();
+
+/// Monitors as the capture backends see them. ui/ matches a QScreen against
+/// these to obtain a MonitorId, which keeps QScreen out of core.
+std::vector<MonitorInfo> enumerateMonitors();
 bool isWindowShareSupportedOnCurrentPlatform();
 bool isScreenShareSupportedOnCurrentPlatform();
 bool hasScreenCapturePermission();

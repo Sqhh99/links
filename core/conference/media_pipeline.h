@@ -1,22 +1,18 @@
 #ifndef CORE_CONFERENCE_MEDIA_PIPELINE_H
 #define CORE_CONFERENCE_MEDIA_PIPELINE_H
 
-#include <QAudioFormat>
-#include <QAudioSink>
-#include <QImage>
-#include <QMap>
-#include <QIODevice>
-#include <QSharedPointer>
-#include <QString>
-#include <QObject>
-#include <QMediaDevices>
-#include <QAudioDevice>
 #include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
 #include <memory>
+#include <string>
 #include <thread>
+
+#include "../base/executor.h"
+#include "../base/signal.h"
+#include "../media/audio_player.h"
+#include "../media/video_frame.h"
 #include "livekit/livekit.h"
 
 class ParticipantStore;
@@ -27,28 +23,28 @@ class ParticipantStore;
  */
 using ReverseAudioCallback = std::function<void(const int16_t*, int, int, int)>;
 
-class MediaPipeline : public QObject {
-    Q_OBJECT
-
+class MediaPipeline {
 public:
-    explicit MediaPipeline(ParticipantStore* participantStore, QObject* parent = nullptr);
-    ~MediaPipeline() override;
+    MediaPipeline(ParticipantStore* participantStore,
+                  links::core::TaskRunner& taskRunner,
+                  links::core::AudioPlayerFactory& audioPlayers);
+    ~MediaPipeline();
 
-    void startVideoStreamReader(const QString& trackSid,
-                                const QString& participantIdentity,
+    void startVideoStreamReader(const std::string& trackSid,
+                                const std::string& participantIdentity,
                                 std::shared_ptr<livekit::VideoStream> stream);
-    void startAudioStreamReader(const QString& trackSid,
-                                const QString& participantIdentity,
+    void startAudioStreamReader(const std::string& trackSid,
+                                const std::string& participantIdentity,
                                 std::shared_ptr<livekit::AudioStream> stream);
-    void stopTrack(const QString& trackSid);
+    void stopTrack(const std::string& trackSid);
     void stopAll();
 
-    void setVideoStream(const QString& trackSid, std::shared_ptr<livekit::VideoStream> stream);
-    void setAudioStream(const QString& trackSid, std::shared_ptr<livekit::AudioStream> stream);
-    bool hasVideoStream(const QString& trackSid) const;
-    bool hasAudioStream(const QString& trackSid) const;
-    void removeVideoStream(const QString& trackSid);
-    void removeAudioStream(const QString& trackSid);
+    void setVideoStream(const std::string& trackSid, std::shared_ptr<livekit::VideoStream> stream);
+    void setAudioStream(const std::string& trackSid, std::shared_ptr<livekit::AudioStream> stream);
+    bool hasVideoStream(const std::string& trackSid) const;
+    bool hasAudioStream(const std::string& trackSid) const;
+    void removeVideoStream(const std::string& trackSid);
+    void removeAudioStream(const std::string& trackSid);
 
     /**
      * Set a callback that will be invoked with every remote audio frame
@@ -56,37 +52,45 @@ public:
      */
     void setReverseAudioCallback(ReverseAudioCallback callback);
 
-signals:
-    void videoFrameReady(const QString& participantIdentity,
-                         const QString& trackSid,
-                         const QImage& frame,
-                         livekit::TrackSource source);
-    void audioActivity(const QString& participantIdentity, bool hasAudio);
+    // Notified on the main thread.
+    links::core::Signal<const std::string&, const std::string&,
+                        const links::core::VideoFrame&, livekit::TrackSource> videoFrameReady;
+    links::core::Signal<const std::string&, bool> audioActivity;
 
 private:
     struct AudioPlayback {
-        QSharedPointer<QAudioSink> sink;
-        QIODevice* device{nullptr};
-        QAudioDevice outputDevice;
-        QAudioFormat format;
+        std::unique_ptr<links::core::AudioPlayer> player;
+        links::core::AudioFormat format;
+        std::string deviceId;
     };
 
     void handleVideoFrame(const livekit::VideoFrameEvent& event,
-                          const QString& trackSid,
-                          const QString& participantIdentity);
+                          const std::string& trackSid,
+                          const std::string& participantIdentity);
     void handleAudioFrame(const livekit::AudioFrameEvent& event,
-                          const QString& trackSid,
-                          const QString& participantIdentity);
-    void stopStreamReaders(const QString& trackSid);
+                          const std::string& trackSid,
+                          const std::string& participantIdentity);
+    void stopStreamReaders(const std::string& trackSid);
 
     ParticipantStore* participantStore_;
-    QMap<QString, std::shared_ptr<livekit::VideoStream>> videoStreams_;
-    QMap<QString, std::shared_ptr<livekit::AudioStream>> audioStreams_;
-    std::map<QString, std::unique_ptr<std::thread>> videoStreamThreads_;
-    std::map<QString, std::unique_ptr<std::thread>> audioStreamThreads_;
-    QMap<QString, std::atomic<bool>*> streamStopFlags_;
-    QMap<QString, AudioPlayback> audioPlayers_;
+    links::core::TaskRunner& taskRunner_;
+    links::core::AudioPlayerFactory& audioPlayerFactory_;
+
+    std::map<std::string, std::shared_ptr<livekit::VideoStream>> videoStreams_;
+    std::map<std::string, std::shared_ptr<livekit::AudioStream>> audioStreams_;
+    std::map<std::string, std::unique_ptr<std::thread>> videoStreamThreads_;
+    std::map<std::string, std::unique_ptr<std::thread>> audioStreamThreads_;
+
+    // shared_ptr, not a raw owning pointer: the reader thread holds a strong
+    // reference, so the flag stays alive even if the map entry is erased while
+    // the thread is still winding down.
+    std::map<std::string, std::shared_ptr<std::atomic<bool>>> streamStopFlags_;
+
+    std::map<std::string, AudioPlayback> audioPlayers_;
     ReverseAudioCallback reverseAudioCallback_;
+
+    // Must stay last: cancels in-flight posts from reader threads first.
+    links::core::LifetimeToken lifetime_;
 };
 
 #endif // CORE_CONFERENCE_MEDIA_PIPELINE_H
