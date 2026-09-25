@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Controls
 
 TextField {
@@ -6,19 +7,19 @@ TextField {
 
     property bool error: false
 
-    implicitHeight: 44
-    color: "#111827"
-    placeholderTextColor: "#C7CCD5"
-    selectionColor: "#2563EB"
-    font.pixelSize: 15
-    leftPadding: 16
-    rightPadding: 16
+    implicitHeight: 40
+    color: Theme.textPrimary
+    placeholderTextColor: Theme.inputPlaceholder
+    selectionColor: Theme.brand
+    font.pixelSize: 14
+    leftPadding: 12
+    rightPadding: 12
 
     background: Rectangle {
-        color: "#FFFFFF"
-        border.color: root.error ? "#EF4444" : (root.activeFocus ? "#2563EB" : "#D1D5DB")
+        color: Theme.inputBackground
+        border.color: root.error ? Theme.danger : (root.activeFocus ? Theme.brand : Theme.inputBorder)
         border.width: 1
-        radius: 10
+        radius: 8
 
         Behavior on border.color {
             ColorAnimation { duration: 150 }

@@ -4,7 +4,7 @@ import QtQuick.Controls
 import Links
 import Links.Backend 1.0
 
-Rectangle {
+Item {
     id: root
 
     property var meetingsModel: null
@@ -14,196 +14,132 @@ Rectangle {
     signal joinMeeting(string meetingNo)
     signal cancelMeeting(string meetingNo)
 
-    radius: 14
-    color: Theme.cardBackground
-    border.color: Theme.borderLight
-    border.width: 1
-
     TextEdit {
         id: copyHelper
         visible: false
     }
 
-    function tagBackground(status) {
-        if (status === "scheduled") return "#FFF7ED"
-        if (status === "open") return "#EFF6FF"
-        if (status === "ended") return "#F3F4F6"
-        if (status === "cancelled") return "#FEF2F2"
-        return "#F3F4F6"
-    }
-
-    function tagBorder(status) {
-        if (status === "scheduled") return "#FCD34D"
-        if (status === "open") return "#BFDBFE"
-        if (status === "ended") return "#D1D5DB"
-        if (status === "cancelled") return "#FECACA"
-        return "#D1D5DB"
-    }
-
-    function tagColor(status) {
-        if (status === "scheduled") return "#B45309"
-        if (status === "open") return "#2563EB"
-        if (status === "ended") return "#4B5563"
-        if (status === "cancelled") return "#B91C1C"
-        return "#4B5563"
+    function copyText(text) {
+        copyHelper.text = text
+        copyHelper.selectAll()
+        copyHelper.copy()
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 18
-        spacing: 12
-
-        RowLayout {
-            Layout.fillWidth: true
-
-            Text {
-                text: "我的预定"
-                color: Theme.textPrimary
-                font.pixelSize: 15
-                font.weight: Font.DemiBold
-            }
-
-            Item { Layout.fillWidth: true }
-
-            BusyIndicator {
-                running: root.loading
-                visible: root.loading
-                width: 18
-                height: 18
-            }
-        }
+        spacing: 6
 
         ListView {
             id: meetingList
             Layout.fillWidth: true
             Layout.fillHeight: true
-            spacing: 10
+            spacing: 2
             clip: true
             model: root.meetingsModel
             visible: model && model.count > 0
+            boundsBehavior: Flickable.StopAtBounds
 
             delegate: Rectangle {
+                id: row
                 width: meetingList.width
-                radius: 10
-                color: Theme.cardBackground
-                border.color: Theme.borderLight
-                border.width: 1
-                implicitHeight: contentLayout.implicitHeight + 20
+                radius: Theme.radiusMd
+                color: rowHover.hovered ? Theme.hoverBackground : Theme.hoverClear
+                implicitHeight: contentLayout.implicitHeight + 16
+
+                Behavior on color { ColorAnimation { duration: 100 } }
+
+                HoverHandler { id: rowHover }
 
                 ColumnLayout {
                     id: contentLayout
-                    anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 8
-
-
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 4
 
                     RowLayout {
                         Layout.fillWidth: true
                         spacing: 8
 
                         Text {
-                            Layout.fillWidth: true
                             text: title
                             color: Theme.textPrimary
-                            font.pixelSize: 13
+                            font.pixelSize: 14
                             font.weight: Font.DemiBold
                             elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            Layout.maximumWidth: implicitWidth
                         }
 
-                        Rectangle {
-                            radius: 8
-                            color: root.tagBackground(status)
-                            border.color: root.tagBorder(status)
-                            border.width: 1
-                            Layout.preferredHeight: 22
-                            Layout.preferredWidth: statusLabel.implicitWidth + 14
-
-                            Text {
-                                id: statusLabel
-                                anchors.centerIn: parent
-                                text: tag
-                                color: root.tagColor(status)
-                                font.pixelSize: 10
-                                font.weight: Font.DemiBold
-                            }
+                        StatusPill {
+                            visible: tag.length > 0
+                            text: tag
+                            live: status === "open" || status === "active"
+                            upcoming: status === "scheduled"
                         }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 4
+                        spacing: 6
 
                         Text {
-                            text: "会议号: " + meetingNo
+                            text: time + "  ·  " + meetingNo
                             color: Theme.textMuted
-                            font.pixelSize: 11
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                            Layout.maximumWidth: implicitWidth
                         }
 
-                        Image {
-                            source: "qrc:/res/icon/copy.png"
-                            sourceSize.width: 14
-                            sourceSize.height: 14
-                            opacity: copyMa.containsMouse ? 1.0 : 0.6
+                        Icon {
+                            id: copyIcon
+                            name: copied ? "check" : "copy"
+                            size: 13
+                            color: copied ? Theme.success
+                                          : (copyHover.hovered ? Theme.brand : Theme.iconMuted)
+                            property bool copied: false
 
-                            MouseArea {
-                                id: copyMa
-                                anchors.fill: parent
-                                hoverEnabled: true
+                            HoverHandler {
+                                id: copyHover
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    copyHelper.text = meetingNo
-                                    copyHelper.selectAll()
-                                    copyHelper.copy()
-                                    copyTooltip.show()
+                            }
+                            TapHandler {
+                                onTapped: {
+                                    root.copyText(meetingNo)
+                                    copyIcon.copied = true
+                                    copyResetTimer.restart()
                                 }
                             }
-                        }
-
-                        Rectangle {
-                            id: copyTooltip
-                            visible: false
-                            radius: 4
-                            color: "#111827"
-                            implicitWidth: tooltipText.implicitWidth + 12
-                            implicitHeight: 20
-
-                            function show() {
-                                visible = true
-                                hideTimer.restart()
-                            }
-
-                            Text {
-                                id: tooltipText
-                                anchors.centerIn: parent
-                                text: "已复制"
-                                color: "#FFFFFF"
-                                font.pixelSize: 10
-                            }
-
                             Timer {
-                                id: hideTimer
+                                id: copyResetTimer
                                 interval: 1500
-                                onTriggered: copyTooltip.visible = false
+                                onTriggered: copyIcon.copied = false
                             }
-                        }
-                    }
 
-                    Text {
-                        Layout.fillWidth: true
-                        text: time
-                        color: "#6B7280"
-                        font.pixelSize: 11
-                        elide: Text.ElideRight
+                            ToolTip.visible: copyHover.hovered
+                            ToolTip.text: copied ? "已复制" : "复制会议号"
+                            ToolTip.delay: 300
+                        }
+
+                        Item { Layout.fillWidth: true }
                     }
 
                     RowLayout {
                         Layout.fillWidth: true
+                        Layout.topMargin: 4
                         spacing: 8
+                        visible: (canJoin || canCancel)
 
-                        SecondaryButton {
+                        PrimaryButton {
                             text: "加入"
-                            Layout.fillWidth: true
+                            implicitHeight: 28
+                            leftPadding: 14
+                            rightPadding: 14
                             enabled: canJoin && !root.loading
                             visible: canJoin
                             onClicked: root.joinMeeting(meetingNo)
@@ -211,46 +147,70 @@ Rectangle {
 
                         SecondaryButton {
                             text: "取消预定"
-                            Layout.fillWidth: true
+                            implicitHeight: 28
+                            leftPadding: 12
+                            rightPadding: 12
                             enabled: canCancel && !root.loading
                             visible: canCancel
                             onClicked: root.cancelMeeting(meetingNo)
                         }
+
+                        Item { Layout.fillWidth: true }
                     }
                 }
             }
         }
 
-        Item {
+        ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             visible: !meetingList.visible
 
-            ColumnLayout {
-                anchors.centerIn: parent
-                spacing: 8
+            // The spacers also fill width; otherwise this column's maximum width
+            // is its widest child and the content would sit left-aligned.
+            Item { Layout.fillWidth: true; Layout.fillHeight: true }
 
-                Text {
-                    text: "暂无可管理的预定会议"
-                    color: Theme.textSecondary
-                    font.pixelSize: 13
-                    font.weight: Font.DemiBold
-                    horizontalAlignment: Text.AlignHCenter
-                }
-
-                Text {
-                    text: "创建预定会议后会显示在这里"
-                    color: Theme.textTertiary
-                    font.pixelSize: 11
-                    horizontalAlignment: Text.AlignHCenter
-                }
+            BusyIndicator {
+                running: root.loading
+                visible: root.loading
+                Layout.alignment: Qt.AlignHCenter
+                Layout.preferredWidth: 24
+                Layout.preferredHeight: 24
             }
+
+            Icon {
+                visible: !root.loading
+                name: "calendar"
+                size: 36
+                color: Theme.iconMuted
+                Layout.alignment: Qt.AlignHCenter
+                Layout.bottomMargin: 4
+            }
+
+            Text {
+                visible: !root.loading
+                text: "暂无预定会议"
+                color: Theme.textSecondary
+                font.pixelSize: 13
+                font.weight: Font.Medium
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            Text {
+                visible: !root.loading
+                text: "创建预定会议后会显示在这里"
+                color: Theme.textMuted
+                font.pixelSize: 12
+                Layout.alignment: Qt.AlignHCenter
+            }
+
+            Item { Layout.fillWidth: true; Layout.fillHeight: true }
         }
 
         Text {
             visible: root.errorMessage.length > 0
             text: root.errorMessage
-            color: "#DC2626"
+            color: Theme.danger
             font.pixelSize: 12
             wrapMode: Text.WordWrap
             Layout.fillWidth: true

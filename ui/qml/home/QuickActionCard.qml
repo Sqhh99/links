@@ -1,85 +1,99 @@
 import QtQuick
-import Links
 import QtQuick.Layouts
+import QtQuick.Effects
+import QtQuick.Controls
+import Links
 import Links.Backend 1.0
 
-Rectangle {
+// Solid brand tile with a label underneath (Tencent Meeting style)
+Item {
     id: root
 
     property string title: ""
-    property string subtitle: ""
-    property string iconSource: ""
-    property color accentColor: "#2563EB"
-    property real accentOpacity: 0.18
-    property real iconOpacity: 0.9
+    property string iconName: ""
+    property bool locked: false
+    property string toolTipText: ""
 
     signal clicked()
 
-    radius: 14
-    color: pressed ? Theme.pressedBackground : (hovered ? Theme.hoverBackground : Theme.cardBackground)
-    border.color: hovered ? accentColor : Theme.borderLight
-    border.width: 1
+    implicitWidth: 104
+    implicitHeight: 104
 
-    implicitHeight: 152
-    implicitWidth: 240
+    readonly property bool hovered: hover.hovered
+    readonly property bool pressed: tap.pressed
 
-    property bool hovered: false
-    property bool pressed: false
+    Rectangle {
+        id: tile
+        width: 64
+        height: 64
+        radius: 18
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.top: parent.top
+        color: root.pressed ? Theme.brandPressed : (root.hovered ? Theme.brandHover : Theme.brand)
+        scale: root.pressed ? 0.96 : (root.hovered ? 1.04 : 1.0)
 
-    Behavior on border.color {
-        ColorAnimation { duration: 120 }
-    }
-    Behavior on color {
-        ColorAnimation { duration: 120 }
-    }
+        Behavior on color { ColorAnimation { duration: 120 } }
+        Behavior on scale { NumberAnimation { duration: 140; easing.type: Easing.OutCubic } }
 
-    ColumnLayout {
-        anchors.fill: parent
-        anchors.margins: 24
-        spacing: 8
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Qt.rgba(Theme.brand.r, Theme.brand.g, Theme.brand.b, root.hovered ? 0.38 : 0.22)
+            shadowBlur: 0.7
+            shadowVerticalOffset: root.hovered ? 6 : 4
+        }
 
+        Icon {
+            anchors.centerIn: parent
+            name: root.iconName
+            size: 28
+            color: "#FFFFFF"
+        }
+
+        // Lock badge for actions that need login
         Rectangle {
-            width: 40
-            height: 40
-            radius: 12
-            color: accentColor
-            opacity: root.accentOpacity
+            visible: root.locked
+            width: 20
+            height: 20
+            radius: 10
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.rightMargin: -5
+            anchors.topMargin: -5
+            color: Theme.cardBackground
+            border.color: Theme.borderLight
+            border.width: 1
 
-            Image {
-                source: root.iconSource
-                sourceSize.width: 20
-                sourceSize.height: 20
+            Icon {
                 anchors.centerIn: parent
-                opacity: root.iconOpacity
+                name: "lock"
+                size: 11
+                color: Theme.iconSecondary
             }
         }
-
-        Text {
-            text: root.title
-            color: Theme.textPrimary
-            font.pixelSize: 16
-            font.weight: Font.DemiBold
-        }
-
-        Text {
-            text: root.subtitle
-            color: Theme.textMuted
-            font.pixelSize: 12
-            wrapMode: Text.WordWrap
-            Layout.fillWidth: true
-        }
-
-        Item { Layout.fillHeight: true }
     }
 
-    MouseArea {
-        anchors.fill: parent
-        hoverEnabled: true
+    Text {
+        anchors.top: tile.bottom
+        anchors.topMargin: 12
+        anchors.horizontalCenter: parent.horizontalCenter
+        text: root.title
+        color: Theme.textPrimary
+        font.pixelSize: 13
+        font.weight: Font.Medium
+    }
+
+    HoverHandler {
+        id: hover
         cursorShape: Qt.PointingHandCursor
-        onEntered: root.hovered = true
-        onExited: root.hovered = false
-        onPressed: root.pressed = true
-        onReleased: root.pressed = false
-        onClicked: root.clicked()
     }
+
+    TapHandler {
+        id: tap
+        onTapped: root.clicked()
+    }
+
+    ToolTip.visible: root.toolTipText.length > 0 && root.hovered
+    ToolTip.text: root.toolTipText
+    ToolTip.delay: 600
 }

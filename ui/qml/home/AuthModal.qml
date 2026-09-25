@@ -16,13 +16,14 @@ Popup {
 
     modal: true
     focus: true
-    width: 420
-    height: 560
+    parent: Overlay.overlay
+    width: 400
+    height: Math.min(540, (parent ? parent.height : 580) - 24)
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     anchors.centerIn: parent
 
     Overlay.modal: Rectangle {
-        color: "#00000066"
+        color: Theme.overlayColor
     }
 
     background: Rectangle {

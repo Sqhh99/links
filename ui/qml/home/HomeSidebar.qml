@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import Links
 import Links.Backend 1.0
 
+// Narrow navigation rail: avatar, page icons, settings at the bottom
 Rectangle {
     id: root
 
@@ -17,22 +18,28 @@ Rectangle {
     signal accountSettingsRequested()
     signal settingsRequested()
 
-    color: Theme.cardBackground
-    border.color: Theme.borderLight
-    border.width: 1
-    radius: 16
-    clip: true
+    color: Theme.railBackground
 
     Behavior on color { ColorAnimation { duration: 200 } }
-    Behavior on border.color { ColorAnimation { duration: 200 } }
+
+    // Hairline on the right edge
+    Rectangle {
+        anchors.right: parent.right
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        width: 1
+        color: Theme.separatorColor
+    }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 16
-        spacing: 18
+        anchors.topMargin: 20
+        anchors.bottomMargin: 14
+        spacing: 6
 
         HomeUserCard {
-            Layout.fillWidth: true
+            Layout.alignment: Qt.AlignHCenter
+            Layout.bottomMargin: 18
             isGuest: root.isGuest
             userName: root.userName
             onLoginClicked: root.loginRequested()
@@ -41,27 +48,28 @@ Rectangle {
             onLogoutRequested: root.logoutRequested()
         }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 6
+        HomeNavButton {
+            text: "会议"
+            iconName: "video"
+            active: root.currentIndex === 0
+            onClicked: root.navChanged(0)
+        }
 
-            HomeNavButton {
-                text: "会议"
-                iconSource: "qrc:/res/icon/video.png"
-                active: root.currentIndex === 0
-                onClicked: root.navChanged(0)
-            }
-
-            HomeNavButton {
-                text: "录制"
-                iconSource: "qrc:/res/icon/screen-share-off.png"
-                active: root.currentIndex === 1
-                onClicked: root.navChanged(1)
-            }
+        HomeNavButton {
+            text: "录制"
+            iconName: "circle-dot"
+            active: root.currentIndex === 1
+            onClicked: root.navChanged(1)
         }
 
         Item { Layout.fillHeight: true }
 
-        Item { height: 1 }
+        HomeNavButton {
+            text: "设置"
+            iconName: "settings"
+            active: false
+            checkable: false
+            onClicked: root.settingsRequested()
+        }
     }
 }

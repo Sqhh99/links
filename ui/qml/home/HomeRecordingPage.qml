@@ -50,7 +50,7 @@ Item {
                 text: "录制"
                 color: Theme.textPrimary
                 font.pixelSize: 20
-                font.weight: Font.DemiBold
+                font.weight: Font.Bold
             }
 
             Text {
@@ -64,7 +64,7 @@ Item {
                 color: Theme.textHint
                 font.pixelSize: 11
                 elide: Text.ElideMiddle
-                Layout.preferredWidth: 560
+                Layout.fillWidth: true
             }
         }
 
@@ -100,22 +100,43 @@ Item {
             Rectangle {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                radius: 12
+                radius: Theme.radiusLg
                 color: Theme.cardBackground
                 border.color: Theme.borderLight
                 border.width: 1
 
                 StackLayout {
                     anchors.fill: parent
-                    anchors.margins: 12
+                    anchors.margins: 8
                     currentIndex: LocalRecordingManager.recentRecordings.length > 0 ? 1 : 0
 
                     Item {
-                        Text {
+                        ColumnLayout {
                             anchors.centerIn: parent
-                            text: "暂无本地录制"
-                            color: Theme.textMuted
-                            font.pixelSize: 12
+                            spacing: 8
+
+                            Icon {
+                                name: "circle-dot"
+                                size: 36
+                                color: Theme.iconMuted
+                                Layout.alignment: Qt.AlignHCenter
+                                Layout.bottomMargin: 4
+                            }
+
+                            Text {
+                                text: "暂无本地录制"
+                                color: Theme.textSecondary
+                                font.pixelSize: 13
+                                font.weight: Font.Medium
+                                Layout.alignment: Qt.AlignHCenter
+                            }
+
+                            Text {
+                                text: "在会议中点击录制按钮即可开始"
+                                color: Theme.textMuted
+                                font.pixelSize: 12
+                                Layout.alignment: Qt.AlignHCenter
+                            }
                         }
                     }
 
@@ -130,17 +151,31 @@ Item {
 
                             delegate: Rectangle {
                                 width: recordingsList.width
-                                height: 66
-                                radius: 8
-                                color: Theme.windowBackground
-                                border.color: Theme.borderLight
-                                border.width: 1
+                                height: 58
+                                radius: Theme.radiusMd
+                                color: recHover.hovered ? Theme.hoverBackground : "transparent"
+
+                                HoverHandler { id: recHover }
 
                                 RowLayout {
                                     anchors.fill: parent
                                     anchors.leftMargin: 10
                                     anchors.rightMargin: 10
-                                    spacing: 10
+                                    spacing: 12
+
+                                    Rectangle {
+                                        Layout.preferredWidth: 34
+                                        Layout.preferredHeight: 34
+                                        radius: 9
+                                        color: Theme.brandSoft
+
+                                        Icon {
+                                            anchors.centerIn: parent
+                                            name: "video"
+                                            size: 17
+                                            color: Theme.brand
+                                        }
+                                    }
 
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -149,7 +184,7 @@ Item {
                                         Text {
                                             text: modelData.fileName
                                             color: Theme.textPrimary
-                                            font.pixelSize: 12
+                                            font.pixelSize: 13
                                             font.weight: Font.Medium
                                             elide: Text.ElideMiddle
                                             Layout.fillWidth: true
@@ -158,7 +193,7 @@ Item {
                                         Text {
                                             text: modelData.createdAtText + "  ·  " + modelData.sizeText
                                             color: Theme.textMuted
-                                            font.pixelSize: 11
+                                            font.pixelSize: 12
                                             elide: Text.ElideRight
                                             Layout.fillWidth: true
                                         }

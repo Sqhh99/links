@@ -103,36 +103,20 @@ Rectangle {
             visible: !(root.isLocalHost && !root.isLocal && !root.isParticipantHost && root.hovered)
             
             // Camera Status
-            Image {
-                source: root.camEnabled ? "qrc:/res/icon/video.png" : "qrc:/res/icon/close_video.png"
-                sourceSize.width: 14; sourceSize.height: 14
-                visible: true // restored visibility
+            Icon {
                 id: camIcon
-                opacity: 0.6 // Adding opacity since we can't tint easily without MultiEffect
+                name: root.camEnabled ? "video" : "video-off"
+                size: 15
+                color: root.camEnabled ? Theme.iconSecondary : Theme.danger
             }
-            /*
-            MultiEffect {
-                source: camIcon; width: 14; height: 14
-                colorization: 1.0
-                colorizationColor: root.camEnabled ? "#6B7280" : "#EF4444"
-            }
-            */
             
             // Mic Status
-            Image {
-                source: root.micEnabled ? "qrc:/res/icon/Turn_on_the_microphone.png" : "qrc:/res/icon/mute_the_microphone.png"
-                sourceSize.width: 14; sourceSize.height: 14
-                visible: true // restored visibility
+            Icon {
                 id: micIcon
-                opacity: 0.6
+                name: root.micEnabled ? "mic" : "mic-off"
+                size: 15
+                color: root.micEnabled ? Theme.success : Theme.danger
             }
-            /*
-            MultiEffect {
-                source: micIcon; width: 14; height: 14
-                colorization: 1.0
-                colorizationColor: root.micEnabled ? "#10B981" : "#EF4444"
-            }
-            */
         }
         
         // Control buttons (host only, not for self) - On Hover
@@ -141,33 +125,33 @@ Rectangle {
             visible: root.isLocalHost && !root.isLocal && !root.isParticipantHost && root.hovered
             
             // Mic toggle
-            IconButton {
-                iconSource: root.micEnabled ? "qrc:/res/icon/Turn_on_the_microphone.png" : "qrc:/res/icon/mute_the_microphone.png"
-                iconColor: root.micEnabled ? "#374151" : "#EF4444"
+            MemberActionButton {
+                iconName: root.micEnabled ? "mic" : "mic-off"
+                iconColor: root.micEnabled ? Theme.iconPrimary : Theme.danger
                 onClicked: root.micToggleClicked(root.identity)
             }
             
             // Camera toggle
-            IconButton {
-                iconSource: root.camEnabled ? "qrc:/res/icon/video.png" : "qrc:/res/icon/close_video.png"
-                iconColor: root.camEnabled ? "#374151" : "#EF4444"
+            MemberActionButton {
+                iconName: root.camEnabled ? "video" : "video-off"
+                iconColor: root.camEnabled ? Theme.iconPrimary : Theme.danger
                 onClicked: root.cameraToggleClicked(root.identity)
             }
             
             // Kick
-            IconButton {
-                iconSource: "qrc:/res/icon/close.png"
-                iconColor: "#EF4444"
-                hoverColor: "#FEE2E2"
+            MemberActionButton {
+                iconName: "user-x"
+                iconColor: Theme.danger
+                hoverColor: Theme.dangerSoft
                 onClicked: root.kickClicked(root.identity)
             }
         }
     }
     
-    component IconButton: Button {
+    component MemberActionButton: Button {
         id: btn
-        property string iconSource: ""
-        property color iconColor: Theme.textMuted
+        property string iconName: ""
+        property color iconColor: Theme.iconSecondary
         property color hoverColor: Theme.hoverBackground
         
         width: 28
@@ -175,27 +159,17 @@ Rectangle {
         
         background: Rectangle {
             color: btn.hovered ? btn.hoverColor : "transparent"
-            radius: 4
+            radius: 6
         }
         
         contentItem: Item {
-            Image {
+            Icon {
                 id: icon
-                source: btn.iconSource
-                sourceSize.width: 14
-                sourceSize.height: 14
+                name: btn.iconName
+                size: 15
                 anchors.centerIn: parent
-                visible: true // restored visibility
-                opacity: 0.7
+                color: btn.iconColor
             }
-            /*
-            MultiEffect {
-                source: icon
-                anchors.fill: icon
-                colorization: 1.0
-                colorizationColor: btn.iconColor
-            }
-            */
         }
     }
 }

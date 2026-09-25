@@ -1,17 +1,21 @@
 import QtQuick
 import Links
 import QtQuick.Controls
+import QtQuick.Effects
 import Links.Backend 1.0
 
 ComboBox {
     id: control
-    
-    implicitHeight: 40
-    
+
+    implicitHeight: 36
+    font.pixelSize: 13
+
     delegate: ItemDelegate {
         id: delegate
-        width: control.width
+        width: control.popup.availableWidth
+        height: 32
         contentItem: Text {
+            leftPadding: 4
             text: {
                 if (control.textRole) {
                     if (typeof modelData !== "undefined" && modelData !== null) {
@@ -24,53 +28,33 @@ ComboBox {
                 }
                 return modelData ?? ""
             }
-            color: delegate.highlighted ? Theme.popupHighlightText : Theme.popupItemText
+            color: control.currentIndex === index ? Theme.popupHighlightText : Theme.popupItemText
             font: control.font
             elide: Text.ElideRight
             verticalAlignment: Text.AlignVCenter
         }
         background: Rectangle {
-            color: delegate.highlighted ? Theme.popupHighlight : "transparent"
-            radius: 4
-            anchors.fill: parent
-            anchors.margins: 2
+            color: delegate.highlighted ? Theme.hoverBackground
+                                        : (control.currentIndex === index ? Theme.popupHighlight : "transparent")
+            radius: Theme.radiusSm
         }
         highlighted: control.highlightedIndex === index
     }
 
-    indicator: Canvas {
-        id: canvas
-        x: control.width - width - control.rightPadding
-        y: control.topPadding + (control.availableHeight - height) / 2
-        width: 12
-        height: 8
-        contextType: "2d"
+    indicator: Icon {
+        x: control.width - width - 10
+        y: (control.height - height) / 2
+        name: "chevron-down"
+        size: 16
+        color: control.pressed || control.popup.visible ? Theme.brand : Theme.iconSecondary
+        rotation: control.popup.visible ? 180 : 0
 
-        onPaint: {
-            if (!context) return;
-            context.reset();
-            context.moveTo(0, 0);
-            context.lineTo(width, 0);
-            context.lineTo(width / 2, height);
-            context.closePath();
-            context.fillStyle = control.pressed ? String(Theme.indicatorPressed) : String(Theme.indicatorColor);
-            context.fill();
-        }
-
-        Connections {
-            target: control
-            function onPressedChanged() { canvas.requestPaint(); }
-        }
-
-        Connections {
-            target: ThemeManager
-            function onThemeChanged() { canvas.requestPaint(); }
-        }
+        Behavior on rotation { NumberAnimation { duration: 150 } }
     }
 
     contentItem: Text {
         leftPadding: 12
-        rightPadding: control.indicator.width + control.spacing
+        rightPadding: 34
 
         text: control.displayText
         font: control.font
@@ -81,25 +65,26 @@ ComboBox {
 
     background: Rectangle {
         implicitWidth: 120
-        implicitHeight: 40
-        border.color: control.pressed || control.hovered ? Theme.borderAccent : Theme.inputBorder
-        border.width: control.visualFocus ? 2 : 1
+        implicitHeight: 36
+        border.color: control.popup.visible || control.visualFocus ? Theme.inputBorderFocus
+                     : (control.hovered ? Theme.borderColor : Theme.inputBorder)
+        border.width: 1
         radius: 8
         color: Theme.inputBackground
 
-        Behavior on color { ColorAnimation { duration: 150 } }
-        Behavior on border.color { ColorAnimation { duration: 150 } }
+        Behavior on border.color { ColorAnimation { duration: 120 } }
     }
 
     popup: Popup {
         y: control.height + 4
         width: control.width
-        implicitHeight: contentItem.implicitHeight + 4
-        padding: 2
+        implicitHeight: Math.min(contentItem.implicitHeight + 8, 280)
+        padding: 4
 
         contentItem: ListView {
             clip: true
             implicitHeight: contentHeight
+            spacing: 2
             model: control.popup.visible ? control.delegateModel : null
             currentIndex: control.highlightedIndex
 
@@ -109,12 +94,16 @@ ComboBox {
         background: Rectangle {
             border.color: Theme.popupBorder
             border.width: 1
-            radius: 8
+            radius: 10
             color: Theme.popupBackground
-            
-            // Subtle shadow
+
             layer.enabled: true
-            layer.effect: null // Placeholder for Shadow if needed
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.shadowColor
+                shadowBlur: 0.6
+                shadowVerticalOffset: 4
+            }
         }
     }
 }

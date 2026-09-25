@@ -21,7 +21,7 @@ RowLayout {
     Item { Layout.fillWidth: true }
     
     IconButton {
-        iconSource: "qrc:/res/icon/close.png"
+        iconName: "x"
         hoverColor: Theme.hoverBackground
         onClicked: root.closeClicked()
     }

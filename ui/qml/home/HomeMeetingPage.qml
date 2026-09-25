@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import Links
 import Links.Backend 1.0
 
@@ -50,80 +51,38 @@ Item {
         }
     }
 
-    ColumnLayout {
-        anchors.fill: parent
-        spacing: 16
+    GridLayout {
+        anchors.centerIn: parent
+        columns: 2
+        rowSpacing: 28
+        columnSpacing: 36
 
-        ColumnLayout {
-            spacing: 6
-            Layout.bottomMargin: 16
-
-            Text {
-                text: "开始新的会议"
-                color: Theme.textPrimary
-                font.pixelSize: 21
-                font.weight: Font.DemiBold
-            }
-
-            Text {
-                text: root.isGuest
-                    ? "游客仅可加入已存在普通房间，创建会议需登录"
-                    : "可加入、创建与预定会议"
-                color: Theme.textMuted
-                font.pixelSize: 12
-            }
+        QuickActionCard {
+            title: "加入会议"
+            iconName: "plus"
+            onClicked: root.openAction("join")
         }
 
-        GridLayout {
-            Layout.fillWidth: true
-            Layout.fillHeight: true
-            columns: 2
-            rowSpacing: 16
-            columnSpacing: 16
+        QuickActionCard {
+            title: "快速会议"
+            iconName: "zap"
+            locked: root.isGuest
+            toolTipText: root.isGuest ? "登录后可创建临时会议" : "一键创建临时会议"
+            onClicked: root.openAction("quick")
+        }
 
-            QuickActionCard {
-                Layout.fillWidth: true
-                title: "加入会议"
-                subtitle: "输入会议号或链接"
-                iconSource: "qrc:/res/icon/video.png"
-                accentColor: Theme.isDark ? "#3B82F6" : "#2563EB"
-                accentOpacity: 0.22
-                iconOpacity: 1.0
-                onClicked: root.openAction("join")
-            }
+        QuickActionCard {
+            title: "预定会议"
+            iconName: "calendar-check"
+            locked: root.isGuest
+            toolTipText: root.isGuest ? "登录后可预定会议" : "设置时间、密码与准入策略"
+            onClicked: root.openAction("schedule")
+        }
 
-            QuickActionCard {
-                Layout.fillWidth: true
-                title: "快速会议"
-                subtitle: root.isGuest ? "登录后可创建临时会议" : "一键创建临时会议"
-                iconSource: "qrc:/res/icon/monitor-up.png"
-                accentColor: Theme.isDark ? "#22C55E" : "#16A34A"
-                accentOpacity: 0.22
-                iconOpacity: 1.0
-                onClicked: root.openAction("quick")
-            }
-
-            QuickActionCard {
-                Layout.fillWidth: true
-                title: "预定会议"
-                subtitle: root.isGuest ? "登录后可预定会议" : "设置时间、密码与准入策略"
-                iconSource: "qrc:/res/icon/pin.png"
-                accentColor: Theme.isDark ? "#FBBF24" : "#F59E0B"
-                accentOpacity: 0.18
-                iconOpacity: 0.9
-                onClicked: root.openAction("schedule")
-            }
-
-            QuickActionCard {
-                Layout.fillWidth: true
-                title: "共享屏幕"
-                subtitle: "开始屏幕演示"
-                iconSource: "qrc:/res/icon/screen_sharing_sidebar.png"
-                accentColor: Theme.isDark ? "#8B5CF6" : "#7C3AED"
-                accentOpacity: 0.18
-                iconOpacity: 0.9
-                onClicked: root.openAction("share")
-            }
+        QuickActionCard {
+            title: "共享屏幕"
+            iconName: "screen-share"
+            onClicked: root.openAction("share")
         }
     }
 
@@ -132,13 +91,15 @@ Item {
 
         modal: true
         focus: true
-        width: root.currentAction === "schedule" ? 520 : 420
-        height: root.currentAction === "schedule" ? 600 : 520
+        parent: Overlay.overlay
+        width: root.currentAction === "schedule" ? 480 : 400
+        height: Math.min(root.currentAction === "schedule" ? 548 : 420,
+                         (parent ? parent.height : 580) - 32)
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         anchors.centerIn: parent
 
         Overlay.modal: Rectangle {
-            color: Theme.isDark ? Qt.rgba(0, 0, 0, 0.6) : Qt.rgba(0, 0, 0, 0.4)
+            color: Theme.overlayColor
         }
 
         background: Rectangle {
@@ -146,14 +107,22 @@ Item {
         }
 
         contentItem: Rectangle {
-            radius: 16
+            radius: Theme.radiusLg
             color: Theme.cardBackground
-            border.color: Theme.borderColor
+            border.color: Theme.popupBorder
             border.width: 1
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.shadowColor
+                shadowBlur: 1.0
+                shadowVerticalOffset: 8
+            }
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: root.currentAction === "schedule" ? 24 : 20
+                anchors.margins: 20
                 spacing: 12
 
                 RowLayout {
@@ -169,7 +138,7 @@ Item {
                     Item { Layout.fillWidth: true }
 
                     IconButton {
-                        iconSource: "qrc:/res/icon/close.png"
+                        iconName: "x"
                         toolTipText: "关闭"
                         onClicked: actionDialog.close()
                     }

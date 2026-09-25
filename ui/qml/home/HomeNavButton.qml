@@ -4,92 +4,56 @@ import QtQuick.Controls
 import QtQuick.Layouts
 import Links.Backend 1.0
 
+// Icon-only navigation button for the home rail
 Button {
     id: root
 
     property bool active: false
-    property string iconSource: ""
+    property string iconName: ""
 
-    Layout.fillWidth: true
-    implicitHeight: 42
+    Layout.alignment: Qt.AlignHCenter
+    implicitWidth: 64
+    implicitHeight: 44
+    padding: 0
     checkable: true
     checked: active
 
-    background: Rectangle {
-        color: "transparent"
-        radius: 10
-
+    background: Item {
+        // Active indicator bar on the rail's left edge
         Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            color: Theme.activeBackground
-            opacity: root.checked ? 1 : 0
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: 3
+            height: root.active ? 20 : 0
+            radius: 2
+            color: Theme.brand
 
-            Behavior on opacity { NumberAnimation { duration: 120 } }
+            Behavior on height { NumberAnimation { duration: 150; easing.type: Easing.OutCubic } }
         }
 
         Rectangle {
-            anchors.fill: parent
-            radius: parent.radius
-            color: Theme.hoverBackground
-            opacity: root.checked ? 0 : (root.hovered ? 1 : 0)
+            anchors.centerIn: parent
+            width: 40
+            height: 40
+            radius: Theme.radiusMd
+            color: root.active ? Theme.brandSoft : (root.hovered ? Theme.hoverBackground : Theme.hoverClear)
 
-            Behavior on opacity { NumberAnimation { duration: 100 } }
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
     }
 
-    contentItem: RowLayout {
-        spacing: 10
-        anchors.fill: parent
-        anchors.leftMargin: 12
-
-        Rectangle {
-            width: 22
-            height: 22
-            radius: 6
-            color: "transparent"
-
-            Rectangle {
-                anchors.fill: parent
-                radius: parent.radius
-                color: Theme.accentLight
-                opacity: root.active ? 1 : 0
-
-                Behavior on opacity { NumberAnimation { duration: 120 } }
-            }
-
-            Rectangle {
-                anchors.fill: parent
-                radius: parent.radius
-                color: Theme.hoverBackground
-                opacity: (!root.active && root.hovered) ? 1 : 0
-
-                Behavior on opacity { NumberAnimation { duration: 100 } }
-            }
-
-            Image {
-                source: root.iconSource
-                sourceSize.width: 14
-                sourceSize.height: 14
-                anchors.centerIn: parent
-                opacity: root.active ? 0.9 : (root.hovered ? 0.75 : 0.6)
-            }
-        }
-
-        Text {
-            text: root.text
-            color: root.active ? Theme.accentHover : Theme.textTertiary
-            font.pixelSize: 13
-            font.weight: root.active ? Font.DemiBold : Font.Medium
-            Layout.fillWidth: true
-
-            Behavior on color { ColorAnimation { duration: 150 } }
+    contentItem: Item {
+        Icon {
+            anchors.centerIn: parent
+            name: root.iconName
+            size: 21
+            color: root.active ? Theme.brand : (root.hovered ? Theme.iconPrimary : Theme.iconSecondary)
         }
     }
 
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onPressed: function(mouse) { mouse.accepted = false }
-    }
+    ToolTip.visible: hovered && text.length > 0
+    ToolTip.text: text
+    ToolTip.delay: 400
+
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
 }

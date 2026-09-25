@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Layouts
 
 RowLayout {
@@ -24,7 +25,7 @@ RowLayout {
             Text {
                 id: loginLabel
                 text: "登录"
-                color: root.mode === "login" ? "#2563EB" : "#94A3B8"
+                color: root.mode === "login" ? Theme.brand : Theme.textMuted
                 font.pixelSize: 13
                 font.weight: root.mode === "login" ? Font.DemiBold : Font.Medium
             }
@@ -35,9 +36,9 @@ RowLayout {
 
             Rectangle {
                 width: loginTab.width
-                height: 1
+                height: 2
                 radius: 1
-                color: root.mode === "login" ? "#2563EB" : "#E5E7EB"
+                color: root.mode === "login" ? Theme.brand : Theme.borderLight
             }
         }
 
@@ -64,7 +65,7 @@ RowLayout {
             Text {
                 id: registerLabel
                 text: "注册"
-                color: root.mode === "register" ? "#2563EB" : "#94A3B8"
+                color: root.mode === "register" ? Theme.brand : Theme.textMuted
                 font.pixelSize: 13
                 font.weight: root.mode === "register" ? Font.DemiBold : Font.Medium
             }
@@ -75,9 +76,9 @@ RowLayout {
 
             Rectangle {
                 width: registerTab.width
-                height: 1
+                height: 2
                 radius: 1
-                color: root.mode === "register" ? "#2563EB" : "#E5E7EB"
+                color: root.mode === "register" ? Theme.brand : Theme.borderLight
             }
         }
 

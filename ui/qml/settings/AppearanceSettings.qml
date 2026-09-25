@@ -1,8 +1,7 @@
 import QtQuick
-import Links
-import Links as Comp
 import QtQuick.Controls
 import QtQuick.Layouts
+import Links
 import Links.Backend 1.0
 
 ScrollView {
@@ -10,247 +9,210 @@ ScrollView {
 
     contentWidth: availableWidth
     clip: true
+    ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
-    ColumnLayout {
-        width: parent.width
-        spacing: 24
+    // Theme preview card; preview colors are literal so each card always
+    // shows its own theme regardless of the active one.
+    component ThemeCard: Rectangle {
+        id: card
 
-        Text {
-            text: "主题"
-            color: Theme.textSecondary
-            font.pixelSize: 13
-            font.weight: Font.Medium
-        }
+        property string themeKey: "light"
+        property string label: ""
+        property string iconName: "sun"
+        property color previewPage: "#F4F7FC"
+        property color previewRail: "#FFFFFF"
+        property color previewCard: "#FFFFFF"
+        property color previewLine: "#E3E8F0"
+        readonly property bool selected: ThemeManager.currentTheme === card.themeKey
 
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 16
+        Layout.fillWidth: true
+        Layout.preferredHeight: 132
+        radius: Theme.radiusMd
+        color: Theme.cardBackground
+        border.color: selected ? Theme.brand : (cardHover.hovered ? Theme.borderColor : Theme.borderLight)
+        border.width: selected ? 2 : 1
 
-            // Light Theme Card
+        Behavior on border.color { ColorAnimation { duration: 150 } }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 10
+
+            // Mini window preview
             Rectangle {
-                Layout.preferredWidth: 160
-                Layout.preferredHeight: 120
-                radius: 12
-                color: ThemeManager.currentTheme === "light" ? "#EFF6FF" : Theme.cardBackground
-                border.color: ThemeManager.currentTheme === "light" ? Theme.accentColor : Theme.borderLight
-                border.width: ThemeManager.currentTheme === "light" ? 2 : 1
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                radius: 6
+                color: card.previewPage
+                border.color: card.previewLine
+                clip: true
 
-                Behavior on border.color { ColorAnimation { duration: 150 } }
-                Behavior on color { ColorAnimation { duration: 150 } }
+                Rectangle {
+                    id: previewRail
+                    width: 18
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.left: parent.left
+                    anchors.margins: 1
+                    color: card.previewRail
 
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 8
+                    Column {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.top: parent.top
+                        anchors.topMargin: 6
+                        spacing: 5
 
-                    // Light theme preview
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        radius: 8
-                        color: "#FFFFFF"
-                        border.color: "#E5E7EB"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            spacing: 4
-
-                            Rectangle {
-                                Layout.preferredWidth: 24
-                                Layout.fillHeight: true
-                                radius: 4
-                                color: "#F3F4F6"
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 4
-                                color: "#FAFAFA"
-
-                                Rectangle {
-                                    anchors.top: parent.top
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.margins: 4
-                                    height: 6
-                                    radius: 2
-                                    color: "#E5E7EB"
-                                }
-                            }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        // Radio indicator
-                        Rectangle {
-                            width: 16
-                            height: 16
-                            radius: 8
-                            color: "transparent"
-                            border.color: ThemeManager.currentTheme === "light" ? Theme.accentColor : Theme.borderColor
-                            border.width: 1.5
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 8
-                                height: 8
-                                radius: 4
-                                color: Theme.accentColor
-                                visible: ThemeManager.currentTheme === "light"
-                            }
-                        }
-
-                        Text {
-                            text: "浅色"
-                            color: Theme.textPrimary
-                            font.pixelSize: 13
-                            font.weight: ThemeManager.currentTheme === "light" ? Font.Bold : Font.Medium
-                        }
+                        Rectangle { width: 8; height: 8; radius: 4; color: "#1F6FFF" }
+                        Rectangle { width: 8; height: 8; radius: 2; color: card.previewLine }
+                        Rectangle { width: 8; height: 8; radius: 2; color: card.previewLine }
                     }
                 }
 
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: ThemeManager.setTheme("light")
+                Grid {
+                    anchors.left: previewRail.right
+                    anchors.leftMargin: 14
+                    anchors.verticalCenter: parent.verticalCenter
+                    columns: 2
+                    spacing: 6
+
+                    Repeater {
+                        model: 4
+                        Rectangle { width: 16; height: 16; radius: 5; color: "#1F6FFF" }
+                    }
+                }
+
+                Rectangle {
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: parent.bottom
+                    anchors.margins: 6
+                    width: parent.width * 0.34
+                    radius: 3
+                    color: card.previewCard
+
+                    Column {
+                        anchors.fill: parent
+                        anchors.margins: 5
+                        spacing: 4
+
+                        Rectangle { width: parent.width * 0.5; height: 5; radius: 2; color: card.previewLine }
+                        Rectangle { width: parent.width; height: 3; radius: 1; color: card.previewLine }
+                        Rectangle { width: parent.width * 0.8; height: 3; radius: 1; color: card.previewLine }
+                        Rectangle { width: parent.width; height: 3; radius: 1; color: card.previewLine }
+                    }
                 }
             }
 
-            // Dark Theme Card
-            Rectangle {
-                Layout.preferredWidth: 160
-                Layout.preferredHeight: 120
-                radius: 12
-                color: ThemeManager.currentTheme === "dark" ? "#2A3A5C" : Theme.cardBackground
-                border.color: ThemeManager.currentTheme === "dark" ? Theme.accentColor : Theme.borderLight
-                border.width: ThemeManager.currentTheme === "dark" ? 2 : 1
-
-                Behavior on border.color { ColorAnimation { duration: 150 } }
-                Behavior on color { ColorAnimation { duration: 150 } }
-
-                ColumnLayout {
-                    anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 8
-
-                    // Dark theme preview
-                    Rectangle {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        radius: 8
-                        color: "#1E1E2E"
-                        border.color: "#3A3A4E"
-
-                        RowLayout {
-                            anchors.fill: parent
-                            anchors.margins: 6
-                            spacing: 4
-
-                            Rectangle {
-                                Layout.preferredWidth: 24
-                                Layout.fillHeight: true
-                                radius: 4
-                                color: "#252538"
-                            }
-                            Rectangle {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                                radius: 4
-                                color: "#2A2A3C"
-
-                                Rectangle {
-                                    anchors.top: parent.top
-                                    anchors.left: parent.left
-                                    anchors.right: parent.right
-                                    anchors.margins: 4
-                                    height: 6
-                                    radius: 2
-                                    color: "#3A3A4E"
-                                }
-                            }
-                        }
-                    }
-
-                    RowLayout {
-                        Layout.fillWidth: true
-                        spacing: 6
-
-                        // Radio indicator
-                        Rectangle {
-                            width: 16
-                            height: 16
-                            radius: 8
-                            color: "transparent"
-                            border.color: ThemeManager.currentTheme === "dark" ? Theme.accentColor : Theme.borderColor
-                            border.width: 1.5
-
-                            Rectangle {
-                                anchors.centerIn: parent
-                                width: 8
-                                height: 8
-                                radius: 4
-                                color: Theme.accentColor
-                                visible: ThemeManager.currentTheme === "dark"
-                            }
-                        }
-
-                        Text {
-                            text: "深色"
-                            color: Theme.textPrimary
-                            font.pixelSize: 13
-                            font.weight: ThemeManager.currentTheme === "dark" ? Font.Bold : Font.Medium
-                        }
-                    }
-                }
-
-                MouseArea {
-                    anchors.fill: parent
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: ThemeManager.setTheme("dark")
-                }
-            }
-        }
-
-        Text {
-            text: "选择主题后将立即应用到所有界面"
-            color: Theme.textHint
-            font.pixelSize: 11
-        }
-
-        Rectangle {
-            Layout.fillWidth: true
-            color: "transparent"
-            border.color: Theme.separatorColor
-            border.width: 1
-            radius: 8
-            implicitHeight: autoHideColumn.implicitHeight + 24
-
-            ColumnLayout {
-                id: autoHideColumn
-                anchors.fill: parent
-                anchors.margins: 12
+            RowLayout {
+                Layout.fillWidth: true
                 spacing: 6
 
-                Comp.CheckBox {
-                    text: "自动隐藏顶部栏和底部栏"
-                    checked: AppearanceManager.autoHideConferenceChrome
-                    onToggled: AppearanceManager.setAutoHideConferenceChrome(checked)
+                Icon {
+                    name: card.iconName
+                    size: 15
+                    color: card.selected ? Theme.brand : Theme.iconSecondary
                 }
 
                 Text {
-                    text: "开启后，会议中无操作时将自动隐藏顶部和底部面板，移动到边缘可再次显示。"
-                    color: Theme.textHint
-                    font.pixelSize: 11
-                    wrapMode: Text.Wrap
+                    text: card.label
+                    color: card.selected ? Theme.brand : Theme.textPrimary
+                    font.pixelSize: 13
+                    font.weight: card.selected ? Font.DemiBold : Font.Normal
                     Layout.fillWidth: true
+                }
+
+                Rectangle {
+                    implicitWidth: 16
+                    implicitHeight: 16
+                    radius: 8
+                    color: card.selected ? Theme.brand : "transparent"
+                    border.color: card.selected ? Theme.brand : Theme.checkboxBorder
+                    border.width: 1.5
+
+                    Icon {
+                        anchors.centerIn: parent
+                        visible: card.selected
+                        name: "check"
+                        size: 10
+                        color: "#FFFFFF"
+                    }
                 }
             }
         }
 
-        Item { Layout.fillHeight: true }
+        HoverHandler {
+            id: cardHover
+            cursorShape: Qt.PointingHandCursor
+        }
+
+        TapHandler {
+            onTapped: ThemeManager.setTheme(card.themeKey)
+        }
+    }
+
+    ColumnLayout {
+        width: root.availableWidth
+        spacing: 20
+
+        ColumnLayout {
+            Layout.fillWidth: true
+            spacing: 8
+
+            Text {
+                text: "主题"
+                color: Theme.textTertiary
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+                Layout.leftMargin: 4
+            }
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+
+                ThemeCard {
+                    themeKey: "light"
+                    label: "浅色"
+                    iconName: "sun"
+                    previewPage: "#F4F7FC"
+                    previewRail: "#FFFFFF"
+                    previewCard: "#FFFFFF"
+                    previewLine: "#E3E8F0"
+                }
+
+                ThemeCard {
+                    themeKey: "dark"
+                    label: "深色"
+                    iconName: "moon"
+                    previewPage: "#14161B"
+                    previewRail: "#181B21"
+                    previewCard: "#1C1F26"
+                    previewLine: "#2E323C"
+                }
+            }
+
+            Text {
+                text: "选择主题后将立即应用到所有界面"
+                color: Theme.textMuted
+                font.pixelSize: 11
+                Layout.leftMargin: 4
+            }
+        }
+
+        SettingsSection {
+            title: "会议界面"
+
+            SettingsRow {
+                label: "自动隐藏顶部栏和底部栏"
+                description: "会议中无操作时自动隐藏，移动到边缘可再次显示"
+                divider: false
+
+                ToggleSwitch {
+                    checked: AppearanceManager.autoHideConferenceChrome
+                    onToggled: AppearanceManager.setAutoHideConferenceChrome(checked)
+                }
+            }
+        }
     }
 }

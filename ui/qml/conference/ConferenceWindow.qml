@@ -232,7 +232,7 @@ Window {
 
     // Avatar color palette
     function getAvatarColor(index) {
-        var colors = ["#3B82F6", "#10B981", "#8B5CF6", "#F59E0B", "#EC4899", "#06B6D4", "#EF4444", "#6366F1"]
+        var colors = ["#1F6FFF", "#16B26B", "#7C5CFF", "#F59E0B", "#EC4899", "#0EA5E9", "#F04A4A", "#6366F1"]
         return colors[index % colors.length]
     }
 
@@ -445,11 +445,11 @@ Window {
                             Behavior on opacity { NumberAnimation { duration: 150 } }
                             Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
 
-                            Image {
+                            Icon {
                                 anchors.centerIn: parent
-                                source: backend.sidebarVisible ? "qrc:/res/icon/panel-left-close.png" : "qrc:/res/icon/panel-left-open.png"
-                                sourceSize.width: 18
-                                sourceSize.height: 18
+                                name: backend.sidebarVisible ? "panel-left-close" : "panel-left-open"
+                                size: 18
+                                color: "#FFFFFF"
                             }
 
                             MouseArea {
@@ -526,16 +526,16 @@ Window {
                                     height: 28
                                     radius: 14
                                     color: localLeftArea.containsMouse ? "#00000080" : "#00000050"
-                                    border.color: "#6010B981"
+                                    border.color: Qt.rgba(1, 1, 1, 0.18)
                                     border.width: 1
                                     visible: localGalleryCard.hasDualStreams && localGalleryCard.showingScreen
                                     z: 20
 
-                                    Image {
+                                    Icon {
                                         anchors.centerIn: parent
-                                        source: "qrc:/res/icon/chevron-left.png"
-                                        sourceSize.width: 14
-                                        sourceSize.height: 14
+                                        name: "chevron-left"
+                                        size: 14
+                                        color: "#FFFFFF"
                                     }
 
                                     MouseArea {
@@ -557,16 +557,16 @@ Window {
                                     height: 28
                                     radius: 14
                                     color: localRightArea.containsMouse ? "#00000080" : "#00000050"
-                                    border.color: "#6010B981"
+                                    border.color: Qt.rgba(1, 1, 1, 0.18)
                                     border.width: 1
                                     visible: localGalleryCard.hasDualStreams && !localGalleryCard.showingScreen
                                     z: 20
 
-                                    Image {
+                                    Icon {
                                         anchors.centerIn: parent
-                                        source: "qrc:/res/icon/chevron-right.png"
-                                        sourceSize.width: 14
-                                        sourceSize.height: 14
+                                        name: "chevron-right"
+                                        size: 14
+                                        color: "#FFFFFF"
                                     }
 
                                     MouseArea {
@@ -585,7 +585,7 @@ Window {
                                     anchors.margins: 8
                                     height: 24
                                     width: localNameRow.width + 16
-                                    color: Theme.isDark ? Qt.rgba(30/255, 30/255, 40/255, 0.9) : "#FFFFFFEE"
+                                    color: Theme.isDark ? Qt.rgba(28/255, 31/255, 38/255, 0.92) : Qt.rgba(1, 1, 1, 0.93)
                                     radius: 6
                                     z: 10
 
@@ -599,15 +599,15 @@ Window {
                                             width: backend.micEnabled ? 4 : 10
                                             height: backend.micEnabled ? 8 : 10
                                             radius: backend.micEnabled ? 2 : 5
-                                            color: backend.micEnabled ? "#10B981" : "transparent"
+                                            color: backend.micEnabled ? Theme.success : "transparent"
                                             anchors.verticalCenter: parent.verticalCenter
 
-                                            Image {
+                                            Icon {
                                                 anchors.centerIn: parent
-                                                source: "qrc:/res/icon/mute_the_microphone.png"
-                                                sourceSize.width: 10
-                                                sourceSize.height: 10
+                                                name: "mic-off"
                                                 visible: !backend.micEnabled
+                                                size: 11
+                                                color: Theme.danger
                                             }
                                         }
 
@@ -671,16 +671,16 @@ Window {
                                         height: 28
                                         radius: 14
                                         color: remoteLeftArea.containsMouse ? "#00000080" : "#00000050"
-                                        border.color: "#6010B981"
+                                        border.color: Qt.rgba(1, 1, 1, 0.18)
                                         border.width: 1
                                         visible: remoteCard.hasDualStreams && remoteCard.showingScreen
                                         z: 20
 
-                                        Image {
+                                        Icon {
                                             anchors.centerIn: parent
-                                            source: "qrc:/res/icon/chevron-left.png"
-                                            sourceSize.width: 14
-                                            sourceSize.height: 14
+                                            name: "chevron-left"
+                                            size: 14
+                                            color: "#FFFFFF"
                                         }
 
                                         MouseArea {
@@ -701,16 +701,16 @@ Window {
                                         height: 28
                                         radius: 14
                                         color: remoteRightArea.containsMouse ? "#00000080" : "#00000050"
-                                        border.color: "#6010B981"
+                                        border.color: Qt.rgba(1, 1, 1, 0.18)
                                         border.width: 1
                                         visible: remoteCard.hasDualStreams && !remoteCard.showingScreen
                                         z: 20
 
-                                        Image {
+                                        Icon {
                                             anchors.centerIn: parent
-                                            source: "qrc:/res/icon/chevron-right.png"
-                                            sourceSize.width: 14
-                                            sourceSize.height: 14
+                                            name: "chevron-right"
+                                            size: 14
+                                            color: "#FFFFFF"
                                         }
 
                                         MouseArea {
@@ -727,7 +727,7 @@ Window {
                                         anchors.fill: parent
                                         radius: 12
                                         color: "transparent"
-                                        border.color: Theme.isDark ? Qt.rgba(91/255, 141/255, 239/255, 0.2) : "#3B82F620"
+                                        border.color: Theme.isDark ? Qt.rgba(91/255, 141/255, 239/255, 0.2) : Qt.rgba(31/255, 111/255, 255/255, 0.12)
                                         border.width: 4
                                         visible: modelData.identity === backend.mainParticipantId
                                         z: 5
@@ -740,7 +740,7 @@ Window {
                                         anchors.margins: 8
                                         height: 24
                                         width: remoteNameRow.width + 16
-                                        color: Theme.isDark ? Qt.rgba(30/255, 30/255, 40/255, 0.9) : "#FFFFFFEE"
+                                        color: Theme.isDark ? Qt.rgba(28/255, 31/255, 38/255, 0.92) : Qt.rgba(1, 1, 1, 0.93)
                                         radius: 6
                                         z: 10
 
@@ -754,15 +754,15 @@ Window {
                                                 width: modelData.micEnabled ? 4 : 10
                                                 height: modelData.micEnabled ? 8 : 10
                                                 radius: modelData.micEnabled ? 2 : 5
-                                                color: modelData.micEnabled ? "#10B981" : "transparent"
+                                                color: modelData.micEnabled ? Theme.success : "transparent"
                                                 anchors.verticalCenter: parent.verticalCenter
 
-                                                Image {
+                                                Icon {
                                                     anchors.centerIn: parent
-                                                    source: "qrc:/res/icon/mute_the_microphone.png"
-                                                    sourceSize.width: 10
-                                                    sourceSize.height: 10
+                                                    name: "mic-off"
                                                     visible: !modelData.micEnabled
+                                                    size: 11
+                                                    color: Theme.danger
                                                 }
                                             }
 

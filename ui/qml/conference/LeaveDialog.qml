@@ -99,7 +99,7 @@ Popup {
                 Layout.preferredHeight: 40
 
                 background: Rectangle {
-                    color: confirmButton.down ? "#991B1B" : (confirmButton.hovered ? "#B91C1C" : "#DC2626")
+                    color: confirmButton.down || confirmButton.hovered ? Theme.dangerHover : Theme.danger
                     radius: 8
                 }
 

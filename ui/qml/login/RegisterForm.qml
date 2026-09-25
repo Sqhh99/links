@@ -63,7 +63,7 @@ ColumnLayout {
 
         Text {
             text: "邮箱验证码"
-            color: "#374151"
+            color: Theme.textSecondary
             font.pixelSize: 12
             font.weight: Font.DemiBold
         }
@@ -90,8 +90,8 @@ ColumnLayout {
                 Layout.preferredWidth: 120
 
                 background: Rectangle {
-                    color: sendCodeButton.enabled ? "#DBEAFE" : "#F3F4F6"
-                    border.color: sendCodeButton.enabled ? "#93C5FD" : "#E5E7EB"
+                    color: sendCodeButton.enabled ? Theme.brandSoft : Theme.hoverBackground
+                    border.color: sendCodeButton.enabled ? Theme.brandSoftStrong : Theme.borderLight
                     border.width: 1
                     radius: 10
 
@@ -102,7 +102,7 @@ ColumnLayout {
 
                 contentItem: Text {
                     text: sendCodeButton.text
-                    color: sendCodeButton.enabled ? "#4338CA" : "#9CA3AF"
+                    color: sendCodeButton.enabled ? Theme.brand : Theme.textHint
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
                     horizontalAlignment: Text.AlignHCenter
@@ -122,7 +122,7 @@ ColumnLayout {
         Text {
             visible: (root.showErrors || root.codeTouched) && !root.codeValid
             text: "请输入 6 位验证码"
-            color: "#EF4444"
+            color: Theme.danger
             font.pixelSize: 12
         }
     }

@@ -1,16 +1,18 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import Links
 import Links.Backend 1.0
 
+// Round avatar at the top of the home rail. Clicking it opens the account
+// popup (guest: login card, signed in: account actions).
 Item {
     id: root
 
     property bool isGuest: true
     property string userName: "游客"
     property string subtitle: "已登录"
-    property string avatarSource: "qrc:/res/icon/user.png"
     property bool suppressMenuToggleClick: false
     property bool closingFromToggle: false
 
@@ -19,7 +21,13 @@ Item {
     signal switchUserRequested()
     signal logoutRequested()
 
-    implicitHeight: 80
+    implicitWidth: 40
+    implicitHeight: 40
+
+    readonly property string initial: {
+        var name = root.isGuest ? "" : root.userName.trim()
+        return name.length > 0 ? name.charAt(0).toUpperCase() : ""
+    }
 
     function toggleAccountMenu() {
         if (suppressMenuToggleClick) {
@@ -40,9 +48,9 @@ Item {
         }
 
         const popupHeight = accountPopup.implicitHeight > 0 ? accountPopup.implicitHeight : accountPopup.height
-        const buttonPos = menuButton.mapToItem(overlay, menuButton.width, 0)
-        const desiredX = buttonPos.x + 8
-        const desiredY = buttonPos.y + (menuButton.height - popupHeight) / 2
+        const buttonPos = avatar.mapToItem(overlay, avatar.width, 0)
+        const desiredX = buttonPos.x + 12
+        const desiredY = buttonPos.y - 4
 
         const maxX = Math.max(8, overlay.width - accountPopup.width - 8)
         const maxY = Math.max(8, overlay.height - popupHeight - 8)
@@ -52,92 +60,110 @@ Item {
         accountPopup.open()
     }
 
-    Rectangle {
-        anchors.fill: parent
-        radius: 12
-        color: Theme.cardBackground
-        border.color: Theme.borderLight
-        border.width: 1
+    // Inline components cannot see this file's ids, so state is passed in.
+    component Avatar: Rectangle {
+        id: avatarItem
+        property int diameter: 40
+        property bool guest: true
+        property string initial: ""
+        width: diameter
+        height: diameter
+        radius: diameter / 2
+        color: guest ? Theme.hoverBackground : Theme.brand
 
-        Behavior on color { ColorAnimation { duration: 200 } }
-        Behavior on border.color { ColorAnimation { duration: 200 } }
-    }
-
-    RowLayout {
-        anchors.fill: parent
-        anchors.margins: 12
-        spacing: 12
-
-        Rectangle {
-            width: 44
-            height: 44
-            radius: 22
-            color: Theme.cardBackground
-            border.color: Theme.borderLight
-            border.width: 1
-
-            Image {
-                anchors.centerIn: parent
-                source: root.avatarSource
-                sourceSize.width: 20
-                sourceSize.height: 20
-                opacity: root.isGuest ? 0.6 : 0.9
-            }
+        Text {
+            anchors.centerIn: parent
+            visible: avatarItem.initial.length > 0
+            text: avatarItem.initial
+            color: "#FFFFFF"
+            font.pixelSize: avatarItem.diameter * 0.42
+            font.weight: Font.DemiBold
         }
 
-        ColumnLayout {
-            spacing: 6
-            Layout.fillWidth: true
+        Icon {
+            anchors.centerIn: parent
+            visible: avatarItem.initial.length === 0
+            name: "user"
+            size: Math.round(avatarItem.diameter * 0.45)
+            color: avatarItem.guest ? Theme.iconSecondary : "#FFFFFF"
+        }
+    }
 
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: 8
+    Avatar {
+        id: avatar
+        anchors.centerIn: parent
+        diameter: 40
+        guest: root.isGuest
+        initial: root.initial
+        border.width: avatarHover.hovered || accountPopup.opened ? 2 : 0
+        border.color: Theme.brandSoftStrong
 
-                Text {
-                    text: root.isGuest ? "游客" : root.userName
-                    color: Theme.textPrimary
-                    font.pixelSize: 14
-                    font.weight: Font.DemiBold
-                    elide: Text.ElideRight
-                    Layout.fillWidth: true
-                }
+        HoverHandler {
+            id: avatarHover
+            cursorShape: Qt.PointingHandCursor
+        }
 
-                LinkButton {
-                    visible: root.isGuest
-                    text: "去登录"
-                    Layout.alignment: Qt.AlignVCenter
-                    onClicked: root.loginClicked()
-                }
+        TapHandler {
+            onTapped: root.toggleAccountMenu()
+        }
+
+        ToolTip.visible: avatarHover.hovered && !accountPopup.opened
+        ToolTip.text: root.isGuest ? "游客 · 点击登录" : root.userName
+        ToolTip.delay: 500
+    }
+
+    component MenuRow: Rectangle {
+        id: menuRow
+        property string iconName: ""
+        property string label: ""
+        property bool destructive: false
+        signal triggered()
+
+        Layout.fillWidth: true
+        implicitHeight: 34
+        radius: Theme.radiusSm
+        color: rowHover.hovered ? (destructive ? Theme.dangerSoft : Theme.hoverBackground) : "transparent"
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 10
+
+            Icon {
+                name: menuRow.iconName
+                size: 15
+                color: menuRow.destructive ? Theme.danger : Theme.iconSecondary
             }
 
             Text {
-                visible: !root.isGuest
-                text: root.subtitle
-                color: Theme.textMuted
-                font.pixelSize: 11
-                elide: Text.ElideRight
+                text: menuRow.label
+                color: menuRow.destructive ? Theme.danger : Theme.textPrimary
+                font.pixelSize: 13
+                Layout.fillWidth: true
             }
         }
 
-        IconButton {
-            id: menuButton
-            visible: !root.isGuest
-            iconSource: accountPopup.opened ? "qrc:/res/icon/chevron-down.png" : "qrc:/res/icon/chevron-up.png"
-            toolTipText: ""
-            onClicked: root.toggleAccountMenu()
+        HoverHandler {
+            id: rowHover
+            cursorShape: Qt.PointingHandCursor
+        }
+
+        TapHandler {
+            onTapped: menuRow.triggered()
         }
     }
 
     Popup {
         id: accountPopup
         parent: Overlay.overlay
-        width: 196
+        width: 232
         padding: 8
         implicitHeight: accountMenuContent.implicitHeight + topPadding + bottomPadding
         height: implicitHeight
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         onAboutToHide: {
-            if (!root.closingFromToggle && (menuButton.down || menuButton.hovered)) {
+            if (!root.closingFromToggle && avatarHover.hovered) {
                 root.suppressMenuToggleClick = true
             }
         }
@@ -145,141 +171,109 @@ Item {
 
         background: Rectangle {
             color: Theme.popupBackground
-            radius: 10
+            radius: 12
             border.color: Theme.popupBorder
             border.width: 1
+
+            layer.enabled: true
+            layer.effect: MultiEffect {
+                shadowEnabled: true
+                shadowColor: Theme.shadowColor
+                shadowBlur: 0.8
+                shadowVerticalOffset: 6
+            }
         }
 
         contentItem: ColumnLayout {
             id: accountMenuContent
-            spacing: 4
+            spacing: 2
 
-            Rectangle {
+            // Header: avatar + name
+            RowLayout {
                 Layout.fillWidth: true
-                implicitHeight: 30
-                radius: 8
-                color: settingsArea.containsMouse ? Theme.sidebarBackground : "transparent"
+                Layout.margins: 8
+                spacing: 10
 
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 8
+                Avatar {
+                    diameter: 36
+                    guest: root.isGuest
+                    initial: root.initial
+                }
 
-                    Image {
-                        source: "qrc:/res/icon/set_up.png"
-                        sourceSize.width: 12
-                        sourceSize.height: 12
-                        opacity: Theme.iconOpacity
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    spacing: 2
+
+                    Text {
+                        text: root.isGuest ? "游客" : root.userName
+                        color: Theme.textPrimary
+                        font.pixelSize: 14
+                        font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
                     }
 
                     Text {
-                        text: "账号设置"
-                        color: Theme.textSecondary
-                        font.pixelSize: 12
+                        text: root.isGuest ? "仅可加入已存在的普通会议" : root.subtitle
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
                         Layout.fillWidth: true
-                    }
-                }
-
-                MouseArea {
-                    id: settingsArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        accountPopup.close()
-                        root.settingsRequested()
                     }
                 }
             }
 
-            Rectangle {
+            PrimaryButton {
+                visible: root.isGuest
                 Layout.fillWidth: true
-                height: 1
+                Layout.leftMargin: 8
+                Layout.rightMargin: 8
+                Layout.bottomMargin: 6
+                implicitHeight: 34
+                text: "登录 / 注册"
+                onClicked: {
+                    accountPopup.close()
+                    root.loginClicked()
+                }
+            }
+
+            Rectangle {
+                visible: !root.isGuest
+                Layout.fillWidth: true
+                Layout.topMargin: 2
+                Layout.bottomMargin: 4
+                implicitHeight: 1
                 color: Theme.separatorColor
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 30
-                radius: 8
-                color: switchArea.containsMouse ? Theme.sidebarBackground : "transparent"
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 8
-
-                    Image {
-                        source: "qrc:/res/icon/user.png"
-                        sourceSize.width: 12
-                        sourceSize.height: 12
-                        opacity: Theme.iconOpacity
-                    }
-
-                    Text {
-                        text: "切换账号"
-                        color: Theme.textSecondary
-                        font.pixelSize: 12
-                        Layout.fillWidth: true
-                    }
-                }
-
-                MouseArea {
-                    id: switchArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        accountPopup.close()
-                        root.switchUserRequested()
-                    }
+            MenuRow {
+                visible: !root.isGuest
+                iconName: "user-cog"
+                label: "账号设置"
+                onTriggered: {
+                    accountPopup.close()
+                    root.settingsRequested()
                 }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                height: 1
-                color: Theme.separatorColor
+            MenuRow {
+                visible: !root.isGuest
+                iconName: "repeat"
+                label: "切换账号"
+                onTriggered: {
+                    accountPopup.close()
+                    root.switchUserRequested()
+                }
             }
 
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 30
-                radius: 8
-                color: logoutArea.containsMouse ? "#FEF2F2" : "transparent"
-
-                RowLayout {
-                    anchors.fill: parent
-                    anchors.leftMargin: 10
-                    anchors.rightMargin: 10
-                    spacing: 8
-
-                    Image {
-                        source: "qrc:/res/icon/user-x.png"
-                        sourceSize.width: 12
-                        sourceSize.height: 12
-                        opacity: 0.75
-                    }
-
-                    Text {
-                        text: "退出登录"
-                        color: "#B91C1C"
-                        font.pixelSize: 12
-                        Layout.fillWidth: true
-                    }
-                }
-
-                MouseArea {
-                    id: logoutArea
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        accountPopup.close()
-                        root.logoutRequested()
-                    }
+            MenuRow {
+                visible: !root.isGuest
+                iconName: "log-out"
+                label: "退出登录"
+                destructive: true
+                onTriggered: {
+                    accountPopup.close()
+                    root.logoutRequested()
                 }
             }
         }

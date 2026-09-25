@@ -129,7 +129,7 @@ ColumnLayout {
 
                 delegate: Text {
                     text: DateUtils.pad2(modelData)
-                    color: Tumbler.displacement === 0 ? "#111827" : "#9CA3AF"
+                    color: Tumbler.displacement === 0 ? Theme.textPrimary : Theme.textHint
                     font.pixelSize: Tumbler.displacement === 0 ? 22 : 14
                     font.weight: Tumbler.displacement === 0 ? Font.Bold : Font.Normal
                     horizontalAlignment: Text.AlignHCenter
