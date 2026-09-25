@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Links
 
 Button {
     id: root
@@ -10,7 +11,7 @@ Button {
     
     background: Rectangle {
         color: "transparent"
-        border.color: root.hovered ? "#3d4560" : "#2a3041"
+        border.color: root.hovered ? Theme.borderColor : Theme.borderLight
         border.width: 1
         radius: 10
         
@@ -21,7 +22,7 @@ Button {
     
     contentItem: Text {
         text: root.text
-        color: "#c4c7d3"
+        color: Theme.textSecondary
         font.pixelSize: 14
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

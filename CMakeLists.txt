@@ -59,7 +59,7 @@ include(FetchLiveKitSDK)
 include(FetchWebRTCAudioProcessing)
 
 # Find Qt6
-find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent)
+find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Multimedia Quick QuickControls2 Qml Concurrent Svg)
 qt_standard_project_setup(REQUIRES 6.8)
 
 # =============================================================================
@@ -372,6 +372,9 @@ qt_add_qml_module(links
         ui/qml/components/TabButton.qml
         ui/qml/components/ComboBox.qml
         ui/qml/components/CheckBox.qml
+        ui/qml/components/Icon.qml
+        ui/qml/components/ToggleSwitch.qml
+        ui/qml/components/BrandSlider.qml
         # Login (auth components)
         ui/qml/login/LoginCard.qml
         ui/qml/login/AuthTabs.qml
@@ -390,6 +393,7 @@ qt_add_qml_module(links
         ui/qml/home/MeetingListPanel.qml
         ui/qml/home/HostMeetingListPanel.qml
         ui/qml/home/MeetingListItem.qml
+        ui/qml/home/StatusPill.qml
         ui/qml/home/GuestPromptDialog.qml
         ui/qml/home/MeetingPasswordDialog.qml
         ui/qml/home/CancelMeetingDialog.qml
@@ -408,6 +412,9 @@ qt_add_qml_module(links
         ui/qml/settings/VideoSettings.qml
         ui/qml/settings/NetworkSettings.qml
         ui/qml/settings/AppearanceSettings.qml
+        ui/qml/settings/SettingsSection.qml
+        ui/qml/settings/SettingsRow.qml
+        ui/qml/settings/SegmentedPicker.qml
         # Theme
         ui/qml/theme/Theme.qml
         # Conference
@@ -435,38 +442,49 @@ qt_add_qml_module(links
         ui/qml/screenpicker/ShareButton.qml
     RESOURCES
         ui/qml/utils/DateUtils.js
-        res/icon/close.png
-        res/icon/minimize.png
-        res/icon/maximize.png
-        res/icon/video.png
-        res/icon/close_video.png
-        res/icon/mute_the_microphone.png
-        res/icon/Turn_on_the_microphone.png
-        res/icon/monitor-up.png
-        res/icon/message.png
-        res/icon/user.png
-        res/icon/hang_up.png
-        res/icon/pin-off.png
-        res/icon/pin.png
-        res/icon/set_up.png
-        res/icon/panel-left-close.png
-        res/icon/panel-left-open.png
-        res/icon/panel-right-open.png
-        res/icon/user-x.png
-        res/icon/maximize_recovery.png
-        res/icon/chevron-down.png
-        res/icon/chevron-up.png
-        res/icon/chevron-right.png
-        res/icon/chevron-left.png 
-        res/icon/network.png
-        res/icon/screen_sharing_sidebar.png
-        res/icon/screen-share-off.png
-        res/icon/camera_staring_sidebar.png
-        res/icon/copy.png
-        res/icon/square-arrow-out-up-right.png
-        res/icon/monitor.png
-        res/icon/file-chart-column-increasing.png
-        res/icon/disc.png
+        res/icon/lucide/calendar-check.svg
+        res/icon/lucide/calendar.svg
+        res/icon/lucide/camera.svg
+        res/icon/lucide/check.svg
+        res/icon/lucide/chevron-down.svg
+        res/icon/lucide/chevron-left.svg
+        res/icon/lucide/chevron-right.svg
+        res/icon/lucide/chevron-up.svg
+        res/icon/lucide/circle-dot.svg
+        res/icon/lucide/copy.svg
+        res/icon/lucide/file-chart-column-increasing.svg
+        res/icon/lucide/inbox.svg
+        res/icon/lucide/layout-grid.svg
+        res/icon/lucide/lock.svg
+        res/icon/lucide/log-out.svg
+        res/icon/lucide/maximize-2.svg
+        res/icon/lucide/message-square.svg
+        res/icon/lucide/mic-off.svg
+        res/icon/lucide/mic.svg
+        res/icon/lucide/minimize-2.svg
+        res/icon/lucide/minus.svg
+        res/icon/lucide/monitor-up.svg
+        res/icon/lucide/moon.svg
+        res/icon/lucide/palette.svg
+        res/icon/lucide/panel-left-close.svg
+        res/icon/lucide/panel-left-open.svg
+        res/icon/lucide/phone-off.svg
+        res/icon/lucide/plus.svg
+        res/icon/lucide/repeat.svg
+        res/icon/lucide/screen-share-off.svg
+        res/icon/lucide/screen-share.svg
+        res/icon/lucide/settings.svg
+        res/icon/lucide/square-arrow-out-up-right.svg
+        res/icon/lucide/sun.svg
+        res/icon/lucide/user-cog.svg
+        res/icon/lucide/user-x.svg
+        res/icon/lucide/user.svg
+        res/icon/lucide/users.svg
+        res/icon/lucide/video-off.svg
+        res/icon/lucide/video.svg
+        res/icon/lucide/wifi.svg
+        res/icon/lucide/x.svg
+        res/icon/lucide/zap.svg
         res/icon/appIcon/linux/icon_16x16.png
         res/icon/appIcon/linux/icon_32x32.png
         res/icon/appIcon/linux/icon_48x48.png
@@ -484,6 +502,7 @@ target_link_libraries(links PRIVATE
     Qt6::Multimedia
     Qt6::Quick
     Qt6::QuickControls2
+    Qt6::Svg
     Qt6::Qml
     Qt6::Concurrent
 )

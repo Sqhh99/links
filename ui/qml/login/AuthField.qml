@@ -1,4 +1,5 @@
 import QtQuick
+import Links
 import QtQuick.Layouts
 
 ColumnLayout {
@@ -25,7 +26,7 @@ ColumnLayout {
     Text {
         visible: root.label.length > 0
         text: root.label
-        color: "#374151"
+        color: Theme.textSecondary
         font.pixelSize: 12
         font.weight: Font.DemiBold
     }
@@ -43,7 +44,7 @@ ColumnLayout {
     Text {
         visible: root.showError && root.errorText.length > 0
         text: root.errorText
-        color: "#EF4444"
+        color: Theme.danger
         font.pixelSize: 12
     }
 }

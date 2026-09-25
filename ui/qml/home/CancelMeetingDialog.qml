@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import Links
 import Links.Backend 1.0
 
@@ -21,7 +22,7 @@ Popup {
     anchors.centerIn: parent
 
     Overlay.modal: Rectangle {
-        color: "#00000066"
+        color: Theme.overlayColor
     }
 
     background: Rectangle {
@@ -29,9 +30,16 @@ Popup {
     }
 
     contentItem: Rectangle {
-        radius: 16
+        radius: Theme.radiusLg
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Theme.shadowColor
+            shadowBlur: 1.0
+            shadowVerticalOffset: 8
+        }
         color: Theme.windowBackground
-        border.color: Theme.borderLight
+        border.color: Theme.popupBorder
         border.width: 1
 
         ColumnLayout {

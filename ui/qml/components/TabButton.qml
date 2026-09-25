@@ -3,45 +3,37 @@ import Links
 import QtQuick.Controls
 import Links.Backend 1.0
 
+// Segment of a segmented control. Place several in a RowLayout on a
+// Theme.tabInactiveBg track (or use them standalone).
 Button {
     id: root
-    
+
     property bool active: false
-    
+
     checkable: false
     checked: active
-    
-    implicitHeight: 36
-    
+
+    implicitHeight: 30
+
     background: Rectangle {
-        color: root.checked ? Theme.tabActiveBg : Theme.tabInactiveBg
-        border.color: root.checked ? Theme.tabActiveBg : Theme.tabInactiveBorder
+        color: root.checked ? Theme.tabActiveBg : (root.hovered ? Theme.hoverBackground : Theme.tabInactiveBg)
+        radius: 7
+        border.color: root.checked && !Theme.isDark ? Theme.borderLight : "transparent"
         border.width: 1
-        radius: 10
-        
+
         Behavior on color {
-            ColorAnimation { duration: 150 }
-        }
-        Behavior on border.color {
-            ColorAnimation { duration: 150 }
+            ColorAnimation { duration: 120 }
         }
     }
-    
+
     contentItem: Text {
         text: root.text
-        color: root.checked ? Theme.textOnAccent : Theme.tabInactiveText
-        font.pixelSize: 13
+        color: root.checked ? Theme.tabActiveText : Theme.tabInactiveText
+        font.pixelSize: 12
+        font.weight: root.checked ? Font.DemiBold : Font.Normal
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-        
-        Behavior on color {
-            ColorAnimation { duration: 150 }
-        }
     }
-    
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onPressed: function(mouse) { mouse.accepted = false }
-    }
+
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
 }

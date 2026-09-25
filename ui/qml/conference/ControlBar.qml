@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import Links
 import Links.Backend 1.0
 
@@ -8,7 +9,7 @@ import Links.Backend 1.0
 Rectangle {
     id: root
     
-    height: 68
+    height: 60
     color: Theme.windowBackground
     radius: 12
     clip: true
@@ -45,8 +46,8 @@ Rectangle {
             SplitDeviceButton {
                 id: micButton
                 isActive: backend ? backend.micEnabled : false
-                iconOn: "qrc:/res/icon/Turn_on_the_microphone.png"
-                iconOff: "qrc:/res/icon/mute_the_microphone.png"
+                iconOn: "mic"
+                iconOff: "mic-off"
                 toolTipOn: "静音"
                 toolTipOff: "解除静音"
                 deviceLabel: "麦克风"
@@ -65,8 +66,8 @@ Rectangle {
             SplitDeviceButton {
                 id: camButton
                 isActive: backend ? backend.camEnabled : false
-                iconOn: "qrc:/res/icon/video.png"
-                iconOff: "qrc:/res/icon/close_video.png"
+                iconOn: "video"
+                iconOff: "video-off"
                 toolTipOn: "关闭摄像头"
                 toolTipOff: "开启摄像头"
                 deviceLabel: "摄像头"
@@ -92,7 +93,7 @@ Rectangle {
             
             IconOnlyButton {
                 visible: !root.isGuest
-                iconSource: "qrc:/res/icon/monitor-up.png"
+                iconName: "monitor-up"
                 isActive: backend ? backend.screenSharing : false
                 enabled: backend ? backend.screenShareSupported : false
                 activeColor: Theme.accentLight
@@ -108,7 +109,7 @@ Rectangle {
             
             IconOnlyButton {
                 visible: !root.isGuest
-                iconSource: "qrc:/res/icon/message.png"
+                iconName: "message-square"
                 isActive: backend ? backend.isChatVisible : false
                 activeColor: Theme.accentLight
                 activeIconColor: Theme.accentColor
@@ -117,7 +118,7 @@ Rectangle {
             }
             
             IconOnlyButton {
-                iconSource: "qrc:/res/icon/user.png"
+                iconName: "users"
                 isActive: backend ? backend.isParticipantsVisible : false
                 activeColor: Theme.accentLight
                 activeIconColor: Theme.accentColor
@@ -127,10 +128,11 @@ Rectangle {
             }
 
             IconOnlyButton {
-                iconSource: "qrc:/res/icon/disc.png"
+                iconName: "circle-dot"
                 isActive: backend ? backend.recording : false
                 enabled: backend ? backend.recordingAvailable : false
-                activeColor: "#FEE2E2"
+                activeColor: Theme.dangerSoft
+                activeIconColor: Theme.danger
                 toolTip: backend && !backend.recordingAvailable
                          ? "当前构建未启用本地录制"
                          : (backend && backend.recording ? "停止录制" : "开始录制")
@@ -138,7 +140,7 @@ Rectangle {
             }
             
             IconOnlyButton {
-                iconSource: "qrc:/res/icon/set_up.png"
+                iconName: "settings"
                 toolTip: "设置"
                 onClicked: if (backend) backend.showSettings()
             }
@@ -149,7 +151,9 @@ Rectangle {
         
         // --- Right Group: Leave ---
         IconOnlyButton {
-            iconSource: "qrc:/res/icon/hang_up.png"
+            iconName: "phone-off"
+            danger: true
+            implicitWidth: 56
             toolTip: "结束会议"
             onClicked: if (backend) backend.leave()
         }
@@ -172,17 +176,17 @@ Rectangle {
         signal deviceSelected(string deviceId)
         signal openSettings()
         
-        implicitWidth: 68  // 42 + 26 seamless
-        implicitHeight: 42
+        implicitWidth: 66  // 40 + 26 seamless
+        implicitHeight: 40
         
         // Container with capsule shape
         Rectangle {
             id: container
             anchors.fill: parent
-            radius: 12
-            color: splitBtn.isActive ? Theme.windowBackground : Theme.accentLight
+            radius: 10
+            color: splitBtn.isActive ? Theme.windowBackground : Theme.dangerSoft
             border.width: 1
-            border.color: splitBtn.isActive ? Theme.borderColor : Theme.borderAccent
+            border.color: splitBtn.isActive ? Theme.borderColor : "transparent"
             clip: true
             
             Row {
@@ -192,15 +196,15 @@ Rectangle {
                 // Left: Main toggle button
                 Rectangle {
                     id: mainButton
-                    width: 42
+                    width: 40
                     height: parent.height
                     color: mainButtonArea.containsMouse ? Theme.hoverBackground : "transparent"
                     
-                    Image {
+                    Icon {
                         anchors.centerIn: parent
-                        source: splitBtn.isActive ? splitBtn.iconOn : splitBtn.iconOff
-                        sourceSize.width: 20
-                        sourceSize.height: 20
+                        name: splitBtn.isActive ? splitBtn.iconOn : splitBtn.iconOff
+                        size: 20
+                        color: splitBtn.isActive ? Theme.iconPrimary : Theme.danger
                     }
                     
                     MouseArea {
@@ -221,7 +225,7 @@ Rectangle {
                     width: 1
                     height: parent.height - 12
                     anchors.verticalCenter: parent.verticalCenter
-                    color: splitBtn.isActive ? Theme.separatorColor : Theme.borderAccent
+                    color: splitBtn.isActive ? Theme.separatorColor : Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.25)
                 }
                 
                 // Right: Dropdown button with arrow
@@ -231,12 +235,11 @@ Rectangle {
                     height: parent.height
                     color: dropdownArea.containsMouse ? Theme.hoverBackground : "transparent"
                     
-                    Image {
+                    Icon {
                         anchors.centerIn: parent
-                        source: menuPopup.visible ? "qrc:/res/icon/chevron-down.png" : "qrc:/res/icon/chevron-up.png"
-                        sourceSize.width: 10
-                        sourceSize.height: 10
-                        opacity: Theme.iconOpacity
+                        name: menuPopup.visible ? "chevron-down" : "chevron-up"
+                        size: 13
+                        color: Theme.iconSecondary
                     }
                     
                     MouseArea {
@@ -271,9 +274,13 @@ Rectangle {
                 border.width: 1
                 border.color: Theme.popupBorder
                 
-                // Shadow effect
                 layer.enabled: true
-                layer.effect: null
+                layer.effect: MultiEffect {
+                    shadowEnabled: true
+                    shadowColor: Theme.shadowColor
+                    shadowBlur: 0.8
+                    shadowVerticalOffset: 4
+                }
             }
             
             contentItem: Column {
@@ -318,12 +325,11 @@ Rectangle {
                             }
                             
                             // Checkmark for selected
-                            Text {
+                            Icon {
                                 visible: modelData.id === splitBtn.selectedDeviceId
-                                text: "✓"
-                                color: Theme.accentColor
-                                font.pixelSize: 12
-                                font.weight: Font.Bold
+                                name: "check"
+                                size: 14
+                                color: Theme.brand
                             }
                         }
                         
@@ -359,11 +365,9 @@ Rectangle {
                         anchors.leftMargin: 12
                         spacing: 8
                         
-                        Image {
-                            source: "qrc:/res/icon/set_up.png"
-                            sourceSize.width: 14
-                            sourceSize.height: 14
-                            opacity: Theme.iconOpacity
+                        Icon {
+                            name: "settings"
+                            size: 14
                         }
                         
                         Text {
@@ -391,29 +395,35 @@ Rectangle {
     // --- Icon Only Button Component ---
     component IconOnlyButton: Button {
         id: iBtn
-        property string iconSource: ""
+        property string iconName: ""
         property bool isActive: false
+        property bool danger: false
         property color activeColor: Theme.accentLight
         property color activeIconColor: Theme.accentColor
         property string toolTip: ""
         property int badgeCount: 0
         
-        implicitWidth: 48
-        implicitHeight: 40
+        implicitWidth: 44
+        implicitHeight: 38
         opacity: enabled ? 1.0 : 0.45
         
         background: Rectangle {
-            color: iBtn.isActive ? iBtn.activeColor : "transparent"
+            color: iBtn.danger ? (iBtn.hovered ? Theme.dangerHover : Theme.danger)
+                 : iBtn.isActive ? iBtn.activeColor
+                 : (iBtn.enabled && iBtn.hovered ? Theme.hoverBackground : Theme.hoverClear)
             radius: 10
+
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
         
         contentItem: Item {
-            Image {
+            Icon {
                 anchors.centerIn: parent
-                source: iBtn.iconSource
-                sourceSize.width: 22
-                sourceSize.height: 22
-                opacity: (iBtn.isActive || iBtn.hovered) ? 1.0 : Theme.iconOpacity
+                name: iBtn.iconName
+                size: 20
+                color: iBtn.danger ? "#FFFFFF"
+                     : iBtn.isActive ? iBtn.activeIconColor
+                     : (iBtn.hovered ? Theme.iconPrimary : Theme.iconSecondary)
             }
             
             // Badge
@@ -422,7 +432,7 @@ Rectangle {
                 width: 16
                 height: 16
                 radius: 8
-                color: "#EF4444" // Keeping red for notification badge
+                color: Theme.danger
                 anchors.top: parent.top
                 anchors.right: parent.right
                 anchors.topMargin: -2
@@ -438,14 +448,6 @@ Rectangle {
                     font.bold: true
                 }
             }
-        }
-        
-        // Hover
-        Rectangle {
-            anchors.fill: parent
-            radius: 10
-            color: "#000000"
-            opacity: (iBtn.enabled && !iBtn.isActive && iBtn.hovered) ? 0.05 : 0
         }
         
         ToolTip.visible: toolTip.length > 0 && hovered

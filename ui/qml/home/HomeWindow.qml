@@ -8,8 +8,8 @@ import Links.Backend 1.0
 Window {
     id: root
 
-    width: 1160
-    height: 720
+    width: 880
+    height: 580
     visible: true
     color: "transparent"
     flags: Qt.FramelessWindowHint | Qt.Window
@@ -137,68 +137,89 @@ Window {
         root.reloadMeetingData()
     }
 
+    // Current time for the date header, refreshed every minute
+    property date now: new Date()
+
+    Timer {
+        interval: 60 * 1000
+        running: root.visible
+        repeat: true
+        onTriggered: root.now = new Date()
+    }
+
+    readonly property var weekdayNames: ["周日", "周一", "周二", "周三", "周四", "周五", "周六"]
+
+    function pad2(n) {
+        return n < 10 ? "0" + n : "" + n
+    }
+
     Rectangle {
         id: windowFrame
         anchors.fill: parent
-        color: Theme.pageBackground
-        radius: 16
+        radius: 12
         border.color: Theme.windowBorder
         border.width: 1
+        gradient: Gradient {
+            GradientStop { position: 0.0; color: Theme.pageWashTop }
+            GradientStop { position: 0.55; color: Theme.pageWashBottom }
+            GradientStop { position: 1.0; color: Theme.pageBackground }
+        }
 
-        Behavior on color { ColorAnimation { duration: 200 } }
-        Behavior on border.color { ColorAnimation { duration: 200 } }
-
-        ColumnLayout {
+        RowLayout {
             anchors.fill: parent
+            anchors.margins: 1
             spacing: 0
 
-            TitleBar {
-                Layout.fillWidth: true
-                targetWindow: root
-                title: "Links"
-                onSettingsClicked: settingsDialog.open()
-                onMinimizeClicked: root.showMinimized()
-                onCloseClicked: Qt.quit()
+            HomeSidebar {
+                Layout.preferredWidth: 64
+                Layout.fillHeight: true
+                topLeftRadius: 11
+                bottomLeftRadius: 11
+                isGuest: root.isGuest
+                userName: root.userName
+                currentIndex: root.currentIndex
+                onNavChanged: function(index) { root.currentIndex = index }
+                onLoginRequested: root.openAuthModal()
+                onSwitchUserRequested: {
+                    authBackend.switchUser()
+                    localMeetingsModel.clear()
+                    hostMeetingsModel.clear()
+                }
+                onLogoutRequested: {
+                    authBackend.logout()
+                    localMeetingsModel.clear()
+                    hostMeetingsModel.clear()
+                }
+                onAccountSettingsRequested: settingsDialog.open()
+                onSettingsRequested: settingsDialog.open()
             }
 
-            RowLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.margins: 20
-                Layout.topMargin: 12
-                spacing: 20
+                spacing: 0
 
-                HomeSidebar {
-                    Layout.preferredWidth: 220
-                    Layout.fillHeight: true
-                    isGuest: root.isGuest
-                    userName: root.userName
-                    currentIndex: root.currentIndex
-                    onNavChanged: function(index) { root.currentIndex = index }
-                    onLoginRequested: root.openAuthModal()
-                    onSwitchUserRequested: {
-                        authBackend.switchUser()
-                        localMeetingsModel.clear()
-                        hostMeetingsModel.clear()
-                    }
-                    onLogoutRequested: {
-                        authBackend.logout()
-                        localMeetingsModel.clear()
-                        hostMeetingsModel.clear()
-                    }
-                    onAccountSettingsRequested: settingsDialog.open()
-                    onSettingsRequested: settingsDialog.open()
+                TitleBar {
+                    Layout.fillWidth: true
+                    targetWindow: root
+                    showTitle: false
+                    showSettingsButton: false
+                    onMinimizeClicked: root.showMinimized()
+                    onCloseClicked: Qt.quit()
                 }
 
-                Rectangle {
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    radius: 16
-                    color: "transparent"
+                    spacing: 0
 
                     StackLayout {
                         id: pageStack
-                        anchors.fill: parent
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.leftMargin: root.currentIndex === 0 ? 0 : 28
+                        Layout.rightMargin: root.currentIndex === 0 ? 0 : 28
+                        Layout.bottomMargin: 20
                         currentIndex: root.currentIndex
 
                         HomeMeetingPage {
@@ -221,41 +242,110 @@ Window {
                             isGuest: root.isGuest
                         }
                     }
-                }
 
-                Rectangle {
-                    Layout.preferredWidth: root.currentIndex === 0 ? 300 : 0
-                    Layout.fillHeight: true
-                    visible: root.currentIndex === 0
-                    color: "transparent"
+                    // Separator between actions and the schedule panel
+                    Rectangle {
+                        visible: root.currentIndex === 0
+                        Layout.preferredWidth: 1
+                        Layout.fillHeight: true
+                        Layout.bottomMargin: 28
+                        color: Theme.separatorColor
+                    }
 
+                    // Date header + meeting lists
+                    // Nested layouts default to fillWidth: true, which would let this
+                    // column compete with the action page for space; pin it to 300.
                     ColumnLayout {
-                        anchors.fill: parent
-                        spacing: 8
+                        visible: root.currentIndex === 0
+                        Layout.fillWidth: false
+                        Layout.preferredWidth: 300
+                        Layout.maximumWidth: 300
+                        Layout.fillHeight: true
+                        Layout.leftMargin: 20
+                        Layout.rightMargin: 16
+                        Layout.bottomMargin: 16
+                        spacing: 0
+
+                        Text {
+                            text: root.pad2(root.now.getMonth() + 1) + "/" + root.pad2(root.now.getDate())
+                            color: Theme.textPrimary
+                            font.pixelSize: 40
+                            font.weight: Font.Bold
+                            font.letterSpacing: -0.5
+                            Layout.leftMargin: 10
+                        }
 
                         RowLayout {
-                            Layout.fillWidth: true
+                            Layout.leftMargin: 10
+                            Layout.topMargin: 2
+                            spacing: 6
+
+                            Icon {
+                                name: "calendar"
+                                size: 14
+                                color: Theme.iconSecondary
+                            }
+
+                            Text {
+                                text: root.weekdayNames[root.now.getDay()] + "  ·  "
+                                      + (root.isGuest
+                                         ? "游客模式"
+                                         : (hostMeetingsModel.count > 0
+                                            ? hostMeetingsModel.count + " 场预定会议"
+                                            : "暂无预定"))
+                                color: Theme.textTertiary
+                                font.pixelSize: 13
+                            }
+                        }
+
+                        // Segmented tabs
+                        Rectangle {
                             visible: !root.isGuest
-                            spacing: 8
+                            Layout.fillWidth: true
+                            Layout.topMargin: 18
+                            Layout.leftMargin: 6
+                            Layout.rightMargin: 4
+                            implicitHeight: 36
+                            radius: 9
+                            color: Theme.tabInactiveBg
 
-                            TabButton {
-                                Layout.fillWidth: true
-                                text: "会议记录"
-                                active: root.rightPanelTab === 0
-                                onClicked: root.rightPanelTab = 0
-                            }
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.margins: 3
+                                spacing: 3
 
-                            TabButton {
-                                Layout.fillWidth: true
-                                text: "我的预定"
-                                active: root.rightPanelTab === 1
-                                onClicked: root.rightPanelTab = 1
+                                TabButton {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    text: "会议记录"
+                                    active: root.rightPanelTab === 0
+                                    onClicked: root.rightPanelTab = 0
+                                }
+
+                                TabButton {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    text: "我的预定"
+                                    active: root.rightPanelTab === 1
+                                    onClicked: root.rightPanelTab = 1
+                                }
                             }
+                        }
+
+                        Text {
+                            visible: root.isGuest
+                            text: "会议记录"
+                            color: Theme.textSecondary
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            Layout.leftMargin: 10
+                            Layout.topMargin: 22
                         }
 
                         Loader {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
+                            Layout.topMargin: 10
                             sourceComponent: (!root.isGuest && root.rightPanelTab === 1)
                                 ? hostMeetingsPanelComponent
                                 : meetingRecordsPanelComponent
@@ -266,9 +356,6 @@ Window {
 
                             MeetingListPanel {
                                 isGuest: root.isGuest
-                                headerTitle: "会议记录"
-                                headerTag: ""
-                                actionText: "查看全部 >"
                                 meetingsModel: localMeetingsModel
                                 onQuickMeetingClicked: meetingPage.openAction("quick")
                                 onJoinMeetingClicked: meetingPage.openAction("join")

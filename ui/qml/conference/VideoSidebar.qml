@@ -205,11 +205,11 @@ Rectangle {
                         Layout.fillWidth: true
                     }
                     
-                    Image {
+                    Icon {
                         visible: backend ? backend.micEnabled : false
-                        source: "qrc:/res/icon/Turn_on_the_microphone.png"
-                        sourceSize.width: 14
-                        sourceSize.height: 14
+                        name: "mic"
+                        size: 14
+                        color: "#FFFFFF"
                     }
                 }
             }
@@ -225,26 +225,26 @@ Rectangle {
                 color: toggleArea.containsMouse ? "#A0000000" : "#80000000"
                 visible: localCard.hasSingleStream
                 
-                Image {
+                Icon {
                     anchors.centerIn: parent
+                    color: "#FFFFFF"
                     // Single stream: show current mode icon
                     // Dual stream: show icon of what's currently in MAIN VIEW (click to switch to the other)
-                    source: {
+                    name: {
                         if (!backend) return ""
                         if (localCard.hasDualStreams) {
                             // Dual mode: show what's in main (click switches to sidebar content)
                             return backend.showScreenShareInMain 
-                                ? "qrc:/res/icon/camera_staring_sidebar.png"   // Screen in main, click for camera
-                                : "qrc:/res/icon/screen_sharing_sidebar.png"   // Camera in main, click for screen
+                                ? "camera"   // Screen in main, click for camera
+                                : "screen-share"   // Camera in main, click for screen
                         } else {
                             // Single mode: show current active source
                             return backend.screenSharing 
-                                ? "qrc:/res/icon/screen_sharing_sidebar.png" 
-                                : "qrc:/res/icon/camera_staring_sidebar.png"
+                                ? "screen-share" 
+                                : "camera"
                         }
                     }
-                    sourceSize.width: 16
-                    sourceSize.height: 16
+                    size: 16
                 }
                 
                 MouseArea {
@@ -392,11 +392,11 @@ Rectangle {
                                 Layout.fillWidth: true
                             }
                             
-                            Image {
+                            Icon {
                                 visible: modelData.micEnabled
-                                source: "qrc:/res/icon/Turn_on_the_microphone.png"
-                                sourceSize.width: 14
-                                sourceSize.height: 14
+                                name: "mic"
+                                size: 14
+                                color: "#FFFFFF"
                             }
                         }
                     }
@@ -412,23 +412,23 @@ Rectangle {
                         color: remoteToggleArea.containsMouse ? "#A0000000" : "#80000000"
                         visible: remoteCard.hasSingleStream
                         
-                        Image {
+                        Icon {
                             anchors.centerIn: parent
-                            source: {
+                            color: "#FFFFFF"
+                            name: {
                                 if (remoteCard.hasDualStreams) {
                                     // Dual mode: show icon of what clicking will switch TO (same as local)
                                     return remoteCard.showScreenInMain 
-                                        ? "qrc:/res/icon/camera_staring_sidebar.png"  // Screen in main, click for camera
-                                        : "qrc:/res/icon/screen_sharing_sidebar.png"  // Camera in main, click for screen
+                                        ? "camera"  // Screen in main, click for camera
+                                        : "screen-share"  // Camera in main, click for screen
                                 } else {
                                     // Single mode: show current active source
                                     return modelData.screenSharing 
-                                        ? "qrc:/res/icon/screen_sharing_sidebar.png" 
-                                        : "qrc:/res/icon/camera_staring_sidebar.png"
+                                        ? "screen-share" 
+                                        : "camera"
                                 }
                             }
-                            sourceSize.width: 16
-                            sourceSize.height: 16
+                            size: 16
                         }
                         
                         MouseArea {

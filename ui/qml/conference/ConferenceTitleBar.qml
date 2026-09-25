@@ -98,12 +98,11 @@ Rectangle {
                 color: shareBtnArea.containsMouse ? Theme.hoverBackground : "transparent"
                 visible: backend && backend.meetingNo && backend.meetingNo.length > 0
 
-                Image {
+                Icon {
                     anchors.centerIn: parent
-                    source: "qrc:/res/icon/square-arrow-out-up-right.png"
-                    sourceSize.width: 16
-                    sourceSize.height: 16
-                    opacity: 0.7
+                    name: "square-arrow-out-up-right"
+                    size: 16
+                    color: Theme.iconSecondary
                 }
 
                 MouseArea {
@@ -200,12 +199,11 @@ Rectangle {
                                     color: copyNoArea.containsMouse ? Theme.hoverBackground : "transparent"
                                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
-                                    Image {
+                                    Icon {
                                         anchors.centerIn: parent
-                                        source: "qrc:/res/icon/copy.png"
-                                        sourceSize.width: 14
-                                        sourceSize.height: 14
-                                        opacity: copyNoArea.containsMouse ? 1.0 : 0.5
+                                        name: "copy"
+                                        size: 14
+                                        color: copyNoArea.containsMouse ? Theme.iconPrimary : Theme.iconSecondary
                                     }
 
                                     MouseArea {
@@ -230,7 +228,7 @@ Rectangle {
                                         width: 52
                                         height: 24
                                         radius: 6
-                                        color: "#111827"
+                                        color: Theme.isDark ? "#E8ECF3" : "#0F172A"
                                         visible: false
                                         opacity: 0
 
@@ -243,7 +241,7 @@ Rectangle {
                                         Text {
                                             anchors.centerIn: parent
                                             text: "\u5df2\u590d\u5236"
-                                            color: "#FFFFFF"
+                                            color: Theme.isDark ? "#0F172A" : "#FFFFFF"
                                             font.pixelSize: 10
                                         }
 
@@ -309,12 +307,11 @@ Rectangle {
                                     radius: 6
                                     color: copyLinkArea.containsMouse ? Theme.hoverBackground : "transparent"
                                     Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
-                                    Image {
+                                    Icon {
                                         anchors.centerIn: parent
-                                        source: "qrc:/res/icon/copy.png"
-                                        sourceSize.width: 14
-                                        sourceSize.height: 14
-                                        opacity: copyLinkArea.containsMouse ? 1.0 : 0.5
+                                        name: "copy"
+                                        size: 14
+                                        color: copyLinkArea.containsMouse ? Theme.iconPrimary : Theme.iconSecondary
                                     }
 
                                     MouseArea {
@@ -339,7 +336,7 @@ Rectangle {
                                         width: 52
                                         height: 24
                                         radius: 6
-                                        color: "#111827"
+                                        color: Theme.isDark ? "#E8ECF3" : "#0F172A"
                                         visible: false
                                         opacity: 0
 
@@ -352,7 +349,7 @@ Rectangle {
                                         Text {
                                             anchors.centerIn: parent
                                             text: "\u5df2\u590d\u5236"
-                                            color: "#FFFFFF"
+                                            color: Theme.isDark ? "#0F172A" : "#FFFFFF"
                                             font.pixelSize: 10
                                         }
 
@@ -397,7 +394,7 @@ Rectangle {
             Rectangle {
                 id: networkStatusPill
 
-                property color qualityColor: backend ? backend.networkQualityColor : "#6B7280"
+                property color qualityColor: backend ? backend.networkQualityColor : Theme.textMuted
 
                 height: 24
                 width: Math.max(96, networkStatusLabelMetrics.width + 30)
@@ -566,11 +563,10 @@ Rectangle {
                             anchors.centerIn: parent
                             spacing: 4
 
-                            Image {
-                                source: "qrc:/res/icon/user.png" // Using as grid icon
-                                sourceSize.width: 12
-                                sourceSize.height: 12
-                                opacity: (backend && backend.viewMode === "gallery") ? 1.0 : 0.6
+                            Icon {
+                                name: "layout-grid"
+                                size: 12
+                                color: (backend && backend.viewMode === "gallery") ? Theme.iconPrimary : Theme.iconSecondary
                             }
 
                             Text {
@@ -599,11 +595,10 @@ Rectangle {
                             anchors.centerIn: parent
                             spacing: 4
 
-                            Image {
-                                source: "qrc:/res/icon/maximize.png"
-                                sourceSize.width: 12
-                                sourceSize.height: 12
-                                opacity: (!backend || backend.viewMode === "speaker") ? 1.0 : 0.6
+                            Icon {
+                                name: "user"
+                                size: 12
+                                color: (!backend || backend.viewMode === "speaker") ? Theme.iconPrimary : Theme.iconSecondary
                             }
 
                             Text {
@@ -632,25 +627,25 @@ Rectangle {
             spacing: 4
             Layout.alignment: Qt.AlignVCenter
 
-            IconButton {
-                iconSource: "qrc:/res/icon/minimize.png"
-                iconColor: Theme.textMuted
+            WindowIconButton {
+                iconName: "minus"
+                iconColor: Theme.iconSecondary
                 hoverColor: Theme.hoverBackground
                 onClicked: if (root.targetWindow) root.targetWindow.showMinimized()
             }
 
-            IconButton {
-                iconSource: (backend && backend.isFullscreen) ? "qrc:/res/icon/maximize_recovery.png" : "qrc:/res/icon/maximize.png"
-                iconColor: Theme.textMuted
+            WindowIconButton {
+                iconName: (backend && backend.isFullscreen) ? "minimize-2" : "maximize-2"
+                iconColor: Theme.iconSecondary
                 hoverColor: Theme.hoverBackground
                 onClicked: if (backend) backend.isFullscreen = !backend.isFullscreen
             }
 
-            IconButton {
-                iconSource: "qrc:/res/icon/close.png"
-                iconColor: Theme.textMuted
-                hoverColor: "#FEE2E2"
-                hoverIconColor: "#EF4444"
+            WindowIconButton {
+                iconName: "x"
+                iconColor: Theme.iconSecondary
+                hoverColor: Theme.danger
+                hoverIconColor: "#FFFFFF"
                 onClicked: if (backend) backend.leave()
             }
         }
@@ -666,11 +661,11 @@ Rectangle {
     }
 
     // Icon Button Component
-    component IconButton: Rectangle {
+    component WindowIconButton: Rectangle {
         id: btn
-        property string iconSource: ""
+        property string iconName: ""
         property string toolTipText: ""
-        property color iconColor: Theme.textMuted
+        property color iconColor: Theme.iconSecondary
         property color hoverColor: Theme.hoverBackground
         property color hoverIconColor: btn.iconColor
         property bool checkable: false
@@ -683,14 +678,12 @@ Rectangle {
         radius: 6
         color: mouseArea.containsMouse ? btn.hoverColor : "transparent"
 
-        Image {
+        Icon {
             id: icon
-            source: btn.iconSource
-            sourceSize.width: 16
-            sourceSize.height: 16
+            name: btn.iconName
+            size: 16
             anchors.centerIn: parent
-            visible: true
-            opacity: 0.8
+            color: mouseArea.containsMouse ? btn.hoverIconColor : btn.iconColor
         }
 
         ToolTip.visible: toolTipText.length > 0 && mouseArea.containsMouse

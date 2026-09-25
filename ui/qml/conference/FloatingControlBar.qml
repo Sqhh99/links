@@ -195,7 +195,7 @@ Window {
                         width: 8
                         height: 8
                         radius: 4
-                        color: "#EF4444"
+                        color: Theme.danger
                         
                         SequentialAnimation on opacity {
                             running: true
@@ -260,8 +260,8 @@ Window {
                 SplitDeviceButton {
                     visible: !root.isGuest
                     isActive: backend ? backend.micEnabled : false
-                    iconOn: "qrc:/res/icon/Turn_on_the_microphone.png"
-                    iconOff: "qrc:/res/icon/mute_the_microphone.png"
+                    iconOn: "mic"
+                    iconOff: "mic-off"
                     devices: settingsBackend ? settingsBackend.microphones : []
                     selectedDeviceId: settingsBackend ? settingsBackend.selectedMicId : ""
                     onToggle: if (backend) backend.toggleMicrophone()
@@ -280,8 +280,8 @@ Window {
                 SplitDeviceButton {
                     visible: !root.isGuest
                     isActive: backend ? backend.camEnabled : false
-                    iconOn: "qrc:/res/icon/video.png"
-                    iconOff: "qrc:/res/icon/close_video.png"
+                    iconOn: "video"
+                    iconOff: "video-off"
                     devices: settingsBackend ? settingsBackend.cameras : []
                     selectedDeviceId: settingsBackend ? settingsBackend.selectedCameraId : ""
                     onToggle: if (backend) backend.toggleCamera()
@@ -304,24 +304,24 @@ Window {
                     color: Theme.separatorColor
                 }
 
-                IconButton {
+                BarIconButton {
                     id: networkStatusBtn
-                    iconSource: "qrc:/res/icon/file-chart-column-increasing.png"
+                    iconName: "file-chart-column-increasing"
                     toolTipText: "网络状态"
                     onClicked: root.toggleInfoPopup(networkStatsPopup, networkStatusBtn)
                 }
 
-                IconButton {
+                BarIconButton {
                     id: shareBtn
-                    iconSource: "qrc:/res/icon/square-arrow-out-up-right.png"
+                    iconName: "square-arrow-out-up-right"
                     toolTipText: "分享会议"
                     visible: backend && backend.meetingNo && backend.meetingNo.length > 0
                     onClicked: root.toggleInfoPopup(sharePopup, shareBtn)
                 }
 
-                IconButton {
+                BarIconButton {
                     id: recordingBtn
-                    iconSource: "qrc:/res/icon/disc.png"
+                    iconName: "circle-dot"
                     enabled: backend ? backend.recordingAvailable : false
                     toolTipText: backend && !backend.recordingAvailable
                                  ? "当前构建未启用本地录制"
@@ -330,8 +330,8 @@ Window {
                     onClicked: if (backend) backend.toggleRecording()
                 }
                 
-                IconButton {
-                    iconSource: "qrc:/res/icon/set_up.png"
+                BarIconButton {
+                    iconName: "settings"
                     toolTipText: "设置"
                     onClicked: root.openSettingsDialog()
                 }
@@ -347,8 +347,10 @@ Window {
             }
             
             // --- Right: End Share button ---
-            IconButton {
-                iconSource: "qrc:/res/icon/screen-share-off.png"
+            BarIconButton {
+                iconName: "screen-share-off"
+                danger: true
+                implicitWidth: 44
                 toolTipText: "结束共享"
                 onClicked: root.stopSharingClicked()
             }
@@ -434,12 +436,11 @@ Window {
                         color: copyNoArea.containsMouse ? Theme.hoverBackground : "transparent"
                         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
-                        Image {
+                        Icon {
                             anchors.centerIn: parent
-                            source: "qrc:/res/icon/copy.png"
-                            sourceSize.width: 14
-                            sourceSize.height: 14
-                            opacity: copyNoArea.containsMouse ? 1.0 : 0.5
+                            name: "copy"
+                            size: 14
+                            color: copyNoArea.containsMouse ? Theme.brand : Theme.iconSecondary
                         }
 
                         MouseArea {
@@ -463,7 +464,7 @@ Window {
                             width: 52
                             height: 24
                             radius: 6
-                            color: "#111827"
+                            color: Theme.isDark ? "#E8ECF3" : "#0F172A"
                             visible: false
                             opacity: 0
 
@@ -476,7 +477,7 @@ Window {
                             Text {
                                 anchors.centerIn: parent
                                 text: "已复制"
-                                color: "#FFFFFF"
+                                color: Theme.isDark ? "#0F172A" : "#FFFFFF"
                                 font.pixelSize: 10
                             }
 
@@ -541,12 +542,11 @@ Window {
                         color: copyLinkArea.containsMouse ? Theme.hoverBackground : "transparent"
                         Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
 
-                        Image {
+                        Icon {
                             anchors.centerIn: parent
-                            source: "qrc:/res/icon/copy.png"
-                            sourceSize.width: 14
-                            sourceSize.height: 14
-                            opacity: copyLinkArea.containsMouse ? 1.0 : 0.5
+                            name: "copy"
+                            size: 14
+                            color: copyLinkArea.containsMouse ? Theme.brand : Theme.iconSecondary
                         }
 
                         MouseArea {
@@ -570,7 +570,7 @@ Window {
                             width: 52
                             height: 24
                             radius: 6
-                            color: "#111827"
+                            color: Theme.isDark ? "#E8ECF3" : "#0F172A"
                             visible: false
                             opacity: 0
 
@@ -583,7 +583,7 @@ Window {
                             Text {
                                 anchors.centerIn: parent
                                 text: "已复制"
-                                color: "#FFFFFF"
+                                color: Theme.isDark ? "#0F172A" : "#FFFFFF"
                                 font.pixelSize: 10
                             }
 
@@ -706,39 +706,34 @@ Window {
     }
     
     // --- Icon Button Component ---
-    component IconButton: Button {
+    component BarIconButton: Button {
         id: iconBtn
-        property string iconSource: ""
+        property string iconName: ""
         property string toolTipText: ""
         property bool active: false
+        property bool danger: false
         
-        implicitWidth: 36
-        implicitHeight: 36
+        implicitWidth: 34
+        implicitHeight: 34
+        opacity: enabled ? 1.0 : 0.45
         
         background: Rectangle {
-            color: "transparent"
-            radius: 18
+            radius: iconBtn.danger ? 10 : height / 2
+            color: iconBtn.danger ? (iconBtn.hovered ? Theme.dangerHover : Theme.danger)
+                 : iconBtn.active ? Theme.dangerSoft
+                 : (iconBtn.hovered ? Theme.hoverBackground : Theme.hoverClear)
+
+            Behavior on color { ColorAnimation { duration: 120 } }
         }
         
         contentItem: Item {
-            Rectangle {
-                anchors.fill: parent
-                radius: 18
-                color: iconBtn.active ? "#FEE2E2" : "transparent"
-            }
-
-            Image {
+            Icon {
                 anchors.centerIn: parent
-                source: iconBtn.iconSource
-                sourceSize.width: 20
-                sourceSize.height: 20
-            }
-            
-            Rectangle {
-                anchors.fill: parent
-                radius: 18
-                color: "#000000"
-                opacity: iconBtn.hovered ? 0.06 : 0
+                name: iconBtn.iconName
+                size: 18
+                color: iconBtn.danger ? "#FFFFFF"
+                     : iconBtn.active ? Theme.danger
+                     : (iconBtn.hovered ? Theme.iconPrimary : Theme.iconSecondary)
             }
         }
         
@@ -772,9 +767,9 @@ Window {
             id: splitContainer
             anchors.fill: parent
             radius: 10
-            color: splitBtn.isActive ? "transparent" : Theme.accentLight
+            color: splitBtn.isActive ? "transparent" : Theme.dangerSoft
             border.width: 1
-            border.color: splitBtn.isActive ? Theme.borderColor : Theme.borderAccent
+            border.color: splitBtn.isActive ? Theme.borderColor : "transparent"
             clip: true
             
             Row {
@@ -789,11 +784,11 @@ Window {
                         ? Theme.hoverBackground
                         : "transparent"
                     
-                    Image {
+                    Icon {
                         anchors.centerIn: parent
-                        source: splitBtn.isActive ? splitBtn.iconOn : splitBtn.iconOff
-                        sourceSize.width: 18
-                        sourceSize.height: 18
+                        name: splitBtn.isActive ? splitBtn.iconOn : splitBtn.iconOff
+                        size: 18
+                        color: splitBtn.isActive ? Theme.iconPrimary : Theme.danger
                     }
                     
                     MouseArea {
@@ -824,7 +819,7 @@ Window {
                     width: 1
                     height: parent.height - 10
                     anchors.verticalCenter: parent.verticalCenter
-                    color: splitBtn.isActive ? Theme.separatorColor : Theme.borderAccent
+                    color: splitBtn.isActive ? Theme.separatorColor : Qt.rgba(Theme.danger.r, Theme.danger.g, Theme.danger.b, 0.25)
                 }
                 
                 Rectangle {
@@ -835,12 +830,11 @@ Window {
                         ? Theme.hoverBackground
                         : "transparent"
                     
-                    Image {
+                    Icon {
                         anchors.centerIn: parent
-                        source: menuPopup.visible ? "qrc:/res/icon/chevron-down.png" : "qrc:/res/icon/chevron-up.png"
-                        sourceSize.width: 9
-                        sourceSize.height: 9
-                        opacity: Theme.iconOpacity
+                        name: menuPopup.visible ? "chevron-down" : "chevron-up"
+                        size: 12
+                        color: Theme.iconSecondary
                     }
                     
                     MouseArea {
@@ -947,12 +941,11 @@ Window {
                                 Layout.fillWidth: true
                             }
                             
-                            Text {
+                            Icon {
                                 visible: modelData.id === splitBtn.selectedDeviceId
-                                text: "✓"
-                                color: Theme.accentColor
-                                font.pixelSize: 12
-                                font.weight: Font.Bold
+                                name: "check"
+                                size: 14
+                                color: Theme.brand
                             }
                         }
                         
@@ -986,11 +979,9 @@ Window {
                         anchors.leftMargin: 12
                         spacing: 8
 
-                        Image {
-                            source: "qrc:/res/icon/set_up.png"
-                            sourceSize.width: 12
-                            sourceSize.height: 12
-                            opacity: Theme.iconOpacity
+                        Icon {
+                            name: "settings"
+                            size: 13
                         }
 
                         Text {

@@ -3,39 +3,43 @@ import Links
 import QtQuick.Controls
 import Links.Backend 1.0
 
+// Neutral outline button (cancel / secondary actions)
 Button {
     id: root
 
-    implicitHeight: 46
-    leftPadding: 16
-    rightPadding: 16
+    // "outline" (neutral bordered) or "soft" (brand tinted)
+    property string variant: "outline"
+
+    implicitHeight: 40
+    leftPadding: 18
+    rightPadding: 18
 
     background: Rectangle {
-        color: root.enabled ? (root.hovered ? Theme.secondaryHoverBg : Theme.secondaryBg) : Theme.hoverBackground
-        border.color: root.enabled ? Theme.secondaryBorder : Theme.borderLight
-        border.width: 1
-        radius: 10
+        radius: 8
+        color: {
+            if (!root.enabled) return Theme.disabledBg
+            if (root.variant === "soft")
+                return root.hovered ? Theme.secondaryHoverBg : Theme.secondaryBg
+            return root.pressed ? Theme.pressedBackground
+                                : (root.hovered ? Theme.buttonCancelHoverBg : Theme.buttonCancelBg)
+        }
+        border.color: root.variant === "soft" ? "transparent" : Theme.buttonCancelBorder
+        border.width: root.variant === "soft" ? 0 : 1
 
         Behavior on color {
-            ColorAnimation { duration: 120 }
-        }
-        Behavior on border.color {
             ColorAnimation { duration: 120 }
         }
     }
 
     contentItem: Text {
         text: root.text
-        color: root.enabled ? Theme.secondaryText : Theme.disabledText
-        font.pixelSize: 13
-        font.weight: Font.DemiBold
+        color: !root.enabled ? Theme.disabledText
+                             : (root.variant === "soft" ? Theme.secondaryText : Theme.buttonCancelText)
+        font.pixelSize: 14
+        font.weight: Font.Medium
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }
 
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onPressed: function(mouse) { mouse.accepted = false }
-    }
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
 }

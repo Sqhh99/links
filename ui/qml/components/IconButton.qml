@@ -1,41 +1,41 @@
 import QtQuick
-import Links
 import QtQuick.Controls
-import Links.Backend 1.0
+import Links
 
 Button {
     id: root
-    
-    property string iconSource: ""
+
+    property string iconName: ""
+    property int iconSize: 16
     property string toolTipText: ""
-    property string hoverColor: Theme.hoverBackground
-    
-    implicitWidth: 32
-    implicitHeight: 24
-    
+    property color iconColor: Theme.iconSecondary
+    property color hoverColor: Theme.hoverBackground
+    property color hoverIconColor: Theme.iconPrimary
+
+    implicitWidth: 28
+    implicitHeight: 28
+    padding: 0
+
     background: Rectangle {
-        color: "transparent"
-        radius: 4
+        color: root.pressed ? Qt.darker(root.hoverColor, 1.06)
+                            : (root.hovered ? root.hoverColor : Theme.clearOf(root.hoverColor))
+        radius: Theme.radiusSm
+
+        Behavior on color { ColorAnimation { duration: 120 } }
     }
-    
-    contentItem: Image {
-        source: root.iconSource
-        fillMode: Image.PreserveAspectFit
-        horizontalAlignment: Image.AlignHCenter
-        verticalAlignment: Image.AlignVCenter
-        sourceSize.width: 14
-        sourceSize.height: 14
-        smooth: true
-        opacity: Theme.iconOpacity
+
+    contentItem: Item {
+        Icon {
+            anchors.centerIn: parent
+            name: root.iconName
+            size: root.iconSize
+            color: root.hovered ? root.hoverIconColor : root.iconColor
+        }
     }
-    
+
     ToolTip.visible: toolTipText.length > 0 && hovered
     ToolTip.text: toolTipText
     ToolTip.delay: 500
-    
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onPressed: function(mouse) { mouse.accepted = false }
-    }
+
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
 }

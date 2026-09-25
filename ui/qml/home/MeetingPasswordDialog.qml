@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls as QQC2
 import QtQuick.Layouts
+import QtQuick.Effects
 import Links
 import Links.Backend 1.0
 
@@ -23,7 +24,7 @@ Popup {
     anchors.centerIn: parent
 
     Overlay.modal: Rectangle {
-        color: "#00000066"
+        color: Theme.overlayColor
     }
 
     background: Rectangle {
@@ -37,9 +38,16 @@ Popup {
     }
 
     contentItem: Rectangle {
-        radius: 18
+        radius: Theme.radiusLg
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Theme.shadowColor
+            shadowBlur: 1.0
+            shadowVerticalOffset: 8
+        }
         color: Theme.windowBackground
-        border.color: Theme.borderLight
+        border.color: Theme.popupBorder
         border.width: 1
         clip: true
         implicitHeight: innerLayout.implicitHeight + 48
@@ -54,7 +62,7 @@ Popup {
 
             Text {
                 text: root.invalidAttempt ? "密码错误，请重新输入" : "请输入会议密码"
-                color: root.invalidAttempt ? "#B91C1C" : Theme.textPrimary
+                color: root.invalidAttempt ? Theme.danger : Theme.textPrimary
                 font.pixelSize: 16
                 font.weight: Font.DemiBold
             }
@@ -114,7 +122,7 @@ Popup {
                         color: Theme.cardBackground
                         border.width: 1
                         border.color: root.invalidAttempt
-                            ? "#DC2626"
+                            ? Theme.danger
                             : (passwordInput.activeFocus ? Theme.accentColor : Theme.borderColor)
                     }
 
@@ -129,7 +137,7 @@ Popup {
                 Text {
                     visible: root.invalidAttempt
                     text: "密码不正确，请检查后重试"
-                    color: "#DC2626"
+                    color: Theme.danger
                     font.pixelSize: 11
                 }
             }

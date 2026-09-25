@@ -6,30 +6,22 @@ import Links.Backend 1.0
 Button {
     id: root
 
-    implicitHeight: 26
-    leftPadding: 4
-    rightPadding: 4
+    property color textColor: Theme.brand
 
-    background: Rectangle {
-        color: "transparent"
-    }
+    implicitHeight: 24
+    leftPadding: 2
+    rightPadding: 2
+
+    background: Item {}
 
     contentItem: Text {
         text: root.text
-        color: root.hovered ? Theme.accentHover : Theme.accentColor
+        color: root.hovered ? Qt.lighter(root.textColor, 1.15) : root.textColor
         font.pixelSize: 12
-        font.weight: Font.DemiBold
+        font.weight: Font.Medium
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
-
-        Behavior on color {
-            ColorAnimation { duration: 120 }
-        }
     }
 
-    MouseArea {
-        anchors.fill: parent
-        cursorShape: Qt.PointingHandCursor
-        onPressed: function(mouse) { mouse.accepted = false }
-    }
+    HoverHandler { cursorShape: Qt.PointingHandCursor }
 }

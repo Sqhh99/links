@@ -112,12 +112,11 @@ Rectangle {
         }
         
         // Mic status only
-        Image {
+        Icon {
             visible: root.showStatus
-            source: root.micEnabled ? "qrc:/res/icon/Turn_on_the_microphone.png" : "qrc:/res/icon/mute_the_microphone.png"
-            sourceSize.width: 14
-            sourceSize.height: 14
-            opacity: root.micEnabled ? 1.0 : 0.6
+            name: root.micEnabled ? "mic" : "mic-off"
+            size: 14
+            color: root.micEnabled ? "#FFFFFF" : Theme.danger
         }
     }
 }

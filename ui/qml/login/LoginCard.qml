@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Effects
 import Links
 
 Item {
@@ -16,16 +17,24 @@ Item {
 
     Rectangle {
         anchors.fill: parent
-        radius: 16
-        color: "#FFFFFF"
-        border.color: "#E5E7EB"
+        radius: Theme.radiusLg
+        color: Theme.cardBackground
+        border.color: Theme.popupBorder
         border.width: 1
+
+        layer.enabled: true
+        layer.effect: MultiEffect {
+            shadowEnabled: true
+            shadowColor: Theme.shadowColor
+            shadowBlur: 1.0
+            shadowVerticalOffset: 8
+        }
     }
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 28
-        anchors.bottomMargin: 24
+        anchors.margins: 24
+        anchors.bottomMargin: 20
         spacing: 16
 
         ColumnLayout {
@@ -33,14 +42,14 @@ Item {
 
             Text {
                 text: root.mode === "login" ? "欢迎回来" : "创建账号"
-                color: "#111827"
-                font.pixelSize: 22
+                color: Theme.textPrimary
+                font.pixelSize: 20
                 font.weight: Font.DemiBold
             }
 
             Text {
                 text: root.mode === "login" ? "使用邮箱与密码登录" : "创建你的会议账户"
-                color: "#6B7280"
+                color: Theme.textMuted
                 font.pixelSize: 12
             }
         }
@@ -109,7 +118,7 @@ Item {
         Text {
             visible: root.authBackend && root.authBackend.errorMessage.length > 0
             text: root.authBackend ? root.authBackend.errorMessage : ""
-            color: "#EF4444"
+            color: Theme.danger
             font.pixelSize: 13
             Layout.fillWidth: true
             horizontalAlignment: Text.AlignHCenter
