@@ -4,7 +4,7 @@
 - **分支：**
   - 服务端子模块 `server/`：`feat/username-login`，基于 `main` 的 `bf360ec`
   - 客户端：`feat/username-login`，基于 `main` 的 `d3cda31`
-- **关联文档：** [服务端 PR 记录](../pull-requests/2026-09-28-username-login-server.md)（[Sqhh99/links-sig-server#1](https://github.com/Sqhh99/links-sig-server/pull/1)） · [客户端 PR 记录](../pull-requests/2026-09-28-username-login-client.md)
+- **关联文档：** [服务端 PR 记录](../pull-requests/2026-09-28-username-login-server.md)（[Sqhh99/links-sig-server#1](https://github.com/Sqhh99/links-sig-server/pull/1)） · [客户端 PR 记录](../pull-requests/2026-09-28-username-login-client.md)（[Sqhh99/links#26](https://github.com/Sqhh99/links/pull/26)）
 
 ## 一、用户的请求
 
@@ -103,6 +103,7 @@
 
 - Docker Desktop 重启后，WSL 的 Windows 互操作失效（启动 `.exe` 报 `Exec format error`），因此没能构建，也没跑 qmllint。
 - 只做了一项检查：用 grep 确认被删除的符号在仓库里已没有引用。
+- 推送：仓库的 `pre-push` 钩子需要 `git-lfs`，而 WSL 里没有安装，Windows 的 `git.exe` 又因为互操作失效无法使用。作者在 WSL 里安装 `git-lfs` 后，钩子正常通过，完成推送。
 
 **行尾：** 仓库里有些文件的 CRLF 和 LF 混用。最初的编辑脚本把整个文件统一成了 CRLF，后来用脚本按原文件逐行恢复。最终 diff 中没有纯行尾的改动。
 
