@@ -1,0 +1,4 @@
+[submodule "server"]
+	path = server
+	url = https://github.com/Sqhh99/links-sig-server.git
+	branch = main
