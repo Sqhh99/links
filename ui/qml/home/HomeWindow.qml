@@ -21,8 +21,8 @@ Window {
     property int currentIndex: 0
     property int rightPanelTab: 0
 
-    function openAuthModal(mode) {
-        authModal.openWithMode(mode ? mode : "login")
+    function openAuthModal() {
+        authModal.open()
     }
 
     function handleSessionExpired(message) {
@@ -105,13 +105,8 @@ Window {
             authModal.close()
             root.reloadMeetingData()
         }
-        onRegisterSucceeded: {
-            joinBackend.syncParticipantNameFromSession()
-            authModal.close()
-            root.reloadMeetingData()
-        }
         onSwitchUserRequested: {
-            root.openAuthModal("login")
+            root.openAuthModal()
         }
         onSessionExpired: function(message) {
             root.handleSessionExpired(message)
@@ -402,7 +397,7 @@ Window {
 
     GuestPromptDialog {
         id: promptDialog
-        onPrimaryClicked: root.openAuthModal("login")
+        onPrimaryClicked: root.openAuthModal()
     }
 
     MeetingPasswordDialog {

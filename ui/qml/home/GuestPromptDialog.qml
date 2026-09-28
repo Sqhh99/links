@@ -10,7 +10,7 @@ Popup {
 
     property string titleText: "需要登录"
     property string messageText: ""
-    property string primaryText: "登录/注册"
+    property string primaryText: "登录"
     property string secondaryText: "先用游客模式"
     property bool showCancel: false
     property string cancelText: "取消"

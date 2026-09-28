@@ -230,7 +230,7 @@ Item {
                 Layout.rightMargin: 8
                 Layout.bottomMargin: 6
                 implicitHeight: 34
-                text: "登录 / 注册"
+                text: "登录"
                 onClicked: {
                     accountPopup.close()
                     root.loginClicked()

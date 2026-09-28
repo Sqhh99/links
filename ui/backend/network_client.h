@@ -66,10 +66,8 @@ public:
                          const QString& authToken = QString());
     void endRoom(const QString& roomName, const QString& authToken = QString());
 
-    void login(const QString& email, const QString& password);
-    void requestVerificationCode(const QString& email);
-    void registerUser(const QString& email, const QString& password,
-                      const QString& code, const QString& displayName);
+    // Signs in, or creates the account when the username is not taken yet.
+    void login(const QString& username, const QString& password);
 
     void setApiUrl(const QString& url);
     QString getApiUrl() const { return apiUrl_; }
@@ -86,12 +84,9 @@ signals:
     void error(const QString& message);
     void authExpired(const QString& message);
 
-    void loginSuccess(const QString& userId, const QString& email, const QString& token,
+    void loginSuccess(const QString& userId, const QString& username, const QString& token,
                       const QString& displayName);
-    void registerSuccess(const QString& userId, const QString& email, const QString& token,
-                         const QString& displayName);
-    void codeRequestSuccess(int expiresInSecs);
-    void authRefreshed(const QString& userId, const QString& email, const QString& token,
+    void authRefreshed(const QString& userId, const QString& username, const QString& token,
                        const QString& displayName, int expiresInSecs);
     void authError(const QString& message);
 
@@ -111,7 +106,7 @@ private:
                                   const QString& fallbackPath,
                                   const QJsonObject& payload,
                                   const std::function<void(const QJsonObject&)>& onSuccess,
-                                  const std::function<void(const QString&)>& onFailure);
+                                  const std::function<void(const QString&, const QString&)>& onFailure);
 
     QNetworkAccessManager* networkManager_;
     QString apiUrl_;

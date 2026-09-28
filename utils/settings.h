@@ -78,8 +78,8 @@ public:
     void setAuthToken(const QString& token);
     QString getUserId() const;
     void setUserId(const QString& userId);
-    QString getUserEmail() const;
-    void setUserEmail(const QString& email);
+    QString getUsername() const;
+    void setUsername(const QString& username);
     QString getDisplayName() const;
     void setDisplayName(const QString& name);
     bool hasAuthData() const;

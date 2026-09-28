@@ -18,6 +18,22 @@ QString extractErrorCode(const QJsonObject& obj)
     return QString{};
 }
 
+// User-facing text for the login error codes the server returns; the rules
+// match the server's checks for new accounts.
+QString loginErrorText(const QString& code, const QString& fallback)
+{
+    if (code == QStringLiteral("INVALID_CREDENTIALS")) {
+        return QStringLiteral("用户名已被占用或密码错误");
+    }
+    if (code == QStringLiteral("INVALID_USERNAME")) {
+        return QStringLiteral("用户名需为 2-32 个字符，只能包含字母、数字、_ - .");
+    }
+    if (code == QStringLiteral("WEAK_PASSWORD")) {
+        return QStringLiteral("密码需为 8-128 位，同时包含字母和数字，且不能与用户名相同");
+    }
+    return fallback;
+}
+
 int extractHttpStatus(QNetworkReply* reply)
 {
     if (!reply) {
@@ -449,7 +465,7 @@ void NetworkClient::refreshAuthToken(const QString& authToken)
         if (userId.isEmpty()) {
             userId = obj.value("user_id").toString();
         }
-        const QString email = obj.value("email").toString();
+        const QString username = obj.value("username").toString();
         const QString token = obj.value("token").toString();
         QString displayName = obj.value("displayName").toString();
         if (displayName.isEmpty()) {
@@ -457,15 +473,15 @@ void NetworkClient::refreshAuthToken(const QString& authToken)
         }
         const int expiresInSecs = obj.value("expiresInSecs").toInt(0);
 
-        if (userId.isEmpty() || email.isEmpty() || token.isEmpty()) {
+        if (userId.isEmpty() || username.isEmpty() || token.isEmpty()) {
             const QString errorMsg = "Invalid refresh response format";
             Logger::instance().error(errorMsg);
             emit authError(errorMsg);
             return;
         }
 
-        Logger::instance().info("Auth token refreshed for: " + email);
-        emit authRefreshed(userId, email, token, displayName, expiresInSecs);
+        Logger::instance().info("Auth token refreshed for: " + username);
+        emit authRefreshed(userId, username, token, displayName, expiresInSecs);
     });
 }
 
@@ -680,7 +696,7 @@ void NetworkClient::postAuthJsonWithFallback(
     const QString& fallbackPath,
     const QJsonObject& payload,
     const std::function<void(const QJsonObject&)>& onSuccess,
-    const std::function<void(const QString&)>& onFailure)
+    const std::function<void(const QString&, const QString&)>& onFailure)
 {
     const QJsonDocument doc(payload);
     const QByteArray data = doc.toJson();
@@ -710,7 +726,7 @@ void NetworkClient::postAuthJsonWithFallback(
             && statusCode == 404;
 
         if (!shouldFallback) {
-            onFailure(buildAuthErrorMessage(reply, responseData, obj));
+            onFailure(buildAuthErrorMessage(reply, responseData, obj), extractErrorCode(obj));
             return;
         }
 
@@ -729,7 +745,8 @@ void NetworkClient::postAuthJsonWithFallback(
             const QJsonObject fallbackObj = fallbackDoc.isObject() ? fallbackDoc.object() : QJsonObject{};
 
             if (fallbackReply->error() != QNetworkReply::NoError) {
-                onFailure(buildAuthErrorMessage(fallbackReply, fallbackResponseData, fallbackObj));
+                onFailure(buildAuthErrorMessage(fallbackReply, fallbackResponseData, fallbackObj),
+                          extractErrorCode(fallbackObj));
                 return;
             }
 
@@ -738,12 +755,12 @@ void NetworkClient::postAuthJsonWithFallback(
     });
 }
 
-void NetworkClient::login(const QString& email, const QString& password)
+void NetworkClient::login(const QString& username, const QString& password)
 {
-    Logger::instance().info(QString("Attempting login for email: %1").arg(email));
+    Logger::instance().info(QString("Attempting login for user: %1").arg(username));
 
     QJsonObject payload;
-    payload["email"] = email;
+    payload["username"] = username;
     payload["password"] = password;
 
     postAuthJsonWithFallback(
@@ -755,81 +772,22 @@ void NetworkClient::login(const QString& email, const QString& password)
             if (userId.isEmpty()) {
                 userId = obj.value("user_id").toString();
             }
-            const QString responseEmail = obj.value("email").toString();
+            const QString responseUsername = obj.value("username").toString();
             const QString token = obj.value("token").toString();
             QString displayName = obj.value("displayName").toString();
             if (displayName.isEmpty()) {
                 displayName = obj.value("display_name").toString();
             }
 
-            Logger::instance().info("Login successful for: " + responseEmail);
-            emit loginSuccess(userId, responseEmail, token, displayName);
+            Logger::instance().info(QString("Login successful for: %1%2")
+                                       .arg(responseUsername,
+                                            obj.value("accountCreated").toBool()
+                                                ? QStringLiteral(" (account created)")
+                                                : QString()));
+            emit loginSuccess(userId, responseUsername, token, displayName);
         },
-        [this](const QString& errorMsg) {
+        [this](const QString& errorMsg, const QString& errorCode) {
             Logger::instance().error("Login failed: " + errorMsg);
-            emit authError(errorMsg);
-        });
-}
-
-void NetworkClient::requestVerificationCode(const QString& email)
-{
-    Logger::instance().info(QString("Requesting verification code for: %1").arg(email));
-
-    QJsonObject payload;
-    payload["email"] = email;
-
-    postAuthJsonWithFallback(
-        "/api/auth/register/request-code",
-        "/auth/register/request-code",
-        payload,
-        [this](const QJsonObject& obj) {
-            int retryAfterSecs = obj.value("retryAfterSecs").toInt(0);
-            if (retryAfterSecs <= 0) {
-                retryAfterSecs = obj.value("expires_in_secs").toInt(600);
-            }
-            Logger::instance().info("Verification code sent successfully");
-            emit codeRequestSuccess(retryAfterSecs);
-        },
-        [this](const QString& errorMsg) {
-            Logger::instance().error("Request code failed: " + errorMsg);
-            emit authError(errorMsg);
-        });
-}
-
-void NetworkClient::registerUser(const QString& email, const QString& password,
-                                 const QString& code, const QString& displayName)
-{
-    Logger::instance().info(QString("Registering user: %1").arg(email));
-
-    QJsonObject payload;
-    payload["email"] = email;
-    payload["password"] = password;
-    payload["code"] = code;
-    if (!displayName.trimmed().isEmpty()) {
-        payload["displayName"] = displayName.trimmed();
-    }
-
-    postAuthJsonWithFallback(
-        "/api/auth/register",
-        "/auth/register",
-        payload,
-        [this](const QJsonObject& obj) {
-            QString userId = obj.value("userId").toString();
-            if (userId.isEmpty()) {
-                userId = obj.value("user_id").toString();
-            }
-            const QString responseEmail = obj.value("email").toString();
-            const QString token = obj.value("token").toString();
-            QString responseDisplayName = obj.value("displayName").toString();
-            if (responseDisplayName.isEmpty()) {
-                responseDisplayName = obj.value("display_name").toString();
-            }
-
-            Logger::instance().info("Registration successful for: " + responseEmail);
-            emit registerSuccess(userId, responseEmail, token, responseDisplayName);
-        },
-        [this](const QString& errorMsg) {
-            Logger::instance().error("Registration failed: " + errorMsg);
-            emit authError(errorMsg);
+            emit authError(loginErrorText(errorCode, errorMsg));
         });
 }

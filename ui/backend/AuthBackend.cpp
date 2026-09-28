@@ -2,28 +2,30 @@
 #include "../utils/settings.h"
 #include "../utils/logger.h"
 
+namespace {
+
+// Accounts created by the old email sign-up use the email as their username;
+// show only the part before '@' rather than the whole address.
+QString fallbackDisplayName(const QString& username)
+{
+    return username.section('@', 0, 0);
+}
+
+} // namespace
+
 AuthBackend::AuthBackend(QObject* parent)
     : QObject(parent),
-      networkClient_(new NetworkClient(this)),
-      cooldownTimer_(new QTimer(this))
+      networkClient_(new NetworkClient(this))
 {
     // Connect network signals
     connect(networkClient_, &NetworkClient::loginSuccess,
             this, &AuthBackend::onLoginSuccess);
-    connect(networkClient_, &NetworkClient::registerSuccess,
-            this, &AuthBackend::onRegisterSuccess);
-    connect(networkClient_, &NetworkClient::codeRequestSuccess,
-            this, &AuthBackend::onCodeRequestSuccess);
     connect(networkClient_, &NetworkClient::authRefreshed,
             this, &AuthBackend::onAuthRefreshed);
     connect(networkClient_, &NetworkClient::authExpired,
             this, &AuthBackend::onAuthExpired);
     connect(networkClient_, &NetworkClient::authError,
             this, &AuthBackend::onAuthError);
-    
-    // Setup cooldown timer
-    cooldownTimer_->setInterval(1000);
-    connect(cooldownTimer_, &QTimer::timeout, this, &AuthBackend::onCooldownTick);
     
     // Set API URL from settings
     networkClient_->setApiUrl(Settings::instance().getSignalingServerUrl());
@@ -32,32 +34,13 @@ AuthBackend::AuthBackend(QObject* parent)
     tryAutoLogin();
 }
 
-void AuthBackend::login(const QString& email, const QString& password)
+void AuthBackend::login(const QString& username, const QString& password)
 {
     if (loading_) return;
     
     setLoading(true);
     setErrorMessage("");
-    networkClient_->login(email, password);
-}
-
-void AuthBackend::requestCode(const QString& email)
-{
-    if (loading_ || codeCooldown_ > 0) return;
-    
-    setLoading(true);
-    setErrorMessage("");
-    networkClient_->requestVerificationCode(email);
-}
-
-void AuthBackend::registerUser(const QString& displayName, const QString& email,
-                                const QString& code, const QString& password)
-{
-    if (loading_) return;
-
-    setLoading(true);
-    setErrorMessage("");
-    networkClient_->registerUser(email, password, code, displayName.trimmed());
+    networkClient_->login(username.trimmed(), password);
 }
 
 void AuthBackend::logout()
@@ -65,7 +48,7 @@ void AuthBackend::logout()
     Settings::instance().clearAuthData();
     setAuthToken("");
     setLoggedIn(false);
-    setUserEmail("");
+    setAccountName("");
     setUserName("");
     setLoading(false);
     Logger::instance().info("User logged out");
@@ -87,7 +70,7 @@ void AuthBackend::tryAutoLogin()
     }
 }
 
-void AuthBackend::onLoginSuccess(const QString& userId, const QString& email, const QString& token,
+void AuthBackend::onLoginSuccess(const QString& userId, const QString& username, const QString& token,
                                  const QString& displayName)
 {
     setLoading(false);
@@ -95,64 +78,25 @@ void AuthBackend::onLoginSuccess(const QString& userId, const QString& email, co
     // Save auth data
     Settings::instance().setAuthToken(token);
     Settings::instance().setUserId(userId);
-    Settings::instance().setUserEmail(email);
+    Settings::instance().setUsername(username);
     setAuthToken(token.trimmed());
     
     QString resolvedDisplayName = displayName.trimmed();
     if (resolvedDisplayName.isEmpty()) {
-        resolvedDisplayName = email.split("@").first();
+        resolvedDisplayName = fallbackDisplayName(username);
     }
     Settings::instance().setDisplayName(resolvedDisplayName);
 
-    setUserEmail(email);
+    setAccountName(username);
     setUserName(resolvedDisplayName);
     setLoggedIn(true);
     
-    Logger::instance().info("Login successful, user: " + email);
+    Logger::instance().info("Login successful, user: " + username);
     emit loginSucceeded();
 }
 
-void AuthBackend::onRegisterSuccess(const QString& userId, const QString& email, const QString& token,
-                                    const QString& displayName)
-{
-    setLoading(false);
-    
-    // Save auth data
-    Settings::instance().setAuthToken(token);
-    Settings::instance().setUserId(userId);
-    Settings::instance().setUserEmail(email);
-    setAuthToken(token.trimmed());
-    
-    QString resolvedDisplayName = displayName.trimmed();
-    if (resolvedDisplayName.isEmpty()) {
-        resolvedDisplayName = email.split("@").first();
-    }
-    Settings::instance().setDisplayName(resolvedDisplayName);
-
-    setUserEmail(email);
-    setUserName(resolvedDisplayName);
-    setLoggedIn(true);
-
-    Logger::instance().info("Registration successful, user: " + email);
-    emit registerSucceeded();
-}
-
-void AuthBackend::onCodeRequestSuccess(int expiresInSecs)
-{
-    Q_UNUSED(expiresInSecs);
-    setLoading(false);
-    
-    // Start 60 second cooldown
-    codeCooldown_ = 60;
-    emit codeCooldownChanged();
-    startCooldownTimer();
-    
-    Logger::instance().info("Verification code sent");
-    emit codeRequestSucceeded();
-}
-
 void AuthBackend::onAuthRefreshed(const QString& userId,
-                                  const QString& email,
+                                  const QString& username,
                                   const QString& token,
                                   const QString& displayName,
                                   int expiresInSecs)
@@ -162,7 +106,7 @@ void AuthBackend::onAuthRefreshed(const QString& userId,
     setLoading(false);
     Settings::instance().setAuthToken(token);
     Settings::instance().setUserId(userId);
-    Settings::instance().setUserEmail(email);
+    Settings::instance().setUsername(username);
     setAuthToken(token.trimmed());
 
     QString resolvedDisplayName = displayName.trimmed();
@@ -170,15 +114,15 @@ void AuthBackend::onAuthRefreshed(const QString& userId,
         resolvedDisplayName = Settings::instance().getDisplayName().trimmed();
     }
     if (resolvedDisplayName.isEmpty()) {
-        resolvedDisplayName = email.split("@").first();
+        resolvedDisplayName = fallbackDisplayName(username);
     }
     Settings::instance().setDisplayName(resolvedDisplayName);
 
-    setUserEmail(email);
+    setAccountName(username);
     setUserName(resolvedDisplayName);
     setLoggedIn(true);
 
-    Logger::instance().info("Auto-login token refresh successful for: " + email);
+    Logger::instance().info("Auto-login token refresh successful for: " + username);
 }
 
 void AuthBackend::onAuthExpired(const QString& message)
@@ -200,18 +144,6 @@ void AuthBackend::onAuthError(const QString& error)
     setErrorMessage(error);
     Logger::instance().error("Auth error: " + error);
     emit authFailed(error);
-}
-
-void AuthBackend::onCooldownTick()
-{
-    if (codeCooldown_ > 0) {
-        codeCooldown_--;
-        emit codeCooldownChanged();
-        
-        if (codeCooldown_ == 0) {
-            cooldownTimer_->stop();
-        }
-    }
 }
 
 void AuthBackend::setLoading(bool loading)
@@ -238,11 +170,11 @@ void AuthBackend::setLoggedIn(bool loggedIn)
     }
 }
 
-void AuthBackend::setUserEmail(const QString& email)
+void AuthBackend::setAccountName(const QString& username)
 {
-    if (userEmail_ != email) {
-        userEmail_ = email;
-        emit userEmailChanged();
+    if (accountName_ != username) {
+        accountName_ = username;
+        emit accountNameChanged();
     }
 }
 
@@ -263,11 +195,4 @@ void AuthBackend::setAuthToken(const QString& token)
 
     authToken_ = trimmed;
     emit authTokenChanged();
-}
-
-void AuthBackend::startCooldownTimer()
-{
-    if (!cooldownTimer_->isActive()) {
-        cooldownTimer_->start();
-    }
 }
