@@ -733,9 +733,10 @@ QString LoginBackend::defaultAuthDisplayName() const
         return displayName;
     }
 
-    const QString email = Settings::instance().getUserEmail().trimmed();
-    if (!email.isEmpty()) {
-        return email.split("@").first();
+    const QString username = Settings::instance().getUsername().trimmed();
+    if (!username.isEmpty()) {
+        // Accounts from the old email sign-up use the email as username.
+        return username.section('@', 0, 0);
     }
 
     return QStringLiteral("User");

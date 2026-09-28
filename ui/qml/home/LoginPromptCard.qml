@@ -8,7 +8,7 @@ Rectangle {
 
     property string title: "登录解锁功能"
     property string message: ""
-    property string primaryText: "登录/注册"
+    property string primaryText: "登录"
     property string secondaryText: "先用游客模式"
     property bool showSecondary: true
     property int primaryWidth: 0

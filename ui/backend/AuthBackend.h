@@ -3,7 +3,6 @@
 
 #include <QObject>
 #include <QString>
-#include <QTimer>
 #include "network_client.h"
 
 class AuthBackend : public QObject
@@ -12,10 +11,10 @@ class AuthBackend : public QObject
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged)
     Q_PROPERTY(bool isLoggedIn READ isLoggedIn NOTIFY isLoggedInChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
-    Q_PROPERTY(QString userEmail READ userEmail NOTIFY userEmailChanged)
+    // accountName is the login username; userName is the name shown to others.
+    Q_PROPERTY(QString accountName READ accountName NOTIFY accountNameChanged)
     Q_PROPERTY(QString userName READ userName NOTIFY userNameChanged)
     Q_PROPERTY(QString authToken READ authToken NOTIFY authTokenChanged)
-    Q_PROPERTY(int codeCooldown READ codeCooldown NOTIFY codeCooldownChanged)
 
 public:
     explicit AuthBackend(QObject* parent = nullptr);
@@ -24,15 +23,12 @@ public:
     bool loading() const { return loading_; }
     bool isLoggedIn() const { return isLoggedIn_; }
     QString errorMessage() const { return errorMessage_; }
-    QString userEmail() const { return userEmail_; }
+    QString accountName() const { return accountName_; }
     QString userName() const { return userName_; }
     QString authToken() const { return authToken_; }
-    int codeCooldown() const { return codeCooldown_; }
 
-    Q_INVOKABLE void login(const QString& email, const QString& password);
-    Q_INVOKABLE void requestCode(const QString& email);
-    Q_INVOKABLE void registerUser(const QString& displayName, const QString& email,
-                                   const QString& code, const QString& password);
+    // Signs in, or creates the account when the username is not taken yet.
+    Q_INVOKABLE void login(const QString& username, const QString& password);
     Q_INVOKABLE void logout();
     Q_INVOKABLE void switchUser();
     Q_INVOKABLE void tryAutoLogin();
@@ -41,48 +37,38 @@ signals:
     void loadingChanged();
     void isLoggedInChanged();
     void errorMessageChanged();
-    void userEmailChanged();
+    void accountNameChanged();
     void userNameChanged();
     void authTokenChanged();
-    void codeCooldownChanged();
     
     void loginSucceeded();
-    void registerSucceeded();
     void switchUserRequested();
-    void codeRequestSucceeded();
     void sessionExpired(const QString& message);
     void authFailed(const QString& error);
 
 private slots:
-    void onLoginSuccess(const QString& userId, const QString& email, const QString& token,
+    void onLoginSuccess(const QString& userId, const QString& username, const QString& token,
                         const QString& displayName);
-    void onRegisterSuccess(const QString& userId, const QString& email, const QString& token,
-                           const QString& displayName);
-    void onAuthRefreshed(const QString& userId, const QString& email, const QString& token,
+    void onAuthRefreshed(const QString& userId, const QString& username, const QString& token,
                          const QString& displayName, int expiresInSecs);
     void onAuthExpired(const QString& message);
-    void onCodeRequestSuccess(int expiresInSecs);
     void onAuthError(const QString& error);
-    void onCooldownTick();
 
 private:
     void setLoading(bool loading);
     void setErrorMessage(const QString& message);
     void setLoggedIn(bool loggedIn);
-    void setUserEmail(const QString& email);
+    void setAccountName(const QString& username);
     void setUserName(const QString& name);
     void setAuthToken(const QString& token);
-    void startCooldownTimer();
 
     NetworkClient* networkClient_;
-    QTimer* cooldownTimer_;
     bool loading_{false};
     bool isLoggedIn_{false};
     QString errorMessage_;
-    QString userEmail_;
+    QString accountName_;
     QString userName_;
     QString authToken_;
-    int codeCooldown_{0};
 };
 
 #endif // AUTHBACKEND_H

@@ -8,49 +8,50 @@ ColumnLayout {
 
     property bool loading: false
     property bool showErrors: false
-    property bool emailTouched: false
+    property bool usernameTouched: false
     property bool passwordTouched: false
-    property string email: emailField.text
+    property string username: usernameField.text.trim()
     property string password: passwordField.text
-    property var emailPattern: /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/
+    // The server applies the username rules only when it creates an account,
+    // so accounts with older usernames (e.g. an email address) can still sign in.
+    property bool usernameValid: root.username.length > 0
     property var passwordPattern: /^(?=.*[A-Za-z])(?=.*\d).{8,}$/
-    property bool emailValid: emailPattern.test(root.email)
     property bool passwordValid: passwordPattern.test(root.password)
-    property bool formValid: root.emailValid && root.passwordValid
+    property bool formValid: root.usernameValid && root.passwordValid
 
-    signal loginRequested(string email, string password)
+    signal loginRequested(string username, string password)
 
     spacing: 16
 
     function attemptSubmit() {
         root.showErrors = true
         if (root.formValid) {
-            root.loginRequested(root.email, root.password)
+            root.loginRequested(root.username, root.password)
         }
     }
 
     function resetValidation() {
         root.showErrors = false
-        root.emailTouched = false
+        root.usernameTouched = false
         root.passwordTouched = false
     }
 
     AuthField {
-        id: emailField
-        label: "邮箱"
-        placeholderText: "name@company.com"
-        inputMethodHints: Qt.ImhEmailCharactersOnly
-        showError: (root.showErrors || root.emailTouched) && !root.emailValid
-        errorText: "请输入有效邮箱"
+        id: usernameField
+        label: "用户名"
+        placeholderText: "2-32 个字符：字母、数字、_ - ."
+        inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+        showError: (root.showErrors || root.usernameTouched) && !root.usernameValid
+        errorText: "请输入用户名"
 
-        onEdited: root.emailTouched = true
+        onEdited: root.usernameTouched = true
         onSubmitted: passwordField.inputField.forceActiveFocus()
     }
 
     AuthField {
         id: passwordField
         label: "密码"
-        placeholderText: "至少 8 位"
+        placeholderText: "至少 8 位，包含字母和数字"
         echoMode: TextInput.Password
         inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
         showError: (root.showErrors || root.passwordTouched) && !root.passwordValid
@@ -60,19 +61,9 @@ ColumnLayout {
         onSubmitted: root.attemptSubmit()
     }
 
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: 6
-
-        Item { Layout.fillWidth: true }
-
-        LinkButton {
-            text: "忘记密码？"
-        }
-    }
-
     PrimaryButton {
         Layout.fillWidth: true
+        Layout.topMargin: 4
         text: "登录"
         loading: root.loading
         enabled: !root.loading

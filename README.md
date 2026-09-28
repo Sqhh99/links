@@ -25,7 +25,7 @@ git submodule update --init server
 
 ## Main Capabilities
 
-- Email/password login and meeting join/start flows
+- Username/password login (the first login creates the account) and meeting join/start flows
 - Real-time conferencing with LiveKit
 - Microphone and camera device control
 - Screen sharing

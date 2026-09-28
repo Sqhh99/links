@@ -330,14 +330,16 @@ void Settings::setUserId(const QString& userId)
     settings_.sync();
 }
 
-QString Settings::getUserEmail() const
+QString Settings::getUsername() const
 {
-    return settings_.value("auth/email", "").toString();
+    return settings_.value("auth/username", "").toString();
 }
 
-void Settings::setUserEmail(const QString& email)
+void Settings::setUsername(const QString& username)
 {
-    settings_.setValue("auth/email", email);
+    settings_.setValue("auth/username", username);
+    // Written by versions that signed in with an email address.
+    settings_.remove("auth/email");
     settings_.sync();
 }
 
@@ -355,7 +357,7 @@ void Settings::setDisplayName(const QString& name)
 bool Settings::hasAuthData() const
 {
     return !getAuthToken().isEmpty()
-        && (!getUserId().isEmpty() || !getUserEmail().isEmpty());
+        && (!getUserId().isEmpty() || !getUsername().isEmpty());
 }
 
 void Settings::clearAuthData()
@@ -363,6 +365,7 @@ void Settings::clearAuthData()
     settings_.remove("auth/token");
     settings_.remove("auth/user_id");
     settings_.remove("auth/userId");
+    settings_.remove("auth/username");
     settings_.remove("auth/email");
     settings_.remove("auth/display_name");
     settings_.sync();

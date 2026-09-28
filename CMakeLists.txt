@@ -377,11 +377,9 @@ qt_add_qml_module(links
         ui/qml/components/BrandSlider.qml
         # Login (auth components)
         ui/qml/login/LoginCard.qml
-        ui/qml/login/AuthTabs.qml
         ui/qml/login/AuthField.qml
         ui/qml/login/AuthTextField.qml
         ui/qml/login/LoginForm.qml
-        ui/qml/login/RegisterForm.qml
         # Home
         ui/qml/home/HomeWindow.qml
         ui/qml/home/HomeSidebar.qml
