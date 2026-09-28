@@ -11,8 +11,17 @@ The repository currently contains:
 - Cross-platform build scripts for Windows, Linux, and macOS
 - GitHub Actions workflows for build validation and packaging
 - GoogleTest-based unit and integration-style tests for core modules
+- The LiveKit signaling server in [`server/`](server), checked out from [`links-sig-server`](https://github.com/Sqhh99/links-sig-server) as a Git submodule
 
-The repository also contains a `server/` directory in the project layout notes, but the main actively built target in the current top-level CMake project is the desktop client application.
+The top-level CMake project builds the desktop client. The signaling server is a separate Rust project and is not part of that build.
+
+Initialize the submodule after cloning:
+
+```bash
+git clone --recurse-submodules https://github.com/Sqhh99/links.git
+# existing checkout:
+git submodule update --init server
+```
 
 ## Main Capabilities
 
@@ -36,6 +45,7 @@ Key directories:
 - [res](/mnt/d/workspace/cpp-workspace/links/res): icons and packaged resources
 - [tools](/mnt/d/workspace/cpp-workspace/links/tools): packaging assets and scripts
 - [third_party](/mnt/d/workspace/cpp-workspace/links/third_party): vendored dependencies and downloaded SDKs
+- [server](server): LiveKit signaling server (`links-sig-server` submodule, tracks `main`)
 
 ## Build Requirements
 

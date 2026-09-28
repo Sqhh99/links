@@ -34,3 +34,4 @@ server/livekit-signaling-server/links-sig-rust-server/target/
 server/livekit-signaling-server/links-sig-rust-server/.env
 links-server
 examples/
+.vs
