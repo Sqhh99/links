@@ -64,3 +64,45 @@
   - #3 合并进服务端 `main` 后，客户端还需要再升级一次子模块指针，才能带上服务端 README。
 - `server/api_url` 和 `server/signaling_url` 两个设置项重叠，是否合并由作者决定。
 - `docs/BUILD_GUIDE.md` 和 `docs/README.md` 内容过时，是否删除由作者决定。
+
+## 六、后续：把 README 重新合进服务端 main
+
+- **日期：** 2026-09-29
+- **分支：** 服务端 `docs/readme-onto-main`，基于当时 `main` 的 `4688730`，提交 `ecaba19`，合并提交 `aaa75e9`
+- **关联文档：** [PR 记录](../pull-requests/2026-09-29-server-readme-onto-main.md)（[Sqhh99/links-sig-server#5](https://github.com/Sqhh99/links-sig-server/pull/5)）
+
+### 用户的请求
+
+> "C:\\Users\\sqhh99\\Desktop\\Screenshot_20260929081004.png" ，服务端的main分支的代码，没有README、PROJECT_STRUCTURE.md也没有被删除，修改不在main上呀，帮我合并进main分支
+
+实际要做的事：截图是 [links-sig-server](https://github.com/Sqhh99/links-sig-server) 的 `main`。页面上没有 `README.md`，`PROJECT_STRUCTURE.md` 还在。把英文 README 和删除 `PROJECT_STRUCTURE.md` 这两处改动合进服务端 `main`。
+
+### 计划
+
+1. 核对远端。Docker 配置已经由 [#2](https://github.com/Sqhh99/links-sig-server/pull/2) 合进 `main`。README 改动先由 [#3](https://github.com/Sqhh99/links-sig-server/pull/3) 合进 `chore/docker-stack`，再由 [#4](https://github.com/Sqhh99/links-sig-server/pull/4) 从 `main` 撤回。这两次提交已经在 `main` 的历史上，再把旧分支合进去不会改文件。
+2. 从当时的 `main`（`4688730`）拉出 `docs/readme-onto-main`，撤销 #4 的文件改动：加回 `README.md`，删除 `PROJECT_STRUCTURE.md`。内容与 #3 的 `33880e4` 相同。
+3. 核对链接后开 PR，并用 merge commit 合进 `main`。
+
+### 改了哪些文件
+
+仓库：Sqhh99/links-sig-server。
+
+| 文件 | 改动 | 原因 |
+| --- | --- | --- |
+| `README.md` | 新增，内容与 #3 的 `33880e4` 相同 | `main` 上没有 README，仓库首页是 “Add a README” |
+| `PROJECT_STRUCTURE.md` | 删除 | 作者要求删除；#4 把它加回了 `main` |
+
+没有改 Rust 代码、迁移或 Docker 配置。
+
+### 验证情况
+
+- [x] 合并前 `git diff origin/main...HEAD` 只有上述两个文件。
+- [x] README 的相对链接在当时的 `main` 上都存在：`docker/compose.yaml`、`docker/README.md`、`migrations/`、`docs/api/README.md`、`docs/CONTRIBUTING.md`、`docs/TROUBLESHOOTING.md`。
+- [x] 重新应用后的树里没有 `PROJECT_STRUCTURE` 引用。
+- [x] 合并前 `origin/main` 的文件树与写 README 时的基线 `a032234` 一致，文中的环境变量、路由和登录规则没有过期。
+- [x] [#5](https://github.com/Sqhh99/links-sig-server/pull/5) 已用 merge commit 合入 `main`（`aaa75e9`）。合并后的 `origin/main` 有 `README.md`，没有 `PROJECT_STRUCTURE.md`，文件树与 `ecaba19` 一致。
+- [ ] 只改了文档，没有重新构建，也没有运行测试。
+
+### 遗留事项
+
+- 客户端 `main` 的 `server` 子模块仍指向 `a032234`。服务端 `main` 现在多了 `README.md`、少了 `PROJECT_STRUCTURE.md`。客户端仓库要带上这两处文件，需要另一次子模块指针升级。这次没有改客户端指针。
