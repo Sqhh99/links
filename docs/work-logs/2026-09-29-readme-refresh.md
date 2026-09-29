@@ -6,7 +6,7 @@
   - 客户端：`docs/readme-refresh`，基于 `main` 的 `8d31360`
 - **关联文档：**
   - [服务端 PR 记录](../pull-requests/2026-09-29-server-readme.md)（[Sqhh99/links-sig-server#3](https://github.com/Sqhh99/links-sig-server/pull/3)）
-  - [客户端 PR 记录](../pull-requests/2026-09-29-readme-refresh.md)
+  - [客户端 PR 记录](../pull-requests/2026-09-29-readme-refresh.md)（[Sqhh99/links#28](https://github.com/Sqhh99/links/pull/28)）
   - [Docker 配置的工作记录](2026-09-29-server-docker-stack.md)
 
 ## 一、用户的请求
@@ -59,7 +59,7 @@
 
 ## 五、遗留事项
 
-- **合并顺序**：服务端 #2 → 服务端 #3 → 客户端 #27 → 客户端 README PR。
+- **合并顺序**：服务端 #2 → 服务端 #3 → 客户端 #27 → 客户端 #28。
   - 服务端 #3 的目标分支是 `chore/docker-stack`。#2 合并后，如果删除了该分支，GitHub 会把 #3 的目标分支自动改为 `main`；如果没有删除，需要手动改。
   - #3 合并进服务端 `main` 后，客户端还需要再升级一次子模块指针，才能带上服务端 README。
 - `server/api_url` 和 `server/signaling_url` 两个设置项重叠，是否合并由作者决定。
