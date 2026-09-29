@@ -420,6 +420,8 @@ qt_add_qml_module(links
         ui/qml/conference/ConferenceTitleBar.qml
         ui/qml/conference/VideoSidebar.qml
         ui/qml/conference/VideoThumbnail.qml
+        ui/qml/conference/GalleryView.qml
+        ui/qml/conference/GalleryTile.qml
         ui/qml/conference/MainVideoPanel.qml
         ui/qml/conference/ControlBar.qml
         ui/qml/conference/RightSidebar.qml

@@ -66,14 +66,8 @@ Window {
             if (backend.mainParticipantId === "local" && showCameraInMain && mainVideoPanel) {
                 mainVideoPanel.updateFrame(frame)
             }
-            // Route to gallery view local thumbnail
-            // Show camera frames when: showing camera in dual-stream OR single-stream camera only
-            if (galleryView.visible && localGalleryThumbnail) {
-                var hasDualStreams = backend.camEnabled && backend.screenSharing
-                var shouldShowCamera = !hasDualStreams || !localGalleryCard.showingScreen
-                if (shouldShowCamera && backend.camEnabled) {
-                    localGalleryThumbnail.updateFrame(frame)
-                }
+            if (galleryView.visible) {
+                galleryView.updateLocalCameraFrame(frame)
             }
         }
 
@@ -92,14 +86,8 @@ Window {
                 mainVideoPanel.updateFrame(frame)
             }
 
-            // Route to gallery view local thumbnail
-            // Show screen frames when: showing screen in dual-stream OR single-stream screen only
-            if (galleryView.visible && localGalleryThumbnail) {
-                var hasDualStreamsLocal = backend.camEnabled && backend.screenSharing
-                var shouldShowScreen = !hasDualStreamsLocal || localGalleryCard.showingScreen
-                if (shouldShowScreen && backend.screenSharing) {
-                    localGalleryThumbnail.updateFrame(frame)
-                }
+            if (galleryView.visible) {
+                galleryView.updateLocalScreenFrame(frame)
             }
         }
 
@@ -120,7 +108,7 @@ Window {
             }
             // Also route to gallery view remote thumbnails (camera frames)
             if (galleryView.visible) {
-                updateGalleryRemoteFrame(participantId, frame, false)
+                galleryView.updateRemoteFrame(participantId, frame, false)
             }
         }
 
@@ -141,7 +129,7 @@ Window {
 
             // Also route to gallery view remote thumbnails (screen frames)
             if (galleryView.visible) {
-                updateGalleryRemoteFrame(participantId, frame, true)
+                galleryView.updateRemoteFrame(participantId, frame, true)
             }
         }
 
@@ -159,9 +147,7 @@ Window {
 
         // Handle local camera ended - clear frames
         onLocalCameraEnded: {
-            if (localGalleryThumbnail && typeof localGalleryThumbnail.clearFrame === 'function') {
-                localGalleryThumbnail.clearFrame()
-            }
+            galleryView.clearLocalFrame()
             if (backend.mainParticipantId === "local" && mainVideoPanel) {
                 mainVideoPanel.clearFrame()
             }
@@ -169,9 +155,7 @@ Window {
 
         // Handle local screen share ended - clear frames
         onLocalScreenShareEnded: {
-            if (localGalleryThumbnail && typeof localGalleryThumbnail.clearFrame === 'function') {
-                localGalleryThumbnail.clearFrame()
-            }
+            galleryView.clearLocalFrame()
             if (backend.mainParticipantId === "local" && mainVideoPanel) {
                 mainVideoPanel.clearFrame()
             }
@@ -183,76 +167,10 @@ Window {
             if (backend.mainParticipantId === participantId && mainVideoPanel) {
                 mainVideoPanel.clearFrame()
             }
-            // Clear gallery view thumbnails
-            clearGalleryRemoteFrame(participantId)
+            galleryView.clearRemoteFrame(participantId)
         }
     }
 
-    // Dynamic grid column calculation
-    function getGridColumns(count) {
-        if (count <= 2) return 2
-        if (count <= 4) return 2
-        if (count <= 9) return 3
-        if (count <= 16) return 4
-        return 5
-    }
-
-    // Gallery view remote frame routing
-    function updateGalleryRemoteFrame(participantId, frame, isScreenFrame) {
-        for (var i = 0; i < galleryRemoteRepeater.count; i++) {
-            var item = galleryRemoteRepeater.itemAt(i)
-            if (item && item.children) {
-                // Find the VideoThumbnail in the Rectangle's children
-                for (var j = 0; j < item.children.length; j++) {
-                    var child = item.children[j]
-                    if (child.participantId && child.participantId === participantId) {
-                        // Check if this card should receive this frame type
-                        var hasDualStreams = item.hasDualStreams || false
-                        var showingScreen = item.showingScreen || false
-
-                        // Determine if we should route this frame
-                        var shouldRoute = false
-                        if (hasDualStreams) {
-                            // In dual-stream mode, route based on which stream is being shown
-                            shouldRoute = (isScreenFrame === showingScreen)
-                        } else {
-                            // In single-stream mode, route if this is the only active stream type
-                            shouldRoute = true
-                        }
-
-                        if (shouldRoute) {
-                            child.updateFrame(frame)
-                        }
-                        return
-                    }
-                }
-            }
-        }
-    }
-
-    // Avatar color palette
-    function getAvatarColor(index) {
-        var colors = ["#1F6FFF", "#16B26B", "#7C5CFF", "#F59E0B", "#EC4899", "#0EA5E9", "#F04A4A", "#6366F1"]
-        return colors[index % colors.length]
-    }
-
-    // Clear gallery view remote frame when track ends
-    function clearGalleryRemoteFrame(participantId) {
-        for (var i = 0; i < galleryRemoteRepeater.count; i++) {
-            var item = galleryRemoteRepeater.itemAt(i)
-            if (item && item.children) {
-                for (var j = 0; j < item.children.length; j++) {
-                    var child = item.children[j]
-                    if (child.participantId && child.participantId === participantId) {
-                        if (typeof child.clearFrame === 'function') {
-                            child.clearFrame()
-                        }
-                        return
-                    }
-                }
-            }
-        }
-    }
 
     function restartChromeAutoHideTimer() {
         if (!chromeAutoHideEnabled || !visible) {
@@ -467,326 +385,12 @@ Window {
                     }
                 }
 
-                // Gallery View - Dynamic Grid
-                Rectangle {
+                // Gallery View
+                GalleryView {
                     id: galleryView
                     anchors.fill: parent
-                    color: Theme.windowBackground
-                    radius: 16
-                    border.color: Theme.borderColor
                     visible: backend.viewMode === "gallery"
-                    clip: true
-
-                    ScrollView {
-                        anchors.fill: parent
-                        anchors.margins: 16
-                        contentWidth: availableWidth
-
-                        GridLayout {
-                            id: galleryGrid
-                            width: parent.width
-                            columns: getGridColumns(backend.participants.length + 1)
-                            columnSpacing: 12
-                            rowSpacing: 12
-
-                            // Local participant card with actual video
-                            Rectangle {
-                                id: localGalleryCard
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: width * 9 / 16 // 16:9 aspect ratio
-                                color: Theme.cardBackground
-                                radius: 12
-                                border.color: Theme.borderColor
-                                border.width: 1
-                                clip: true
-
-                                // Dual-stream state
-                                property bool showingScreen: false
-                                property bool hasDualStreams: backend.camEnabled && backend.screenSharing
-
-                                // Video thumbnail for local camera/screen
-                                VideoThumbnail {
-                                    id: localGalleryThumbnail
-                                    anchors.fill: parent
-                                    participantId: "local"
-                                    participantName: backend.userName + " (You)"
-                                    micEnabled: backend.micEnabled
-                                    camEnabled: localGalleryCard.showingScreen ? true : (backend.camEnabled || backend.screenSharing)
-                                    mirrored: !localGalleryCard.showingScreen
-                                    showStatus: false // We use custom name label below
-                                }
-
-                                // Left chevron button (switch to camera)
-                                Rectangle {
-                                    id: localLeftChevron
-                                    anchors.left: parent.left
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.leftMargin: 8
-                                    width: 28
-                                    height: 28
-                                    radius: 14
-                                    color: localLeftArea.containsMouse ? "#00000080" : "#00000050"
-                                    border.color: Qt.rgba(1, 1, 1, 0.18)
-                                    border.width: 1
-                                    visible: localGalleryCard.hasDualStreams && localGalleryCard.showingScreen
-                                    z: 20
-
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        name: "chevron-left"
-                                        size: 14
-                                        color: "#FFFFFF"
-                                    }
-
-                                    MouseArea {
-                                        id: localLeftArea
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: localGalleryCard.showingScreen = false
-                                    }
-                                }
-
-                                // Right chevron button (switch to screen)
-                                Rectangle {
-                                    id: localRightChevron
-                                    anchors.right: parent.right
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    anchors.rightMargin: 8
-                                    width: 28
-                                    height: 28
-                                    radius: 14
-                                    color: localRightArea.containsMouse ? "#00000080" : "#00000050"
-                                    border.color: Qt.rgba(1, 1, 1, 0.18)
-                                    border.width: 1
-                                    visible: localGalleryCard.hasDualStreams && !localGalleryCard.showingScreen
-                                    z: 20
-
-                                    Icon {
-                                        anchors.centerIn: parent
-                                        name: "chevron-right"
-                                        size: 14
-                                        color: "#FFFFFF"
-                                    }
-
-                                    MouseArea {
-                                        id: localRightArea
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: localGalleryCard.showingScreen = true
-                                    }
-                                }
-
-                                // Name label with mic status (bottom-left, semi-transparent)
-                                Rectangle {
-                                    anchors.left: parent.left
-                                    anchors.bottom: parent.bottom
-                                    anchors.margins: 8
-                                    height: 24
-                                    width: localNameRow.width + 16
-                                    color: Theme.isDark ? Qt.rgba(28/255, 31/255, 38/255, 0.92) : Qt.rgba(1, 1, 1, 0.93)
-                                    radius: 6
-                                    z: 10
-
-                                    Row {
-                                        id: localNameRow
-                                        anchors.centerIn: parent
-                                        spacing: 4
-
-                                        // Mic status indicator only
-                                        Rectangle {
-                                            width: backend.micEnabled ? 4 : 10
-                                            height: backend.micEnabled ? 8 : 10
-                                            radius: backend.micEnabled ? 2 : 5
-                                            color: backend.micEnabled ? Theme.success : "transparent"
-                                            anchors.verticalCenter: parent.verticalCenter
-
-                                            Icon {
-                                                anchors.centerIn: parent
-                                                name: "mic-off"
-                                                visible: !backend.micEnabled
-                                                size: 11
-                                                color: Theme.danger
-                                            }
-                                        }
-
-                                        Text {
-                                            text: localGalleryCard.showingScreen ? "我 (屏幕)" : "我 (You)"
-                                            color: Theme.textPrimary
-                                            font.pixelSize: 11
-                                            font.weight: Font.Bold
-                                        }
-                                    }
-                                }
-
-                                // Click to pin
-                                MouseArea {
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: backend.pinParticipant("local")
-                                    z: 1
-                                }
-                            }
-
-                            // Remote participants
-                            Repeater {
-                                id: galleryRemoteRepeater
-                                model: backend.participants.filter(function(p) { return p.identity !== "local" })
-
-                                Rectangle {
-                                    id: remoteCard
-                                    Layout.fillWidth: true
-                                    Layout.preferredHeight: width * 9 / 16 // 16:9 aspect ratio
-                                    color: Theme.cardBackground
-                                    radius: 12
-                                    // Speaker highlight with accent border
-                                    border.color: modelData.identity === backend.mainParticipantId ? Theme.accentColor : Theme.borderColor
-                                    border.width: modelData.identity === backend.mainParticipantId ? 2 : 1
-                                    clip: true
-
-                                    // Dual-stream state
-                                    property bool showingScreen: false
-                                    property bool hasDualStreams: modelData.camEnabled && modelData.screenSharing
-
-                                    // Video thumbnail for remote participant
-                                    VideoThumbnail {
-                                        id: remoteGalleryThumbnail
-                                        anchors.fill: parent
-                                        participantId: modelData.identity
-                                        participantName: modelData.name || modelData.identity
-                                        micEnabled: modelData.micEnabled
-                                        camEnabled: remoteCard.showingScreen ? true : (modelData.camEnabled || modelData.screenSharing)
-                                        mirrored: false
-                                        showStatus: false // We use custom name label below
-                                    }
-
-                                    // Left chevron button (switch to camera)
-                                    Rectangle {
-                                        anchors.left: parent.left
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.leftMargin: 8
-                                        width: 28
-                                        height: 28
-                                        radius: 14
-                                        color: remoteLeftArea.containsMouse ? "#00000080" : "#00000050"
-                                        border.color: Qt.rgba(1, 1, 1, 0.18)
-                                        border.width: 1
-                                        visible: remoteCard.hasDualStreams && remoteCard.showingScreen
-                                        z: 20
-
-                                        Icon {
-                                            anchors.centerIn: parent
-                                            name: "chevron-left"
-                                            size: 14
-                                            color: "#FFFFFF"
-                                        }
-
-                                        MouseArea {
-                                            id: remoteLeftArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: remoteCard.showingScreen = false
-                                        }
-                                    }
-
-                                    // Right chevron button (switch to screen)
-                                    Rectangle {
-                                        anchors.right: parent.right
-                                        anchors.verticalCenter: parent.verticalCenter
-                                        anchors.rightMargin: 8
-                                        width: 28
-                                        height: 28
-                                        radius: 14
-                                        color: remoteRightArea.containsMouse ? "#00000080" : "#00000050"
-                                        border.color: Qt.rgba(1, 1, 1, 0.18)
-                                        border.width: 1
-                                        visible: remoteCard.hasDualStreams && !remoteCard.showingScreen
-                                        z: 20
-
-                                        Icon {
-                                            anchors.centerIn: parent
-                                            name: "chevron-right"
-                                            size: 14
-                                            color: "#FFFFFF"
-                                        }
-
-                                        MouseArea {
-                                            id: remoteRightArea
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: remoteCard.showingScreen = true
-                                        }
-                                    }
-
-                                    // Speaker ring effect
-                                    Rectangle {
-                                        anchors.fill: parent
-                                        radius: 12
-                                        color: "transparent"
-                                        border.color: Theme.isDark ? Qt.rgba(91/255, 141/255, 239/255, 0.2) : Qt.rgba(31/255, 111/255, 255/255, 0.12)
-                                        border.width: 4
-                                        visible: modelData.identity === backend.mainParticipantId
-                                        z: 5
-                                    }
-
-                                    // Name label with mic status (bottom-left)
-                                    Rectangle {
-                                        anchors.left: parent.left
-                                        anchors.bottom: parent.bottom
-                                        anchors.margins: 8
-                                        height: 24
-                                        width: remoteNameRow.width + 16
-                                        color: Theme.isDark ? Qt.rgba(28/255, 31/255, 38/255, 0.92) : Qt.rgba(1, 1, 1, 0.93)
-                                        radius: 6
-                                        z: 10
-
-                                        Row {
-                                            id: remoteNameRow
-                                            anchors.centerIn: parent
-                                            spacing: 4
-
-                                            // Mic status indicator only
-                                            Rectangle {
-                                                width: modelData.micEnabled ? 4 : 10
-                                                height: modelData.micEnabled ? 8 : 10
-                                                radius: modelData.micEnabled ? 2 : 5
-                                                color: modelData.micEnabled ? Theme.success : "transparent"
-                                                anchors.verticalCenter: parent.verticalCenter
-
-                                                Icon {
-                                                    anchors.centerIn: parent
-                                                    name: "mic-off"
-                                                    visible: !modelData.micEnabled
-                                                    size: 11
-                                                    color: Theme.danger
-                                                }
-                                            }
-
-                                            Text {
-                                                text: remoteCard.showingScreen ? (modelData.name || modelData.identity) + " (屏幕)" : (modelData.name || modelData.identity)
-                                                color: Theme.textPrimary
-                                                font.pixelSize: 11
-                                                font.weight: Font.Bold
-                                            }
-                                        }
-                                    }
-
-                                    // Click to pin
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: backend.pinParticipant(modelData.identity)
-                                        z: 1
-                                    }
-                                }
-                            }
-                        }
-                    }
+                    backend: backend
                 }
             }
 
