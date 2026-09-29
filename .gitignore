@@ -35,3 +35,4 @@ server/livekit-signaling-server/links-sig-rust-server/.env
 links-server
 examples/
 .vs
+__cmake_systeminformation
