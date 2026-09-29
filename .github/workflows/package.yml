@@ -124,7 +124,7 @@ jobs:
             "platforms\qwindows.dll",
             "livekit.dll",
             "livekit_ffi.dll",
-            "webrtc-audio-processing-2-1.dll"
+            "webrtc-audio-processing-3-0.dll"
           )
           foreach ($relativePath in $required) {
             $path = Join-Path $appDir $relativePath
@@ -257,7 +257,7 @@ jobs:
 
           livekit_lib="$(find "$GITHUB_WORKSPACE/third_party" -name liblivekit.dylib -print -quit)"
           livekit_ffi_lib="$(find "$GITHUB_WORKSPACE/third_party" -name liblivekit_ffi.dylib -print -quit)"
-          webrtc_apm_lib="$(find "$GITHUB_WORKSPACE/third_party" -name 'libwebrtc-audio-processing-2.1.dylib' -print -quit)"
+          webrtc_apm_lib="$(find "$GITHUB_WORKSPACE/third_party" -name 'libwebrtc-audio-processing-3.0.dylib' -print -quit)"
 
           for lib in "$livekit_lib" "$livekit_ffi_lib" "$webrtc_apm_lib"; do
             if [ -z "$lib" ] || [ ! -f "$lib" ]; then
@@ -270,7 +270,7 @@ jobs:
           for copied_lib in \
             "$frameworks_dir/liblivekit.dylib" \
             "$frameworks_dir/liblivekit_ffi.dylib" \
-            "$frameworks_dir/libwebrtc-audio-processing-2.1.dylib"; do
+            "$frameworks_dir/libwebrtc-audio-processing-3.0.dylib"; do
             lib_arch="$(file "$copied_lib")"
             echo "$lib_arch"
             if [[ "$lib_arch" != *"x86_64"* ]]; then
@@ -287,7 +287,7 @@ jobs:
 
           install_name_tool -id "@rpath/liblivekit.dylib" "$frameworks_dir/liblivekit.dylib" 2>/dev/null || true
           install_name_tool -id "@rpath/liblivekit_ffi.dylib" "$frameworks_dir/liblivekit_ffi.dylib" 2>/dev/null || true
-          install_name_tool -id "@rpath/libwebrtc-audio-processing-2.1.dylib" "$frameworks_dir/libwebrtc-audio-processing-2.1.dylib" 2>/dev/null || true
+          install_name_tool -id "@rpath/libwebrtc-audio-processing-3.0.dylib" "$frameworks_dir/libwebrtc-audio-processing-3.0.dylib" 2>/dev/null || true
           install_name_tool -change "@rpath/liblivekit.dylib" "@loader_path/liblivekit.dylib" "$frameworks_dir/liblivekit_ffi.dylib" 2>/dev/null || true
 
           macdeployqt "$app_path" -qmldir="$GITHUB_WORKSPACE/ui/qml" -dmg -verbose=1
@@ -395,10 +395,10 @@ jobs:
           done < <(find -L "$GITHUB_WORKSPACE/third_party" -type f \( \
             -name 'liblivekit.so*' -o \
             -name 'liblivekit_ffi.so*' -o \
-            -name 'libwebrtc-audio-processing-2.so*' \
+            -name 'libwebrtc-audio-processing-3.so*' \
           \))
 
-          for required_lib in liblivekit.so liblivekit_ffi.so libwebrtc-audio-processing-2.so; do
+          for required_lib in liblivekit.so liblivekit_ffi.so libwebrtc-audio-processing-3.so; do
             if ! find "$appdir/usr/lib" -name "${required_lib}*" -print -quit | grep -q .; then
               echo "Missing copied runtime library: ${required_lib}" >&2
               exit 1

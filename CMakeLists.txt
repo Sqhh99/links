@@ -54,8 +54,8 @@ include(FetchLiveKitSDK)
 # =============================================================================
 # WebRTC Audio Processing (auto-download based on platform)
 # =============================================================================
-# Set version before including the module (optional, defaults to 2.1.0-mirror.1)
-# set(WEBRTC_APM_VERSION "2.1.0-mirror.1")
+# Set version before including the module (optional, defaults to m153.8010.0.2)
+# set(WEBRTC_APM_VERSION "m153.8010.0.2")
 include(FetchWebRTCAudioProcessing)
 
 # Find Qt6
@@ -275,6 +275,11 @@ target_include_directories(links_core PUBLIC
     ${LIVEKIT_INCLUDE_DIR}
     ${WEBRTC_APM_INCLUDE_DIR}
     ${WEBRTC_ABSEIL_INCLUDE_DIR}
+)
+
+# The only translation unit that includes WebRTC headers
+set_source_files_properties(core/audio_processing_module.cpp PROPERTIES
+    COMPILE_DEFINITIONS "${WEBRTC_APM_DEFINITIONS}"
 )
 
 # Source files

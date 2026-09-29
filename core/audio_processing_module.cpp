@@ -14,6 +14,8 @@ namespace core = links::core;
 
 // WebRTC Audio Processing includes
 #include "api/audio/audio_processing.h"
+#include "api/audio/builtin_audio_processing_builder.h"
+#include "api/environment/environment_factory.h"
 #include "api/scoped_refptr.h"
 
 #include <algorithm>
@@ -36,6 +38,13 @@ toWebrtcNsLevel(AudioProcessingModule::NoiseSuppressionLevel level)
     }
 }
 
+void AudioProcessingModule::ApmReleaser::operator()(webrtc::AudioProcessing* apm) const
+{
+    if (apm) {
+        apm->Release();
+    }
+}
+
 AudioProcessingModule::AudioProcessingModule() = default;
 
 AudioProcessingModule::~AudioProcessingModule() = default;
@@ -49,14 +58,10 @@ bool AudioProcessingModule::initialize()
         return true; // Already initialized
     }
     
-    // Create WebRTC Audio Processing Module using AudioProcessingBuilder
-    webrtc::AudioProcessingBuilder builder;
-    
     webrtc::AudioProcessing::Config config;
     
     // Echo canceller
     config.echo_canceller.enabled = echoCancellationEnabled_;
-    config.echo_canceller.mobile_mode = false;
     config.echo_canceller.enforce_high_pass_filtering = echoEnhancedFilter_;
     
     // Noise suppression
@@ -76,11 +81,12 @@ bool AudioProcessingModule::initialize()
     // High-pass filter
     config.high_pass_filter.enabled = highPassFilterEnabled_;
     
-    builder.SetConfig(config);
-    
-    auto apm = builder.Create();
+    // Default environment: field trials, clock and task queue factory
+    webrtc::scoped_refptr<webrtc::AudioProcessing> apm =
+        webrtc::BuiltinAudioProcessingBuilder(config).Build(webrtc::CreateEnvironment());
     if (apm) {
-        apm_ = std::unique_ptr<webrtc::AudioProcessing>(apm.release());
+        // release() hands over the builder's reference; ApmReleaser drops it
+        apm_.reset(apm.release());
         core::logInfo(core::str::cat("WebRTC APM initialized (AEC=", echoCancellationEnabled_, ", NS=", noiseSuppressionEnabled_, "[lvl=", static_cast<int>(nsLevel_), "], AGC=", autoGainControlEnabled_, ", HPF=", highPassFilterEnabled_, ")"));
         return true;
     } else {

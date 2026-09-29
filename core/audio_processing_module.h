@@ -129,9 +129,14 @@ public:
     int streamDelayMs() const { return streamDelayMs_; }
     
 private:
+    // The APM is reference-counted: drop our reference instead of deleting it.
+    struct ApmReleaser {
+        void operator()(webrtc::AudioProcessing* apm) const;
+    };
+
     void applyConfig();
     
-    std::unique_ptr<webrtc::AudioProcessing> apm_;
+    std::unique_ptr<webrtc::AudioProcessing, ApmReleaser> apm_;
     
     // Basic toggles
     bool echoCancellationEnabled_{true};
