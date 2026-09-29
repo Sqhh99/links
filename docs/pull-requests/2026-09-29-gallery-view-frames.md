@@ -3,6 +3,7 @@
 - **日期：** 2026-09-29
 - **分支：** `fix/gallery-view-frames` → `main`
 - **基线提交：** `472aaba`
+- **PR：** [Sqhh99/links#30](https://github.com/Sqhh99/links/pull/30)
 - **关联记录：** [工作记录](../work-logs/2026-09-29-gallery-view-frames.md)
 
 ## 关联

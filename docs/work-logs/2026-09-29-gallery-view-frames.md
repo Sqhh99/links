@@ -3,8 +3,8 @@
 - **日期：** 2026-09-29
 - **分支：** `fix/gallery-view-frames`（基于 `main` 的 `472aaba`）
 - **关联文档：**
-  - [PR 记录](../pull-requests/2026-09-29-gallery-view-frames.md)
-  - [同一请求的另一半：WebRTC APM 升级到 3.0](2026-09-29-upgrade-webrtc-apm-3.md)
+  - [PR 记录](../pull-requests/2026-09-29-gallery-view-frames.md)（[Sqhh99/links#30](https://github.com/Sqhh99/links/pull/30)）
+  - 同一请求的另一半：WebRTC APM 升级到 3.0，见 [Sqhh99/links#31](https://github.com/Sqhh99/links/pull/31)（记录 `docs/work-logs/2026-09-29-upgrade-webrtc-apm-3.md` 在该分支上）
 
 ## 一、用户的请求
 
