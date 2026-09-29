@@ -6,7 +6,7 @@
   - 客户端：`chore/server-docker-stack`，基于 `main` 的 `8d31360`，升级 `server` 子模块指针并加入本记录
 - **关联文档：**
   - [服务端 PR 记录](../pull-requests/2026-09-29-docker-stack.md)（[Sqhh99/links-sig-server#2](https://github.com/Sqhh99/links-sig-server/pull/2)）
-  - [客户端 PR 记录](../pull-requests/2026-09-29-server-docker-stack.md)
+  - [客户端 PR 记录](../pull-requests/2026-09-29-server-docker-stack.md)（[Sqhh99/links#27](https://github.com/Sqhh99/links/pull/27)）
   - [用户名登录的工作记录](2026-09-28-username-login.md)
 
 ## 一、用户的请求
