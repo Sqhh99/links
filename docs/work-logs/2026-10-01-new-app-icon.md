@@ -2,7 +2,7 @@
 
 - **日期：** 2026-10-01
 - **分支：** `chore/new-app-icon`（基于 `main` 的 `fd3c109`）
-- **关联文档：** [PR 记录](../pull-requests/2026-10-01-new-app-icon.md)
+- **关联文档：** [PR 记录](../pull-requests/2026-10-01-new-app-icon.md)（[Sqhh99/links#32](https://github.com/Sqhh99/links/pull/32)）
 
 ## 一、用户的请求
 

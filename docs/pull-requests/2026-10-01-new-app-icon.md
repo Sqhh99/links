@@ -3,6 +3,7 @@
 - **日期：** 2026-10-01
 - **分支：** `chore/new-app-icon` → `main`
 - **基线提交：** `fd3c109`
+- **PR：** [Sqhh99/links#32](https://github.com/Sqhh99/links/pull/32)
 - **关联记录：** [工作记录](../work-logs/2026-10-01-new-app-icon.md)
 
 ## 关联
